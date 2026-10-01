@@ -68,6 +68,42 @@ ok('the ops report only starts its 12h clock on an accepted send',
   ok('treasury recap: sent:true is only ever returned after the write', /sent: true, text, valueBtc, valueUsd/.test(fn) && !/sent: !!tgtok/.test(fn));
 }
 
+// Hub alert dedupe (N-1, Round 4; NEW-1, Round 5, docs/HUB_JOURNAL_VERIFY_2026-09-18.md): hubAlert
+// used to write its 6-hour dedupe watermark BEFORE calling cunaOpsAlert/tgSend, so a swallowed send
+// (tgSend returns null on failure — the exact pattern this file exists to catch) ate the next 6
+// hours of fraud-refusal alerts for that key. It also deduped on a 40-char slice of free text,
+// which could collapse two different batches together once the project id ran past ~19 characters
+// — see scripts/hub-settle-route-test.cjs section 34 for the executable half of that fix
+// (lib/hub/alert-key.js). Round 5 found the FIX itself raced: check-then-AWAIT-send-then-set let
+// every call in one synchronous burst (sharing a key) pass the check before any send resolved, so a
+// burst sent one message PER CALL instead of one. The claim now happens synchronously, before the
+// await; a falsy send result deletes it so the next occurrence retries. This is the source-shape
+// half; scripts/hub-settle-route-test.cjs / verify5's q5-style probe is the executable half.
+{
+  const start = server.indexOf('const hubAlert = (m, meta) => {');
+  const end = start >= 0 ? server.indexOf('\n};', start) : -1;
+  const fn = start >= 0 && end > start ? server.slice(start, end) : '';
+  ok('hubAlert exists with the (message, meta) signature', start >= 0, 'const hubAlert = (m, meta) => { not found');
+  const iCheck = fn.indexOf('if (now - (HUB_ALERT_SEEN.get(key) || 0)');
+  const iClaim = fn.indexOf('HUB_ALERT_SEEN.set(key, now);');
+  const iSend = fn.indexOf('await cunaOpsAlert(');
+  ok('hubAlert claims the key SYNCHRONOUSLY, before the await — not after the send resolves',
+     iCheck >= 0 && iClaim > iCheck && iClaim < iSend, `check@${iCheck} claim@${iClaim} send@${iSend}`);
+  ok('a falsy send result releases the claim so the next occurrence retries',
+     /if \(!sent\) HUB_ALERT_SEEN\.delete\(key\);/.test(fn), 'no `if (!sent) HUB_ALERT_SEEN.delete(key);` guard found');
+  ok('a throw also releases the claim rather than leaving a phantom 6-hour suppression',
+     /catch \(_\) \{ HUB_ALERT_SEEN\.delete\(key\); \}/.test(fn), 'no delete-on-catch found');
+  ok('hubAlert sets HUB_ALERT_SEEN exactly once (the synchronous claim) — never unconditionally after the send',
+     (fn.match(/HUB_ALERT_SEEN\.set\(/g) || []).length === 1);
+  // Bypasses cunaOpsAlert's OWN dedupe (dedupeKey=null) rather than moving CUNA_ALERT_SEEN's
+  // watermark timing for every other caller (accrual/burn/watchdog/kv-load alerts).
+  ok('hubAlert bypasses cunaOpsAlert\'s own dedupe key rather than reusing/altering it',
+     /await cunaOpsAlert\(`⚠️ Hub: \$\{m\}`, null\)/.test(fn), 'cunaOpsAlert is not called with dedupeKey=null');
+  ok('cunaOpsAlert itself (the CUNA scheduler\'s shared dedupe) is untouched by this fix',
+     /const last = CUNA_ALERT_SEEN\.get\(dedupeKey\) \|\| 0;\s*\n\s*if \(now - last < 6 \* 60 \* 60 \* 1000\) return null;\s*\n\s*CUNA_ALERT_SEEN\.set\(dedupeKey, now\);/.test(server),
+     'cunaOpsAlert\'s check-then-set-before-send shape changed — that was deliberately left alone for every non-Hub caller');
+}
+
 console.log('\nB. an announcement must be about a mint that exists\n');
 
 const minted = hatchery.slice(hatchery.indexOf('router.post("/minted"'), hatchery.indexOf('router.post("/minted"') + 3500);
@@ -80,6 +116,62 @@ ok('/minted no longer takes the announced name/symbol from the request body',
    'body-supplied name/symbol still reaches the announcement');
 ok('the built name/symbol are recorded at build time', /hatcheryMeta\.set\(mintAddress/.test(hatchery));
 ok('and that map is bounded', /hatcheryMeta\.size > 5000/.test(hatchery));
+
+console.log('\nC. the daily locked-supply post stays retired\n');
+
+// Owner, 2026-09-20: "I want to quit posting the lock supply to CLKN room daily. No one seems
+// to care." The risk is not that someone argues with that — it is that a later refactor of the
+// scheduler block restores the bare `setInterval(lockReportTick, …)` it replaced and the daily
+// post quietly comes back, in the community chat and on X, without anyone deciding to.
+// Positive assertions: the flag must be env-driven (default off) and the registration must be
+// guarded by it. A negative-only test would pass against the unfixed code.
+ok('the daily report is off unless LOCK_REPORT_ON=1 is set in the env',
+   /const LOCK_REPORT_ENABLED = process\.env\.LOCK_REPORT_ON === "1";/.test(server),
+   'LOCK_REPORT_ENABLED is not the env-gated constant — a hardcoded true brings the daily post back');
+ok('its scheduler only registers when that flag is on',
+   /if \(LOCK_REPORT_ENABLED\) setInterval\(lockReportTick,/.test(server),
+   'setInterval(lockReportTick, …) is registered unguarded');
+ok('and the tick itself still refuses to fire when the flag is off',
+   /function lockReportTick\(\) \{\s*\n\s*if \(!LOCK_REPORT_ENABLED\) return;/.test(server),
+   'lockReportTick lost its own flag check — the guard would then rest on the registration alone');
+
+// What retiring the DAILY post must NOT take with it. Each of these is a different thing: an
+// event-driven celebration that only fires on a real lock, an on-demand command someone typed,
+// and the operator's one-off lever. Retiring a schedule is not retiring the feature.
+ok('the new-lock watcher is untouched (it is the Locker Room\'s social proof)',
+   /const LOCK_WATCH_ENABLED = true;/.test(server) &&
+   /setInterval\(\(\) => lockWatchTick\(\)/.test(server),
+   'the lock-change watcher was disabled along with the daily report');
+ok('the /lock command still answers on demand',
+   /command: "lock", description: "Current locked supply/.test(server));
+ok('the operator can still fire one by hand',
+   /app\.get\("\/api\/lock-report-test"/.test(server) &&
+   /notifyLockReport\(\{ dryRun: req\.query\.post !== "1", note \}\)/.test(server),
+   'the manual lock-report lever was removed rather than left as the on-demand path');
+
+console.log('\nD. burn-broadcaster failure notes go to the operator DM, never the public room\n');
+// TELEGRAM_CHAT_ID is the public CLKN community room. The X-failure and hourly-cap notes used to
+// be sent there, so the community watched "⚠️ Burn celebration X post failed (403)" (2026-09-28).
+{
+  const start = server.indexOf('async function broadcastBurnCelebration(');
+  const body = start < 0 ? '' : server.slice(start, server.indexOf('\n}\n', start));
+  ok('broadcastBurnCelebration exists', start >= 0);
+  const alerts = body.split('\n').filter(l => /tgSend\(/.test(l));
+  ok('it has the two operator alerts (X failure, hourly cap)', alerts.length === 2, alerts.join('\n      '));
+  ok('every alert goes to burnOpsChat()', alerts.every(l => /tgSend\(burnOpsChat\(\)/.test(l)), alerts.join('\n      '));
+  ok('no tgSend in it reads TELEGRAM_CHAT_ID', !/TELEGRAM_CHAT_ID[^\n]*\n?[^\n]*tgSend|const (opchat|chat) = process\.env\.TELEGRAM_CHAT_ID/.test(body));
+  ok('burnOpsChat is the operator DM', /function burnOpsChat\(\) \{ return operatorChatId\(\) \|\| OPERATOR_DM_FALLBACK; \}/.test(server));
+  ok('the X alert carries X\'s own reason', /Burn celebration X post failed \(\$\{tgEsc\(xFailReason\(xres\)\)\}\)/.test(body));
+
+  // X 403'd every burn post: the full 88-char base58 signature in the receipt URL reads as a
+  // crypto address to X's filter. The X text must carry the short /b/ link, never ${url}.
+  const xText = (body.match(/const xText =[\s\S]*?;\n/) || [''])[0];
+  ok('the X text uses the short receipt link', /burnShortUrl\(receipt\.sig\)/.test(xText), xText);
+  ok('the X text never carries the full /burn/<sig> URL', !/\$\{url\}|receipt\.sig\}/.test(xText.replace(/burnShortUrl\(receipt\.sig\)/g, '')), xText);
+  const m = server.match(/const BURN_SHORT_LEN = (\d+);/);
+  ok('the short code is too short to read as an address (<= 16 chars)', m && Number(m[1]) >= 8 && Number(m[1]) <= 16, m && m[1]);
+  ok('/b/:code resolves only a unique prefix', /app\.get\("\/b\/:code"[\s\S]{0,600}hits\.length !== 1\) return res\.status\(404\)/.test(server));
+}
 
 console.log('\n' + (failures ? failures + ' FAILED' : 'all passed') + '\n');
 process.exit(failures ? 1 : 0);

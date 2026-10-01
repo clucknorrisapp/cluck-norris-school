@@ -55,19 +55,71 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   // the LP Lab, Meteora/Bags/Jupiter venue + referral links in the Library, connect/revoke residue in
   // the wallet checkup. Pinned here so a regression is named, not just counted.
   ok("no swap/venue/referral leak (jup.ag/swap, CLKN mint, app.meteora.ag, bags.fm referral)", !code.includes("jup.ag/swap") && !code.includes("DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS") && !code.includes("app.meteora.ag") && !/bags\.fm\?ref/.test(code));
-  ok("wallet checkup carries no connect/revoke residue (wallet-btn, syncRevokeUi, connectWallet)", (() => { const t = text.find(([f]) => f === "wallet-checkup.html")[1]; return !t.includes("wallet-btn") && !t.includes("syncRevokeUi") && !t.includes("connectWallet") && !t.includes("revokeCard"); })());
+  // v1.1.0 (2026-09-21): the bundle is the SEEKER SHELL's education edition (docs/STORE_EDITION.md),
+  // one index.html and one chunk — the page-by-page assertions of v1.0.x are restated below as
+  // assertions on the chunk. Same contract, different shape.
+  // v1.2.0: the Solana Room's own ported wallet.html content legitimately QUOTES the phrase
+  // "Connect Wallet" as prose (website copy explaining what the button does, not the wallet
+  // pane's own control) — see scripts/seeker-build-test.cjs's identical, more-documented
+  // exception. Strip that one known, audited sentence (either JSON-escaped or not) before this
+  // scan so it still catches an actual leaked wallet control.
+  const codeForResidue = code.replace(/\\?"Connect Wallet\\?"/g, "");
+  ok("no connect/revoke residue anywhere (walletbtn, syncRevokeUi, connectWallet, revokeCard, Connect Wallet)", !codeForResidue.includes("walletbtn") && !codeForResidue.includes("syncRevokeUi") && !codeForResidue.includes("connectWallet") && !codeForResidue.includes("revokeCard") && !codeForResidue.includes("Connect Wallet"));
+  ok("⚠️ the wallet half of the shell is absent — no wallet/gate/web3 file, no CluckWallet/CluckGate/CluckMWA, no signing call", !files.some((f) => /cluck-wallet|cluck-gate|solana-web3|rent-reclaim-plan|airdrop-engine/.test(f)) && !code.includes("CluckWallet") && !code.includes("CluckGate") && !code.includes("CluckMWA") && !code.includes("signTransaction"));
+  // v1.2.0: rent-math.js also loads here now — pure lamport/SOL arithmetic, no wallet call, no
+  // address, no network (see that file's own header) — for the Solana Room's rent page, which
+  // this education edition now carries. Not the wallet half; see seeker-build-test.cjs's own
+  // "none of the wallet half's files are in the bundle" for the same carve-out.
+  ok("index.html loads only cluck-util.js, i18n.js, clkn-dock-float.js, rent-math.js and the chunk — nothing else", (() => { const h = text.find(([f]) => f === "index.html")[1]; const srcs = [...h.matchAll(/<script[^>]*src="([^"]+)"/g)].map((m) => m[1]).sort(); return srcs.length === 5 && srcs.some((x) => x.endsWith("cluck-util.js")) && srcs.some((x) => x.endsWith("i18n.js")) && srcs.some((x) => x.endsWith("clkn-dock-float.js")) && srcs.some((x) => x.endsWith("rent-math.js")) && srcs.some((x) => /\/assets\/.*\.js$/.test(x)); })(), text.find(([f]) => f === "index.html")[1].match(/<script[^>]*src="([^"]+)"/g));
+  ok("index.html ships no HTML comments (the scans read them as content; v1.1.0's first build failed on a comment)", !text.find(([f]) => f === "index.html")[1].includes("<!--"));
+  ok("the shell declares the school dictionary pack (data-i18n-packs=\"school\")", text.find(([f]) => f === "index.html")[1].includes('data-i18n-packs="school"'));
   ok("no relative /api reference anywhere", !/["'`]\/api\/[a-zA-Z]/.test(all));
-  ok("every API call points at the live backend", all.includes(`${cfg.apiBase}/api/ask-cluck`) && all.includes(`${cfg.apiBase}/api/track`) && all.includes(`${cfg.apiBase}/api/claim/certificate`) && all.includes(`${cfg.apiBase}/api/wallet-checkup`) && all.includes(`${cfg.apiBase}/api/listing-checkup/run`));
-  ok("the store-only surfaces are present (certificate, report, listing link)", all.includes("CERTIFICATE OF COMPLETION") && all.includes("REPORT THIS ANSWER") && all.includes("listing-checkup.html"));
+  ok("every API call points at the live backend", all.includes(`${cfg.apiBase}/api/ask-cluck`) && all.includes(`${cfg.apiBase}/api/ask-cluck/report`) && all.includes(`${cfg.apiBase}/api/track`) && all.includes(`${cfg.apiBase}/api/claim/certificate`) && all.includes(`${cfg.apiBase}/api/wallet-checkup`) && all.includes(`${cfg.apiBase}/api/listing-checkup/run`) && all.includes(`${cfg.apiBase}/api/alpha`));
+  ok("the store-only surfaces are present (certificate of completion, report this answer, paste-an-address checkup)", all.includes("Certificate of completion") && all.includes("Report this answer") && all.includes("Paste a wallet address"));
+  ok("the school is in the bundle (the curriculum is bundled, and it is the STORE copy)", all.includes("School of Crypto Hard Knocks") && all.includes("The Incubator") && all.includes("LP Lab"));
+  ok("the store copy of the curriculum is the one bundled (no venue names, no token examples)", !code.includes("where CLKN trades") && !code.includes("CLKN EXAMPLE"));
+  // Codex on #391 (2026-09-21): "CLKN promotion still renders in the education bundle" — the
+  // guard above passed four real examples (the pool/fee-tier line, the buyback claim, the "what
+  // makes CLKN different" quiz, the AMM trading examples) because it looked for two phrases. The
+  // rule is the whole word: the education edition names no token of ours, anywhere. Pinned on
+  // the generated store curriculum (the source of the bundled school) AND on the chunk, with the
+  // four examples spelled out so a regression is named, not just counted.
+  {
+    const storeCurriculum = fs.readFileSync(path.join(ROOT, "data", "curriculum.store.json"), "utf8");
+    const examples = [
+      ["the fee-tier line about CLKN's own pools", /CLKN's own/],
+      ["the buyback claim (\"reinvests … back into buying CLKN\")", /buying CLKN/],
+      ["the \"what makes CLKN different\" quiz", /What makes CLKN|CLKN is a memecoin/],
+      ["the AMM worked examples priced in CLKN", /[0-9,]+ CLKN/],
+      ["the whole word, anywhere", /\bCLKN\b/],
+    ];
+    for (const [what, re] of examples) ok(`the store curriculum never carries ${what}`, !re.test(storeCurriculum), (re.exec(storeCurriculum) || [""])[0]);
+    ok("the bundled chunk never carries the whole word CLKN (identifiers like CLKN_I18N are not the word)", !/\bCLKN\b/.test(code), (/.{0,60}\bCLKN\b.{0,60}/.exec(code) || [""])[0]);
+    ok("the bundled dictionaries never carry the whole word CLKN", !text.some(([f, t]) => /i18n\/.*\.json$/.test(f) && /\bCLKN\b/.test(t)), text.filter(([f, t]) => /i18n\/.*\.json$/.test(f) && /\bCLKN\b/.test(t)).map(([f]) => f));
+  }
+  ok("the Daily pane never renders the brief or a yield figure", !code.includes("%/day") && !code.includes("payload.brief"));
   ok("every outbound host in every file is on the allow-list", (() => { const bad = new Set(); for (const [, t] of text) for (const m of t.matchAll(/https?:\/\/([a-zA-Z0-9.-]+)/g)) if (!cfg.allowedHosts.includes(m[1])) bad.add(m[1]); return bad.size === 0; })());
   ok("the footer links the store's own privacy policy and terms", all.includes("https://clucknorris.app/privacy/store") && all.includes("https://clucknorris.app/terms/store"));
   ok("the RootCrak credit carries no referral parameter", !all.includes("rootcrak.com/?ref"));
-  ok("the listing checkup gates backend-provided links through a host allow-list at render time", (() => { const t = text.find(([f]) => f === "listing-checkup.html")[1]; return t.includes("STORE_HOSTS") && t.includes("safeUrl(src.pageUrl)") && t.includes("safeUrl(shareUrl)"); })());
+  {
+    // v1.0.2's finding restated for the shell: a static verifier cannot see a link that arrives
+    // in a response, so the PAGE enforces a host allow-list at render time. Source-level, because
+    // the chunk is minified: edu.jsx hands ListingCheckup its LINK_HOSTS, safeHref() enforces a
+    // list when given one, and that list is a subset of this config's allowedHosts.
+    const edu = fs.readFileSync(path.join(ROOT, "src", "seeker", "edition", "edu.jsx"), "utf8");
+    const lc = fs.readFileSync(path.join(ROOT, "src", "seeker", "tools", "ListingCheckup.jsx"), "utf8");
+    ok("the shell's Listing Checkup gates backend-provided links through a host allow-list at render time", /<ListingCheckup\s+linkHosts=\{LINK_HOSTS\}/.test(edu) && /function safeHref\(u, hosts\)/.test(lc) && /hosts\.includes\(new URL\(s\)\.hostname\)/.test(lc) && /safeHref\((row\.pageUrl|row\.fixUrl|m\.pairUrl), hosts\)/.test(lc));
+    const m = edu.match(/export const LINK_HOSTS = \[([\s\S]*?)\];/);
+    const hosts = m ? [...m[1].matchAll(/"([^"]+)"/g)].map((x) => x[1]) : [];
+    const off = hosts.filter((h) => !cfg.allowedHosts.includes(h));
+    ok("every host the education edition may link to is on the build's allow-list (LINK_HOSTS ⊆ allowedHosts)", hosts.length > 0 && off.length === 0, off);
+    ok("and the allow-listed hosts are actually in the chunk (the list survived the build)", hosts.every((h) => code.includes(h)), hosts.filter((h) => !code.includes(h)));
+  }
   ok("the full edition's wallet claim and trade links are compiled out", !code.includes("YOU EARNED YOUR SPOT IN THE FLOCK") && !code.includes("Submit your Solana wallet"));
   ok("no leftover STORE markers", !/STORE:(OUT|IN)/.test(all));
   ok("no page in the bundle that is not allow-listed", files.filter((f) => f.endsWith(".html")).map((f) => path.relative(tmp, f)).sort().join(",") === ["index.html", ...cfg.pages].sort().join(","), files.filter((f) => f.endsWith(".html")).map((f) => path.relative(tmp, f)));
-  ok("the wallet checkup page carries the scan but no revoke card, no connect, no signing", (() => { const t = text.find(([f]) => f === "wallet-checkup.html")[1]; return t.includes("/api/wallet-checkup?wallet=") && !t.includes("revokeCard") && !t.includes("connectWallet") && !t.includes("signAndSend"); })());
-  ok("the listing checkup page runs the full sweep without a gate", (() => { const t = text.find(([f]) => f === "listing-checkup.html")[1]; return t.includes("function runFull()") && !t.includes("CluckGate") && !t.includes("tools pass"); })());
+  ok("the wallet checkup scans (GET /api/wallet-checkup?wallet=) but carries no revoke, no connect, no signing", code.includes("/api/wallet-checkup?wallet=") && !code.includes("revokeCard") && !code.includes("signAndSend"));
+  ok("the listing checkup runs without a gate (no CluckGate, no 'tools pass' in the bundle)", !code.includes("CluckGate") && !code.includes("tools pass"));
   fs.rmSync(tmp, { recursive: true, force: true });
   if (NO_SERVER) { console.log(failures ? `\n${failures} FAILED` : "\nall passed (bundle only)"); process.exit(failures ? 1 : 0); }
 
@@ -102,8 +154,14 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     for (const o of ["https://localhost", "http://localhost"]) { const r = await req(s1.base, "/api/track", { method: "OPTIONS", headers: { origin: o } }); ok(`OPTIONS /api/track from ${o} → 204 + echo`, r.status === 204 && r.h("access-control-allow-origin") === o); }
     const tr = await req(s1.base, "/api/track", { method: "POST", headers: { origin: CAP, "content-type": "application/json", "user-agent": UA }, body: JSON.stringify({ event: "lesson_start:x", sid: "store-test-sid-0001" }) });
     ok("POST /api/track with the store origin + UA is served with CORS", tr.status < 400 && tr.h("access-control-allow-origin") === CAP, { status: tr.status, acao: tr.h("access-control-allow-origin") });
-    const ex = await req(s1.base, "/api/hatchery/config", { method: "OPTIONS", headers: { origin: CAP, "access-control-request-method": "GET" } });
-    ok("an excluded endpoint gets NO CORS for the app origin (preflight does not 204 with our headers)", !(ex.status === 204 && ex.h("access-control-allow-origin") === CAP), { status: ex.status, acao: ex.h("access-control-allow-origin") });
+    // Until 2026-09-22 this asserted that an excluded endpoint got NO CORS for the app origin.
+    // The Seeker edition — the full product — runs from the SAME webview origins and needs CORS
+    // on exactly these endpoints (SEEKER_API_RE, scripts/seeker-cors-test.cjs), so the origin is
+    // no longer what keeps the education edition out: the UA refusal is (403 below, and every
+    // endpoint's own gate). What this pins now: the store UA is refused on it WITH the CORS
+    // headers, so the education app reads the 403 instead of an opaque network error.
+    const ex = await req(s1.base, "/api/hatchery/config", { headers: { origin: CAP, "user-agent": UA } });
+    ok("an excluded endpoint refuses the store UA (403) even from the app origin, and the refusal is readable (CORS present)", ex.status === 403 && ex.json && ex.json.error === "not_available_in_this_edition" && ex.h("access-control-allow-origin") === CAP, { status: ex.status, acao: ex.h("access-control-allow-origin") });
     const foreign = await req(s1.base, "/api/ask-cluck", { method: "OPTIONS", headers: { origin: "https://evil.example", "access-control-request-method": "POST" } });
     ok("a foreign origin gets no app-origin echo", foreign.h("access-control-allow-origin") !== "https://evil.example");
     for (const p of ["/api/tool-gate/config", "/api/tool-gate/session", "/api/hatchery/config", "/api/buyspecial/config", "/api/lock/recent", "/api/wallet-xray?wallet=x", "/api/trace?wallet=x", "/api/claim", "/api/cuna-draw/enter", "/api/security-coop/revoke", "/api/airdrop-collect"]) {

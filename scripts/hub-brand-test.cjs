@@ -57,6 +57,19 @@ t("rejects an over-long tagline", () => {
   assert.strictEqual(brand.validateBrand({ ...goodBrand, tagline: "x".repeat(120) }).tagline.length, 120, "exactly 120 is fine");
 });
 
+t("P3-09 (docs/HUB_PUBLIC_SURFACES_VERIFY_2026-09-18.md): a Unicode bidi override in a tagline is stripped, not just C0 controls", () => {
+  const rlo = "‮"; // RIGHT-TO-LEFT OVERRIDE
+  const cleaned = brand.validateBrand({ ...goodBrand, tagline: rlo + "evil visible text" }).tagline;
+  assert.strictEqual(cleaned, "evil visible text");
+  assert.ok(!cleaned.includes(rlo), "the override character must not survive");
+});
+
+t("a tagline that is ONLY bidi/format characters validates to no tagline (null-ish empty), not a hidden one", () => {
+  const b = brand.validateBrand({ ...goodBrand, tagline: "​‮⁩﻿" });
+  // goodBrand carries other fields too, so the whole block isn't null — just this one field.
+  assert.strictEqual(b.tagline, null);
+});
+
 t("no brand at all validates to null, not an object of empty fields", () => {
   assert.strictEqual(brand.validateBrand(null), null);
   assert.strictEqual(brand.validateBrand({}), null);

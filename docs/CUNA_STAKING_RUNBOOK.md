@@ -369,6 +369,70 @@ at all (see above). An over-payment reads as zero owed, never as a debt.
 
 ---
 
+## The buy-to-enter giveaway scanner: settle delay + rewind (2026-09-24)
+
+`lib/cuna-giveaway.js` runs the separate CUNA buy-to-enter giveaway (the birthday raffle at
+`/prize-wheel`), scanning the trade tape incrementally and never looking back. On 2026-09-23 wallet
+`8w3JXv…HCuNt` made 35 qualifying buys and only 20 were credited: the 15 missed all landed SECONDS
+before a scan tick ran. `getTradeTapeHelius` only reports a slice as incomplete when a signature is
+MISSING from its batch — not when the signature is present but Helius's enhanced parse for a very
+fresh transaction comes back with no usable `tokenTransfers` yet (the enrichment lags a little
+behind the signature index). That read as a fully-covered, empty slice, so the cursor retired it
+and the buys inside it were gone for good.
+
+**The fix, shipped the same day:** `scanOnce()` never scans a slice whose end is within 5 minutes
+of "now" — a `SETTLE_MS` delay that gives Helius's enrichment time to catch up before a slice is
+ever asked for. The room board runs 5 minutes behind live because of this, which is fine — it
+already refreshes every 15–20 minutes. Once a promo's window has actually closed (`now >= endMs +
+5min`), the delay stops mattering and the scanner still reaches exactly `endMs`.
+
+**`&rewind=<ISO | unix ms | unix s>`** on `/api/cuna-giveaway/admin` (**POST-only**, like every
+other mutating flag on this route) is the operator's lever for the tape that was already retired
+before the fix shipped — or for any other stretch worth re-checking. It moves `cursorMs` backward
+and touches NOTHING else: no wallet record, no dq mark, no payout, no draw. It is safe to repeat
+any number of times — every credit is deduped by signature
+(`rec.buys.some(b => b.sig === t.sig)`), so a re-scan cannot double-credit a buy it already counted,
+and a sell already recorded as a dq stays a dq. It clamps to the promo's `startMs` on the early side
+and refuses to move the cursor FORWARD on the late side (a bad or reversed value cannot skip tape
+that hasn't been scanned yet). `scripts/cuna-giveaway-scan-test.cjs` pins both the settle delay and
+the rewind clamp/dedupe behaviour against the real module.
+
+### Rewind and reset now catch up immediately (owner, 2026-09-24: "nothing should take 100 minutes ever")
+
+`scanOnce()` caps itself at `MAX_SLICES_PER_RUN` (8) slices per call so one 5-minute tick can never
+run long — right for steady state, but it meant a `&rewind=` or `&reset=1` that reopened a multi-hour
+stretch got re-scanned at the scheduler's own pace: 8 slices every 5 minutes, so a 14-hour backlog
+took roughly **100 minutes** to fully re-score, while looping `scanOnce()` directly by hand caught the
+same stretch up in about 3 minutes (12 calls) the night this was found. `catchUp(deps, opts)` in
+`lib/cuna-giveaway.js` is that loop, made a first-class function:
+
+- it calls `scanOnce()` repeatedly, with no sleep between calls (credits are deduped by signature,
+  so back-to-back calls are free and safe), until one of three things happens: a call reports
+  `upToDate:true`; the wall-clock budget (`opts.budgetMs`) runs out; or a call returns `ok:false` —
+  a real error (bad config, a tape/RPC failure, no price bars), surfaced rather than swallowed. The
+  one softer case is a slice the tape couldn't fully cover (`scanOnce()` reports this as
+  `ok:true, stalled:true` and does not advance the cursor past it) — that's worth a few retries in
+  case it clears on its own, but three CONSECUTIVE stalls stop the loop rather than burning the
+  whole budget on a slice that isn't going to resolve;
+- it returns `{ ok, calls, slices, newEntries, newDq, behindMs, upToDate, ms }` so a caller can log
+  or report exactly how far it got.
+
+**Both `&rewind=` and `&reset=1` on `/api/cuna-giveaway/admin` now call `catchUp` before answering**,
+budgeted at 75 seconds — comfortably inside Cloudflare's ~100s edge timeout — and the result comes
+back as `out.catchUp` on the response. If that 75s budget isn't enough to reach `upToDate` (a very
+large backlog), the response says so via `catchUp.behindMs`, and **the scheduler's own 5-minute tick
+self-heals the rest**: once a scan reports `behindMs` more than 2 slice-widths (20 minutes) behind
+the ceiling, it calls `catchUp` itself with a 120-second budget and logs
+`[cuna-giveaway] catching up: behind Xmin → Ymin in N calls`, rather than trickling the backlog down
+at 8 slices per tick. Between the 75s on the admin response and the 120s self-heal a tick or two
+later, nothing should ever again sit behind for anywhere near 100 minutes.
+`scripts/cuna-giveaway-scan-test.cjs` also drives `catchUp` directly: a multi-hour rewind caught up
+in one call, a tight budget stopping it early and reporting the remaining `behindMs`, a stubbed
+tape/RPC failure surfaced (not swallowed), and already-credited signatures never double-counted
+across a re-walk.
+
+---
+
 ## Where things are
 
 | | |

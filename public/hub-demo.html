@@ -6,16 +6,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Hub Demo Walkthrough</title>
 <meta name="description" content="A guided, no-wallet walkthrough of the Project Hub's single-holder story — a program version, who qualifies and why, funding coverage, a batch, and a receipt. Fixture data, nothing on-chain."/>
-<meta property="og:title" content="Project Hub — demo walkthrough"/>
-<meta property="og:description" content="See how a Lock to Earn program qualifies holders, covers its funding and pays a receipt — walked through on fixture data, no wallet needed."/>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<!-- OG -->
 <style>
   /* palette + type scale come from theme.css — never redefine a token here */
   * { box-sizing:border-box; margin:0; padding:0; }
   body { background:var(--bg); color:var(--text); font-family:var(--body); min-height:100vh; }
   .wrap { max-width:760px; margin:0 auto; padding:24px 16px 80px; }
-  .back-home { display:inline-flex; align-items:center; gap:6px; font-size:11px; font-weight:700; letter-spacing:2px; color:var(--orange); text-decoration:none; margin-bottom:14px; }
+  .back-home { display:inline-flex; align-items:center; min-height:44px; gap:6px; font-size:11px; font-weight:700; letter-spacing:2px; color:var(--orange); text-decoration:none; margin-bottom:14px; }
   .header { text-align:center; margin-bottom:14px; }
   .header h1 { font-family:var(--disp); font-size:28px; letter-spacing:1px; color:var(--gold); font-weight:400; }
   .header p { font-size:11px; color:var(--sub); letter-spacing:3px; margin-top:4px; }
@@ -57,7 +54,10 @@
   .holder-card.no { border-color:rgba(239,68,68,.3); background:rgba(239,68,68,.04); }
   .holder-card.yes { border-color:rgba(16,185,129,.25); background:rgba(16,185,129,.03); }
   .step-links { display:flex; gap:14px; flex-wrap:wrap; margin-top:12px; font-size:11.5px; }
-  .step-links a { color:var(--cyan, #67E8F9); text-decoration:none; letter-spacing:.5px; }
+  /* Each link is the sole content of its row, not a word in a sentence — invisible tap-area
+     padding (cancelled by an equal negative margin, so nothing shifts visually) brings the hit
+     box toward 44px tall without changing how the row looks. */
+  .step-links a { display:inline-block; padding:16px 2px; margin:-16px -2px; color:var(--cyan, #67E8F9); text-decoration:none; letter-spacing:.5px; }
   pre.proof { background:rgba(0,0,0,.35); border:1px solid var(--border); border-radius:8px; padding:12px; font-family:var(--mono); font-size:11.5px; color:#D1D5DB; overflow-x:auto; white-space:pre-wrap; word-break:break-all; }
   .status { text-align:center; color:var(--sub); font-size:12px; letter-spacing:2px; padding:18px 0; }
   .err { background:var(--redbg, rgba(239,68,68,0.08)); border:1px solid rgba(239,68,68,0.3); border-radius:8px; padding:10px 14px; font-size:12.5px; color:#FCA5A5; margin-top:12px; }
@@ -67,7 +67,7 @@
 </style>
 </head>
 <body>
-<div class="wrap">
+<main class="wrap">
   <a class="back-home" href="/hub">← PROJECT HUB</a>
   <div class="header">
     <h1 id="title">Hub Demo Walkthrough</h1>
@@ -75,7 +75,8 @@
   </div>
   <div class="dryrun"><span class="dot"></span> DRY RUN — fixture data, nothing on-chain</div>
   <div id="app"><div class="status">LOADING…</div></div>
-</div>
+  <div class="fact" data-clkn-avoid="1" style="text-align:center;margin-top:14px">What does this NOT prove? <a href="/hub/trust">Read the trust boundary →</a></div>
+</main>
 
 <script src="/cluck-util.js"></script>
 <script>
@@ -109,7 +110,9 @@
   function holderCard(h, dec, sym) {
     var verdict = h.qualifies
       ? '<span class="pill ok">QUALIFIES</span> <b>' + esc(h.termLabel) + '</b> · <span class="mono">' + esc(h.multiplier) + 'x</span> the base rate'
-      : '<span class="pill bad">DOES NOT QUALIFY</span> ' + (h.reasons || []).map(function (r) { return '<span class="mono">' + esc(r.code) + '</span> — ' + esc(r.text); }).join('; ');
+      // EE2: every code here is a glossary reason entry (kind: "reason", the same list
+      // lib/hub/eligibility.js REASON_CODES exports) — link it rather than just printing it.
+      : '<span class="pill bad">DOES NOT QUALIFY</span> ' + (h.reasons || []).map(function (r) { return '<a class="mono" href="/hub/glossary#' + encodeURIComponent(r.code) + '">' + esc(r.code) + '</a> — ' + esc(r.text); }).join('; ');
     var lines = '<div class="fact" style="margin-top:6px">Locked <b>' + esc(whole(h.numbers.atRiskRaw, dec)) + ' ' + esc(sym) + '</b> · term ' + esc(h.termLabel) +
       ' · locked since ' + esc(new Date(h.numbers.firstSeenAt * 1000).toISOString().slice(0, 10)) +
       (h.qualifies ? ' · accrued so far <b>' + esc(whole(h.accruedRaw, dec)) + ' ' + esc(sym) + '</b>' : '') + '</div>';
@@ -177,9 +180,9 @@
     out += step('E', "Holder A's receipt", receiptBlock(rA, dec, sym) +
       '<div class="step-links"><a href="/hub/' + esc(projectId) + '/r/' + esc(A.receiptId) + '">Open the receipt page →</a></div>');
 
-    out += step('F', 'Reproduce it yourself', '<div class="fact">The reproduction export (design §2) bundles the dated inputs an accrual actually used — every eligible escrow that period, the exclusion list, the pool and the rounding rule — so a developer can rerun it independently:</div>' +
-      '<pre class="proof">node scripts/reproduce-receipt.cjs &lt;export.json&gt;</pre>' +
-      '<div class="fact"><i>This script is being built alongside this walkthrough (see docs/DESIGN_PROJECT_HUB_2026-09-10.md §2, "Reproduction export") — it is not wired up yet, so this step names the command rather than linking a working page.</i></div>');
+    out += step('F', 'Reproduce it yourself', '<div class="fact">A LIVE lock-to-earn or buy-competition receipt can be re-derived from the published inputs, on your own machine, with no server call — this fixture predates that wiring (it runs the newer Addendum-B settlement journal, not yet on a live route; see HUB_VERIFY.md §g), so this step names the tool rather than reproducing itself:</div>' +
+      '<pre class="proof">node scripts/reproduce-receipt.cjs &lt;receipt-url&gt;</pre>' +
+      '<div class="fact" style="margin-top:8px">Or paste any real receipt link into <a href="/hub/verify">the browser version</a> — the exact same code, no terminal needed, and it works offline once loaded.</div>');
 
     out += step('G', 'A second project never sees this one', '<div class="fact">A different fixture project, <b>' + esc(db.project.label) + '</b> (' + esc(db.project.symbol) + '), has its own store, its own ledger and its own holder. ' + esc(db.isolationNote) + '</div>' +
       holderCard(db.holders[0], db.project.decimals, db.project.symbol) +
@@ -202,8 +205,10 @@
     out += '<div class="card"><div class="sec-title" data-clkn-avoid="1" style="margin-top:0">Funding</div>' + fundingBlock(d.funding, dec, sym) + '</div>';
     out += '<div class="card"><div class="sec-title" data-clkn-avoid="1" style="margin-top:0">Batch ' + esc(d.batch.id) + '</div>' + batchTable(d.batch, dec, sym) + '</div>';
     if (d.teach) {
+      // EE2: a.key (what_happens/can_i_sell/where_reward/how_much/risks/why_lock) is a glossary
+      // term id — link the question itself, next to the existing "Learn more" lesson link.
       out += '<div class="card lessons"><div class="sec-title" data-clkn-avoid="1" style="margin-top:0">Six questions, answered from the program itself</div>' +
-        d.teach.answers.map(function (a) { return '<div class="fact" style="padding:6px 0"><b style="color:var(--text)">' + esc(a.question) + '</b><br>' + esc(a.text) + ' <a href="' + esc(a.lesson.href) + '">Learn more →</a></div>'; }).join('') + '</div>';
+        d.teach.answers.map(function (a) { return '<div class="fact" style="padding:6px 0"><b style="color:var(--text)"><a href="/hub/glossary#' + encodeURIComponent(a.key) + '">' + esc(a.question) + '</a></b><br>' + esc(a.text) + ' <a href="' + esc(a.lesson.href) + '">Learn more →</a></div>'; }).join('') + '</div>';
     }
     out += '<div class="fact" data-clkn-avoid="1" style="text-align:center">Raw data: <a class="mono" href="/api/hub-demo/' + esc(projectId) + '">/api/hub-demo/' + esc(projectId) + '</a></div>' +
       '<div class="fact" data-clkn-avoid="1" style="text-align:center;margin-top:6px"><a href="/hub/demo">← back to the walkthrough</a></div>';

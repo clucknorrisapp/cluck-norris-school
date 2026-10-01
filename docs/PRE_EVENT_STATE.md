@@ -211,6 +211,104 @@ release mechanism for the feature/fix PRs below it and is not listed as a separa
 
 ### Operations / hygiene
 
+- **Colosseum batch 17** — the pitch script and demo narration re-timed to the final surface set
+  (every claim re-checked against `develop`, a false "four weeks" claim removed, a stale "not yet
+  fixed" note corrected) with a one-page click sheet for the recording; the desk fix round from
+  the rehearsal (`/api/hub-registry` accepts `accessTier` and refuses unknown fields instead of
+  answering ok while doing nothing; the wallet roll-up says it shows history, not today's
+  eligibility; the project page states what a version is versus a program; a project with no
+  funding wallet is told the exact next step). PR #356.
+- **Colosseum batch 16** — the POKEAHOE rehearsal end to end with `dryRun` kept on (the dry-run
+  project taken from placeholder terms through preview, Launch Readiness, the refusal at export
+  and send, and every public page, against a local boot of the merged tree; the write-up names
+  the staging URLs, what confused, the sequence for the real go with the arming step named and
+  not performed, and a terms-sheet template with no numbers); roadmap Extension 11; the
+  2026-09-18 handoff. PR #355.
+- **Colosseum batch 15** — roadmap Extension 10 (the rehearsal before anyone real is on the other
+  side); docs drift round 4 (the Codex brief through #350–#352 and the journal's rounds 3–5; the
+  reviewer's path in `docs/HUB_VERIFY.md` names every public surface since batch 9; the trust page
+  and the verify doc corrected: the settlement journal IS the live path for Hub payouts since #342,
+  while CUNA's own payouts still run on the older dedicated handler); storyboard Part 4 with
+  fourteen real captures and an inventory test in CI. PR #353.
+- **Colosseum batch 14** — the four P1s from the public-surfaces lens closed with regression tests
+  (`/hub/verify` refuses receipt URLs from any origin but our own; amounts in token units; the
+  heaviest Hub reads rate-limited with a bounded wallet-lookup cache; `/api/track` no longer mints
+  per-project keys for unknown ids); `/hub/glossary` — every term and reason code from one source
+  in seven languages, with a drift test; a load proof for the public reads (fixture generator,
+  `scripts/hub-load-smoke.cjs`, before/after numbers in `docs/HUB_LOAD_2026-09-18.md`, a reduced
+  run in CI); the validation doc filled from milestone timestamps; and preview-before-publish on
+  the operator desk — a draft's terms run through the same validate/version/accrue code the real
+  publish uses, showing who would qualify today, with nothing written. PR #352.
+- **The settlement journal as the live payout path (#342, the W3 integration gate)** — on its
+  own PR because it is a money path: journal-first settlement with exact-amount matching (a
+  transfer settles a row only when its amount equals what the row is owed), the transfer source
+  bound to the funding wallet or an owner-set allowlist, cross-project reuse and future block
+  times refused, per-project locks and per-transfer keys, one summary alert per request, the
+  holder view and the desk reading the same journal, "paid from" on receipts, reserved project
+  ids in one list, an owner-only waive for partial rows. Five read-only verification rounds
+  (`docs/HUB_JOURNAL_VERIFY_2026-09-18.md`) and five fix rounds before it merged; 84 route
+  cases. PR #342.
+- **Colosseum batch 13** — follow a project without a wallet (a JSON Feed and an RSS feed per
+  project: versions published, batches settled with their reproducibility ratio, holder snapshots,
+  observed commitments, from the public view only); Arena drafts round 3 and weekly update #2
+  filled from the record; a receipt you can print, with a QR of its public URL from a
+  from-scratch encoder; a read-only adversarial pass over every public surface added since batch 9
+  (no P0, four P1 — the fixes follow on batch 14); roadmap Extension 9. PR #351.
+- **Colosseum batch 12** — `/hub/verify` in seven languages (and the dictionaries served on a
+  no-build boot, which had silently left every Hub page in English there); the evidence bundle's
+  program version made recomputable (the public view had dropped eight hashed fields, and a served
+  `$schema` was being hashed — both found by the docs pass and the new tests); what changed between
+  two program versions at `/hub/<project>/programs/compare`, computed in the browser from the two
+  public documents; reproducibility over time as a daily append-only hashed record with a
+  sparkline; the receipt verifier as a standalone `npx` package built deterministically from the
+  repo's own libraries (publishing pending the owner); roadmap Extension 8. PR #350.
+- **Colosseum batch 11** — `/receipt <signature>` in Telegram: the reproduce verdict for a Hub
+  settlement, composed from the same public receipt view, silent, with the OnlyRose refusal pinned
+  by a test that calls the real room policy; the receipt lesson measured (per-lesson reads and the
+  finish card's click-throughs counted per day, nothing identifying a learner) and, found on the
+  way, the Google Play bundle stripped of Hub strings that had ridden in through the shared
+  dictionaries; the holders page in the accessibility gate, with the history and compare panels
+  unhidden on a shared snapshot link; the Codex reviewer brief through batch 10, the reviewer's
+  path in `HUB_VERIFY.md`, fourteen reference captures of the new pages; roadmap Extension 7.
+  PR #349.
+- **Colosseum batch 10** — one wallet across every project (`/hub/wallet/<address>`: what each
+  program qualified or excluded it for, each receipt with its settlement signature, owed against
+  arrived); the evidence bundle (one downloadable JSON per settled batch with a canonical hash, and
+  `/hub/verify` accepts it in one move — a hash-stability bug found and fixed on the way); the holder
+  snapshot diff over the recorded top holders, labelled as such; the judge's fifteen minutes
+  (`docs/JUDGE_GUIDE.md` rendered into `/hub/judge`, every URL link-checked on a no-build boot);
+  `/hub/trust`, what the Hub does not prove, in seven languages with a doc-drift test; the Live
+  Classroom's curriculum regenerated from the real sources after three months stale, with a
+  freshness check in CI; a reproducibility badge computed from the record; roadmap Extension 6.
+  PR #348.
+- **Colosseum batch 9** — `/hub/verify`: the pure reproduce + schema-validate core bundled for
+  the browser, so a holder re-derives a receipt's amount on their own machine, offline once loaded,
+  with a test that the browser bundle and the Node script agree on every fixture; the 15th school
+  lesson, "Read a payout receipt", in seven languages, ending on the demo receipt; server-rendered
+  Open Graph cards on every Hub page (one static image, DRY RUN named in the description where it
+  applies); the weekly update built from `git log` rather than memory, update #1 regenerated and
+  Arena drafts round 2 (all held until promoted); `/hub/status` with `GET /api/build` (what is
+  live, where, how reproducible, which commit); ETags, cache tiers, rate limits and parameter shape
+  checks on the new public reads; roadmap Extension 5. PR #347.
+- **Colosseum batch 8** — the phone and accessibility pass on the public Hub pages with a CI gate
+  (and the no-build-boot fix it exposed: the sitewide nav, i18n, read-aloud and theme files now have
+  explicit routes); the demo storyboard with 22 real captures (`docs/DEMO_STORYBOARD.md`'s own
+  inventory count, grown since first written — see that doc's "Capture inventory" table);
+  Launch Readiness (Addendum A: a
+  derived checklist and reward-budget planner, and a known funding shortfall can no longer be armed);
+  airdrop per-drop receipts with every row verified against the chain, including the transfer's
+  source; the public Buy Special standings and hold-through proof (sealed lists hashed, unsealed
+  boards never exposed, the payout split extracted to one pure function); the Codex reviewer brief
+  caught up and `docs/HUB_VERIFY.md` for judges with a doc-drift test; buy-comp rows counted in the
+  reproducibility ratio; the new surfaces in seven languages; the engine timeline with decision
+  replay against the pure gate; append-only hashed holder snapshots; a per-install analytics salt;
+  the pitch and demo scripts to the second. PR #346.
+- **Colosseum batch 7** — W9 part 2, real usage without a single automated post: a "see how a
+  project's rewards are actually paid" door on the school landing and every lesson's finish
+  screen → `/hub/demo` (folded out of the store edition), a second line under the homepage's
+  project tile → `/hub`, both counted per day with their own page views as the denominator in the
+  traction report; Telegram invitation drafts for the four partner projects the owner sends by
+  hand; a note on the one-line lesson-tweet CTA change that stays the owner's call. PR #345.
 - **Colosseum batch 6** — the W6b validation kit: `docs/VALIDATION_2026-09.md` (the
   founder-operated / dry-run / independent rule applied per partner project, interview records,
   the consented POKEAHOE dry-run pilot timeline, every number and quote left to be filled) and the

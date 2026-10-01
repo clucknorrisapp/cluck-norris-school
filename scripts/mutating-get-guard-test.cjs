@@ -133,6 +133,20 @@ function raw(method, p, headers) {
   r = await call("POST", "/api/meme-queue?done=abc&art=%7B%22image%22%3A%22x%22%7D"); ok("POST /api/meme-queue?done=&art= goes through", r.status === 200 && r.body && r.body.ok === true, JSON.stringify(r.body).slice(0, 120));
   r = await call("GET", "/api/meme-queue?done=abc", false); ok("meme-queue stays 404 without the key", r.status === 404);
 
+  // ── airdrop per-drop receipt (Colosseum roadmap §W4/Extension): recording a row is a POST-only
+  // write. It carried the tools pass until 2026-09-22 (owner: the Airdropper is free for everyone
+  // on every platform); it takes no tools pass and reads no holdings, but since Codex's round 18
+  // it needs the RECEIPT SIGN-IN (a signed nonce, 401 without it) so a stranger cannot claim an
+  // operator's transfer on a receipt of their own. The public receipt reads
+  // (/api/airdrop/r/:dropId[/:wallet]) are unauthenticated GETs and stay that way; they are
+  // exercised by scripts/airdrop-receipt-test.cjs, not here.
+  r = await call("GET", "/api/airdrop/record", false);
+  ok("GET /api/airdrop/record is refused with 405", r.status === 405, JSON.stringify(r.body));
+  r = await call("GET", "/api/airdrop/record?dropId=x", false);
+  ok("GET /api/airdrop/record with query params is still refused with 405", r.status === 405);
+  r = await call("POST", "/api/airdrop/record", false);
+  ok("POST /api/airdrop/record with no sign-in is 401 receipt_session_required — never 402 (no tools pass is asked for), never a silent 200", r.status === 401 && r.body && r.body.error === "receipt_session_required", JSON.stringify(r.body));
+
   // ── buy-comp server payout: run / sweep / unpay / set on a GET → 405, decided BEFORE the comp
   // lookup so a pasted link is refused before it touches anything; the flag-less GET is the read.
   r = await call("GET", "/api/buycomp/send?id=nope&run=1");
@@ -167,6 +181,18 @@ function raw(method, p, headers) {
   ok("GET /api/hub/:project/desk/session is refused with 405 (POST-only)", r.status === 405, JSON.stringify(r.body));
   r = await call("GET", "/api/hub/nope/desk", false);
   ok("/api/hub/:project/desk without a key or operator token is 404", r.status === 404);
+  // EE1 (Colosseum roadmap): POST-only because the draft terms are a request BODY — it is a READ
+  // (nothing is written, armed or sent; scripts/hub-preview-test.cjs hashes app-state.json before
+  // and after ten previews to prove it), so unlike every other entry in this file it carries no
+  // mutating flag at all — there is nothing to name here beyond "POST-only".
+  r = await call("GET", "/api/hub/nope/desk/preview");
+  ok("GET /api/hub/:project/desk/preview is refused with 405 (POST-only, not because it mutates)", r.status === 405, JSON.stringify(r.body));
+  r = await call("POST", "/api/hub/nope/desk/preview");
+  ok("POST /api/hub/:project/desk/preview for an unknown project is 404", r.status === 404 && !!r.body && /no such project/.test(String(r.body.error)), JSON.stringify(r.body));
+  r = await call("POST", "/api/hub/nope/desk/preview", false);
+  ok("POST /api/hub/:project/desk/preview without a key or operator token is 404 (no project-exists hint)", r.status === 404 && !(r.body && /no such project/.test(String(r.body.error))), JSON.stringify(r.body));
+  r = await call("GET", "/api/hub/nope/readiness", false);
+  ok("/api/hub/:project/readiness without a key or operator token is 404 (it is a read, but an operator-gated one — it reveals a funding balance)", r.status === 404);
   r = await call("GET", "/api/hub/nope/admin", false);
   ok("/api/hub/:project/admin without a key or operator token is 404 (no project-exists hint)", r.status === 404 && !(r.body && /no such project/.test(String(r.body.error))), JSON.stringify(r.body));
   r = await call("GET", "/api/hub/nope/access?sig=x&quote=y", false);
@@ -177,6 +203,9 @@ function raw(method, p, headers) {
   ok("GET /api/hub/:project/payout?export=1 is refused with 405", r.status === 405);
   r = await call("GET", "/api/hub/nope/payout?send=x&run=1");
   ok("GET /api/hub/:project/payout?send= is refused with 405", r.status === 405);
+  // N-3 (Round 4, docs/HUB_JOURNAL_VERIFY_2026-09-18.md): ledger.waiveRemainder's owner-only route.
+  r = await call("GET", "/api/hub/nope/payout?waive=4Gccq9pESbfNeKiW7M7qi587pYYiaQ4T4zLv3LcriGPs&batch=x");
+  ok("GET /api/hub/:project/payout?waive= is refused with 405", r.status === 405);
   r = await call("GET", "/api/hub/nope/payout", false);
   ok("/api/hub/:project/payout without the key is 404", r.status === 404);
   r = await call("GET", "/api/hub/nope/holder?address=4Gccq9pESbfNeKiW7M7qi587pYYiaQ4T4zLv3LcriGPs", false);
@@ -312,6 +341,10 @@ function raw(method, p, headers) {
   ok("GET /api/cuna-giveaway/admin?scan=1 (ledger write) is refused with 405", r.status === 405);
   r = await call("GET", "/api/cuna-giveaway/admin?reset=1");
   ok("GET /api/cuna-giveaway/admin?reset=1 is refused with 405", r.status === 405);
+  // 2026-09-24: &rewind= moves the scan cursor back (see the settle-delay fix) — a state change
+  // exactly like &scan=1, so it must be POST-only the same way.
+  r = await call("GET", "/api/cuna-giveaway/admin?rewind=" + encodeURIComponent("2026-09-23T12:25:00Z"));
+  ok("GET /api/cuna-giveaway/admin?rewind= (cursor write) is refused with 405", r.status === 405, JSON.stringify(r.body));
   r = await call("GET", "/api/cuna-giveaway/admin");
   ok("GET /api/cuna-giveaway/admin flag-less still reports config", r.status === 200 && r.body && r.body.ok === true && ("config" in r.body), JSON.stringify(r.body).slice(0, 200));
   r = await call("GET", "/api/cuna-giveaway/admin?payout=1");

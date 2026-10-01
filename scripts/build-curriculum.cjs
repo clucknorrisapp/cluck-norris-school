@@ -27,6 +27,13 @@ const read = (p) => fs.readFileSync(path.join(ROOT, p), "utf8");
 // tracking bracket depth and string state (so a "]" or "//" inside a string/template literal
 // doesn't end the scan early), then eval the isolated literal. These are pure-data arrays —
 // no JSX, no function calls — so eval is safe and deterministic.
+// The lesson arrays carry edition ternaries (`STORE ? … : …`, and LPLab/Library's `TOK`, the
+// worked-example ticker — store-edition v1.1.0). These scripts want the WEBSITE edition, so the
+// isolated literal is evaluated with STORE = false and the file's own `const TOK = …` line.
+function editionPrelude(src) {
+  const tok = /const TOK = [^\n]+;/.exec(src);
+  return "const STORE = false; " + (tok ? tok[0] + " " : "");
+}
 function extractArray(src, name) {
   const decl = `const ${name} = [`;
   const start = src.indexOf(decl);
@@ -46,7 +53,7 @@ function extractArray(src, name) {
     else if (c === "]") { depth--; if (depth === 0) { i++; break; } }
   }
   const slice = src.slice(start + decl.length - 1, i);
-  return eval("(" + slice + ")");
+  return eval("(function(){ " + editionPrelude(src) + "return (" + slice + "); })()");
 }
 
 const appSrc = read("src/App.jsx");
@@ -58,7 +65,7 @@ const LP_LESSONS = extractArray(lpSrc, "LP_LESSONS") || [];
 
 // ── Count-drift guard (mirrors scripts/check-counts.js's philosophy: fail loud, never
 // silently render a wrong number on public-facing copy) ────────────────────────────────
-const EXPECTED = { LESSONS: 14, INCUBATOR_LESSONS: 7, LP_LESSONS: 14 };
+const EXPECTED = { LESSONS: 16, INCUBATOR_LESSONS: 7, LP_LESSONS: 14 };
 const actual = { LESSONS: LESSONS.length, INCUBATOR_LESSONS: INCUBATOR_LESSONS.length, LP_LESSONS: LP_LESSONS.length };
 const drift = Object.keys(EXPECTED).filter((k) => actual[k] !== EXPECTED[k]);
 if (drift.length) {
@@ -188,7 +195,7 @@ const jsonLd = {
   "@type": "ItemList",
   name: "School of Crypto Hard Knocks — Curriculum",
   itemListElement: [
-    { "@type": "Course", position: 1, name: "Belt Course", description: "14 belt-ranked lessons on wallets, tokens, DEXs, rugs, market cap and on-chain basics.", provider: { "@type": "Organization", name: "Cluck Norris" } },
+    { "@type": "Course", position: 1, name: "Belt Course", description: "15 belt-ranked lessons on wallets, tokens, DEXs, rugs, market cap and on-chain basics.", provider: { "@type": "Organization", name: "Cluck Norris" } },
     { "@type": "Course", position: 2, name: "Crypto 101 (Incubator)", description: "7 absolute-beginner lessons on wallets, tokens, on-ramps, DEXs and liquidity.", provider: { "@type": "Organization", name: "Cluck Norris" } },
     { "@type": "Course", position: 3, name: "LP Lab", description: "14 lessons on AMMs, impermanent loss, concentrated liquidity and LP strategy.", provider: { "@type": "Organization", name: "Cluck Norris" } },
   ],

@@ -160,6 +160,92 @@ against presenting a dry run as a live program.
 
 ---
 
+## Onboarding clock (from the record)
+
+Everything above this section is filled by a human, from a conversation. This section is
+different: it is filled by a script, from the Hub's own registry (`lib/hub/store.js`'s
+`hub:projects` key), so it can be re-run and re-checked rather than typed by hand. Colosseum item
+**E7** built the four choke points this reads; Colosseum item **EE5** (this section) reads them.
+
+**The four milestones, in plain words** (the exact fields are `lib/hub/project.js`'s
+`milestonesInit()`; each is set at most once, by `setMilestoneOnce`, the first time it happens —
+never overwritten, never backdated):
+
+- **Registered** (`approvedAt`) — the owner approved the project into the Hub's registry. This is
+  the zero point every other delta below is measured from.
+- **First terms published** (`firstVersionPublishedAt`) — the project's first program version (the
+  pool size, the share, the minimum lock, the exclusions) went live for holders to read.
+- **First batch signed** (`firstBatchSignedAt`) — the first payout batch row for this project was
+  recorded as sent: chain-verified before recording for a project that signs its own transfers
+  (the `&sent=` path), or submitted — possibly still confirming — for a project on the managed
+  payer (`&send=`, `lib/hub/routes.js`).
+- **First payout observed** — as of today, the record has **no separate milestone for this.** The
+  only signal the store has for "a payout actually happened" is `firstBatchSignedAt` above.
+  `lib/hub/store.js` defines a settlement journal (`hub:settle`) that could one day hold a
+  distinct, independently-confirmed "observed on-chain" event, but nothing writes to it yet —
+  `readJournal` has callers, `writeJournal` has none (checked by grep, 2026-09-18). So this
+  column is printed from the exact same timestamp as "first batch signed," not a separate one —
+  see the "what is still unfilled" list below. This is a real gap in what the platform tracks,
+  not a rounding choice; naming it is more useful than a fifth invented field.
+
+**The exact command** (read-only, no network — `scripts/validation-rows.cjs`):
+
+```
+node scripts/validation-rows.cjs --data-dir <DATA_DIR>        # Markdown table (what's below)
+node scripts/validation-rows.cjs --data-dir <DATA_DIR> --json # the same rows, machine-readable
+```
+
+Run it wherever `DATA_DIR` points at the real Railway volume for the true production numbers — a
+box with no volume, or a fresh clone, prints the honest empty template
+(`scripts/validation-rows-test.cjs` pins that behavior). A cloud agent session has no access to
+that volume, so the POKEAHOE row below was demonstrated the only way this session could: booting
+`node server.js` against a **fresh, empty, local `DATA_DIR`**, which triggers `seedPokeDryRun()`
+(`server.js` ~14469) because `poke` is not yet in that empty registry, then running the script
+against the same directory. That demonstrates the mechanism honestly but is **not** production's
+real number — it is this box's own boot instant, 2026-09-18, not Railway's. Re-run the same two
+commands against the real `DATA_DIR` for the number that actually belongs in a submission.
+
+| Project | Registered | First terms published (Δ) | First batch signed (Δ) | First payout observed (Δ) | Dry run |
+|---|---|---|---|---|---|
+| POKEAHOE (`poke`) | 2026-09-18 (this session's local demo boot; production's real instant is unread — see above) | — | — | — | yes |
+| CUNA (`cuna`) | — (never registered in the Hub's own registry — CUNA is a built-in programme paid via the pre-Hub `/cuna-payout` mechanism, HELD off the Hub, owner 2026-09-17: "do not duplicate cuna yet") | — | — | — | n/a |
+| DNC | — (no Hub project record exists yet — `docs/PARTNER_INVITES_2026-09.md`'s status table, as of 2026-09-18) | — | — | — | n/a |
+| ROSE | — (no Hub project record exists yet — same source) | — | — | — | n/a |
+
+**Why POKEAHOE's other three columns are dashes, not a projection:** terms are not agreed with the
+POKEAHOE team (§(c) above — the dry run has no funding wallet and no program version), so
+`firstVersionPublishedAt`, `firstBatchSignedAt` and the payout column can none of them exist yet;
+`lib/hub/engine.js` and `lib/hub/routes.js` both refuse to arm or pay a `dryRun:true` project
+regardless, so there is nothing pending either — the dashes are a hard floor, not a delay.
+
+**Why CUNA/DNC/ROSE are template rows, not real ones:** none of the three has a row in the Hub's
+own project registry today (CUNA runs a parallel, pre-Hub mechanism by design; DNC and ROSE have
+never been registered at all), and per `docs/PARTNER_INVITES_2026-09.md`'s own sending checklist,
+**nothing in the record shows any of the four partner-invite DMs has actually been sent yet** —
+that document is paste-ready drafts for the owner to send by hand, not a sent log. So the honest
+status for all three is "not yet invited/answered," exactly as the record shows, not a guess in
+either direction.
+
+**What is still unfilled** (honest, as of 2026-09-18):
+
+- POKEAHOE's `registeredAt` shown above is a local demonstration value, not production's. Re-run
+  `node scripts/validation-rows.cjs --data-dir <real DATA_DIR>` against the Railway volume for the
+  number that belongs in the submission.
+- POKEAHOE's terms/batch/payout columns stay dashed until the POKEAHOE team agrees terms — tracked
+  in §(c) above, not duplicated here.
+- CUNA, DNC and ROSE have no Hub registry row at all — opening one (for DNC/ROSE) or deciding
+  whether CUNA ever gets one (owner call, still HELD) both come before this table can show them
+  for real.
+- Whether any of the four partner-invite DMs in `docs/PARTNER_INVITES_2026-09.md` has actually
+  been sent, and what the operator said, is unrecorded anywhere a script can read — that is what
+  `docs/OPERATOR_INTERVIEW_SCRIPT.md` and §(b) above exist to capture, by hand, after a real call.
+- "First batch signed" and "first payout observed" are the same field in the store today (see the
+  milestone explanation above) — if a later change adds a real, distinct "confirmed on-chain"
+  event (e.g. wiring up the unused settlement journal), this table's two columns should split to
+  match it, not before.
+
+---
+
 ## (d) What we learned
 
 `[to be filled after (a)-(c) are as complete as the window allows]`

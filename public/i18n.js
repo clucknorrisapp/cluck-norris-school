@@ -50,7 +50,7 @@
       "z-index:2147483600", "font-family:'Chakra Petch',system-ui,sans-serif"].join(";");
     var menu = document.createElement("div");
     menu.style.cssText = ["position:absolute", "bottom:46px", "right:0", "display:none", "flex-direction:column",
-      "gap:3px", "background:rgba(20,11,6,.98)", "border:1px solid rgba(255,122,24,.45)", "border-radius:12px",
+      "gap:3px", "background:#140b06", "border:1px solid rgba(255,122,24,.45)", "border-radius:12px",
       "padding:6px", "box-shadow:0 8px 24px rgba(0,0,0,.55)", "min-width:124px"].join(";");
     LANGS.forEach(function (L) {
       var it = document.createElement("button");
@@ -74,13 +74,54 @@
     btn.style.cssText = ["font:inherit", "font-size:13px", "font-weight:700", "letter-spacing:.5px", "color:#FFD9A0",
       "background:rgba(26,15,8,.96)", "border:1px solid rgba(255,122,24,.55)", "border-radius:999px",
       "padding:8px 13px", "cursor:pointer", "box-shadow:0 4px 16px rgba(0,0,0,.5)", "-webkit-tap-highlight-color:transparent"].join(";");
-    btn.addEventListener("click", function (e) { e.stopPropagation(); menu.style.display = (menu.style.display === "none") ? "flex" : "none"; });
+    // Open the menu toward whichever side has room. It used to always open UPWARD from the pill,
+    // and a pill lifted clear of page text (clkn-dock-float.js) sent the seven-language list off
+    // the top of an iPhone screen (owner, 2026-09-25). Docked in a header it opens downward; a
+    // list that fits neither way is capped to the larger side and scrolls.
+    function placeMenu() {
+      menu.style.top = "auto"; menu.style.bottom = "auto"; menu.style.maxHeight = "none"; menu.style.overflowY = "visible";
+      var r = btn.getBoundingClientRect(), h = menu.scrollHeight, vh = window.innerHeight || 0;
+      var header = document.querySelector("#cluck-nav-bar,.seeker-header");
+      var topLimit = (header && !header.contains(wrap) ? header.getBoundingClientRect().bottom : 0) + 8;
+      var above = r.top - topLimit - 6, below = vh - r.bottom - 8 - 6;
+      var nav = document.querySelector(".seeker-nav");
+      if (nav) below = nav.getBoundingClientRect().top - r.bottom - 8 - 6;
+      var down = wrap.__clknHeaderDocked ? below >= Math.min(h, 120) || below >= above : (h > above && below > above);
+      if (down) menu.style.top = (r.height + 6) + "px"; else menu.style.bottom = (r.height + 6) + "px";
+      var room = Math.max(80, down ? below : above);
+      if (h > room) { menu.style.maxHeight = room + "px"; menu.style.overflowY = "auto"; }
+    }
+    btn.addEventListener("click", function (e) {
+      e.stopPropagation();
+      if (menu.style.display === "none") { menu.style.display = "flex"; placeMenu(); } else menu.style.display = "none";
+    });
     document.addEventListener("click", function () { menu.style.display = "none"; });
     wrap.appendChild(menu); wrap.appendChild(btn);
+    window.__clknLangToggleEl = wrap;
+    // A shell with a header (the phone app) gives the picker a fixed home there instead of a
+    // floating pill: it no longer moves as content scrolls under it (owner, 2026-09-25: "it randomly
+    // moves from bottom right to up higher"). Whichever of this script and the shell's header
+    // renders first, the other side completes the dock — see window.__clknLangDockInto below.
+    var host = document.querySelector("[data-clkn-lang-host]");
+    if (host) { dockInto(host); return; }
     document.body.appendChild(wrap);
     // lift above any bottom-anchored composer (helper lives in the nav script, which loaded us)
     if (window.__clknDockFloat) window.__clknDockFloat(wrap);
   }
+  // Move the picker into a header slot and take it out of the floating system for good:
+  // __clknHeaderDocked makes clkn-dock-float.js leave it alone, and the inline !important
+  // position/bottom/right beat the shell's own !important floating rules.
+  function dockInto(host) {
+    var wrap = window.__clknLangToggleEl;
+    if (!wrap || !host) return;
+    wrap.__clknHeaderDocked = 1;
+    wrap.style.setProperty("position", "relative", "important");
+    wrap.style.setProperty("bottom", "auto", "important");
+    wrap.style.setProperty("right", "auto", "important");
+    wrap.style.setProperty("z-index", "2147483600");
+    if (wrap.parentNode !== host) host.appendChild(wrap);
+  }
+  window.__clknLangDockInto = dockInto;
   function onReady(fn) {
     if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", fn);
     else fn();
@@ -97,7 +138,11 @@
   var setVal = (typeof WeakMap !== "undefined") ? new WeakMap() : null;   // node -> value we wrote (to ignore our own mutations)
   var SKIP = { SCRIPT: 1, STYLE: 1, NOSCRIPT: 1, CODE: 1, PRE: 1, TEXTAREA: 1, SVG: 1, KBD: 1, SAMP: 1 };
   var BAD_CHILD = "a,br,span,div,p,ul,ol,li,section,article,header,footer,nav,table,tbody,tr,button,input,textarea,select,img,svg,label,form,h1,h2,h3,h4,h5,h6";
-  var TICKER = {}; "CLKN SOL USDC USDT JUP cbBTC BTC ETH SOLUSD NFT LP AMM DeFi MEV APR APY TVL IL DEX CEX SPL DAO USD".split(" ").forEach(function (t) { TICKER[t] = 1; });
+  // Whole-node tickers/acronyms are never sent for translation. Our own ticker is NOT on this
+  // list on purpose: this file ships inside the education edition of the app, whose bundle
+  // scan refuses the bare word (store-edition v1.1.0 — the app names no token of ours). A lone
+  // node holding our ticker on the website goes to the translator once and comes back unchanged.
+  var TICKER = {}; "SOL USDC USDT JUP cbBTC BTC ETH SOLUSD NFT LP AMM DeFi MEV APR APY TVL IL DEX CEX SPL DAO USD".split(" ").forEach(function (t) { TICKER[t] = 1; });
 
   function norm(s) { return (s || "").replace(/\s+/g, " ").trim(); }
   function curated(key) { var v = DICT[key]; return (v && v !== key) ? v : null; }
@@ -236,13 +281,42 @@
   // social card, and then burned the daily machine-translation budget re-translating
   // strings that were already professionally translated in <lang>.school.json.
   var _p = (location.pathname || "");
-  if (_p.indexOf("/school") === 0 || _p.indexOf("/lp-lab") === 0 || _p.indexOf("/lplab") === 0) jobs.push(loadDict(lang + ".school"));
+  var _packs = {};
+  if (_p.indexOf("/school") === 0 || _p.indexOf("/lp-lab") === 0 || _p.indexOf("/lplab") === 0) _packs.school = 1;
+  // A shell may DECLARE the packs it needs, for the case the path rule above cannot see: a
+  // hash-routed bundle. The Seeker app's path is always "/" and its school is at "#/school", so
+  // the pathname rule never fired and six languages machine-translated lesson prose that was
+  // already professionally translated in <lang>.school.json (Codex, PR #390). Sniffing the hash
+  // instead would be racy — the app boots at "#/" and redirects to "#/school" after this runs —
+  // so the shell declares it: <html data-i18n-packs="school">.
+  //
+  // ⚠️ NOT a blanket "always load everything": <lang>.school.json is ~1MB raw / ~356KB gzipped,
+  // and putting it on the website's homepage for every Spanish visitor would be a real
+  // regression. Only a shell that IS the school declares it.
+  //
+  // ⚠️ KNOWN GAP, stated rather than papered over: on the WEBSITE this is still decided once, at
+  // load. Someone who lands on "/" and then client-navigates to /school does not get the curated
+  // pack for that visit. That predates this change and is unchanged by it; fixing it needs a
+  // lazy merge plus a re-walk of nodes that were already machine-translated, which is a bigger
+  // change than this PR should carry.
+  try {
+    var _decl = (document.documentElement.getAttribute("data-i18n-packs") || "").split(/\s+/);
+    // Whitelisted charset, not because this attribute is attacker-controlled (it is our own
+    // shell markup) but because the value becomes a URL path — a typo should 404 a dictionary,
+    // never escape the /i18n/ directory.
+    for (var _i = 0; _i < _decl.length; _i++) if (/^[a-z][a-z0-9-]*$/.test(_decl[_i])) _packs[_decl[_i]] = 1;
+  } catch (_) {}
+  for (var _k in _packs) if (_packs.hasOwnProperty(_k)) jobs.push(loadDict(lang + "." + _k));
   /* STORE:OUT */ if ((location.pathname || "").indexOf("/locker-room") === 0) jobs.push(loadDict(lang + ".locker")); /* /STORE:OUT */
   Promise.all(jobs)
     .then(function (parts) {
       DICT = {};
       parts.forEach(function (p) { for (var k in p) DICT[k] = p[k]; });
       window.CLKN_I18N = { lang: lang, dict: DICT, mt: MT };
+      // Announce it. A React surface that rendered BEFORE this resolved (the Seeker shell's
+      // school on a direct lesson launch) has no other way to learn the dictionary is here —
+      // polling with a timeout misses a slow load for good (Codex, PR #390 round 9).
+      try { window.dispatchEvent(new CustomEvent("clkn:i18n-ready", { detail: { lang: lang } })); } catch (_) {}
       onReady(start);
     })
     .catch(function () { onReady(injectToggle); });

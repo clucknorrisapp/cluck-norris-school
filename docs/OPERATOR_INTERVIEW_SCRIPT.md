@@ -6,6 +6,11 @@ will pay you, for which repeated job, and what becomes easier enough that they r
 sales pitch and not a demo review. Answers go straight into
 `docs/VALIDATION_2026-09.md` §(b), verbatim.
 
+Before the call, read `docs/VALIDATION_2026-09.md`'s "Onboarding clock (from the record)" section
+for that operator's project — `node scripts/validation-rows.cjs --data-dir <DATA_DIR>` prints the
+real registered/terms/batch/payout deltas, so you walk in already knowing what the record shows
+instead of asking them to remind you.
+
 **Rules for the founder running this, not just the operator being interviewed:**
 - Don't lead the witness. If a question's phrasing below sounds like it's fishing for a "yes,"
   it's wrong — flag it back to whoever wrote this script rather than reading it as-is.

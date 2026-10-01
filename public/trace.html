@@ -6,8 +6,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <meta name="robots" content="noindex"/>
 <title>🔍 Cluck Trace — Wallet × Token Forensic History</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <style>
   /* palette comes from theme.css — the private :root that used to shadow it was removed 2026-07-29 */
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -913,7 +911,7 @@ function downloadCsv() {
 }
 
 // Unified tools pass (owner, 2026-08-18): the page previews free — RUN needs the pass
-// (hold $50 of CLKN = free, else the 0.05 SOL 7-day all-tools pass). /cluck-gate.js.
+// (hold CLKN worth the live figure = free, else the 0.05 SOL 7-day all-tools pass). /cluck-gate.js.
 runTrace = CluckGate.guard(runTrace, { tool: 'Cluck Trace', anchor: '#runBtn' });
 if (walletInput.value && mintInput.value && !runBtn.disabled) runTrace();   // the X-Ray hand-off auto-run, now guarded
 </script>

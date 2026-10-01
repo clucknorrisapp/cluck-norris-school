@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<link rel="stylesheet" href="/theme.css">
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>The Solana Room</title>
+<meta name="description" content="How Solana actually works, in plain words — for someone who already owns tokens but was never told how any of it works. No wallet, no signup."/>
+<meta property="og:title" content="The Solana Room — Cluck Norris"/>
+<meta property="og:description" content="How Solana actually works, in plain words — for someone who already owns tokens but was never told how any of it works. No wallet, no signup."/>
+<meta property="og:type" content="website"/>
+<meta property="og:url" content="https://clucknorris.app/solana"/>
+<meta property="og:image" content="https://clucknorris.app/og/hub-card.png"/>
+<meta property="og:image:width" content="1200"/>
+<meta property="og:image:height" content="630"/>
+<meta name="twitter:card" content="summary_large_image"/>
+<meta name="twitter:title" content="The Solana Room — Cluck Norris"/>
+<meta name="twitter:description" content="How Solana actually works, in plain words — for someone who already owns tokens but was never told how any of it works. No wallet, no signup."/>
+<meta name="twitter:image" content="https://clucknorris.app/og/hub-card.png"/>
+<style>
+  /* palette + type scale come from theme.css — never redefine a token here */
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { background:var(--bg); color:var(--text); font-family:var(--body); min-height:100vh; }
+  .wrap { max-width:760px; margin:0 auto; padding:24px 16px 80px; }
+  .back-home { display:inline-flex; align-items:center; min-height:44px; gap:6px; font-size:11px; font-weight:700; letter-spacing:2px; color:var(--orange); text-decoration:none; margin-bottom:14px; }
+  .header { text-align:center; margin-bottom:18px; }
+  .header h1 { font-family:var(--disp); font-size:28px; letter-spacing:.5px; color:var(--gold); font-weight:400; }
+  .header p { font-size:11px; color:var(--sub); letter-spacing:2px; margin-top:4px; }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:18px; margin-bottom:14px; }
+  .intro { font-size:var(--body-text, 15px); color:var(--subtext, #9CA3AF); line-height:1.7; }
+  .sec-title { font-family:var(--disp); font-size:13px; letter-spacing:2px; margin:0 0 10px; color:var(--gold); text-transform:uppercase; }
+  .sec-lede { font-size:13px; color:var(--sub); line-height:1.6; margin:-4px 0 12px; }
+  .topic-live { display:flex; flex-direction:column; gap:4px; padding:14px 0; }
+  .topic-live:first-of-type { padding-top:0; }
+  .topic-live:not(:first-of-type) { border-top:1px solid var(--border-soft, rgba(255,255,255,.06)); }
+  .topic-live h2 { font-family:var(--disp); font-weight:400; font-size:18px; color:var(--text); }
+  .topic-live p { font-size:var(--body-text, 15px); color:var(--subtext, #9CA3AF); line-height:1.6; }
+  .topic-live a.cta { display:inline-flex; align-items:center; min-height:44px; margin-top:4px; color:var(--cyan, #67E8F9); text-decoration:none; font-size:14px; font-weight:700; }
+  .topic { padding:12px 0; border-top:1px solid var(--border-soft, rgba(255,255,255,.06)); }
+  .topic:first-of-type { border-top:none; padding-top:0; }
+  .topic-head { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .topic-head h2 { font-family:var(--disp); font-weight:400; font-size:16px; color:var(--text); }
+  .badge { font-family:var(--disp); font-size:10px; letter-spacing:1.5px; padding:3px 8px; border-radius:999px; border:1px solid var(--border); color:var(--sub); text-transform:uppercase; white-space:nowrap; }
+  .topic p { font-size:var(--body-text, 15px); color:var(--subtext, #9CA3AF); line-height:1.6; margin-top:4px; }
+  .small { font-size:12px; color:var(--sub); }
+  .status { text-align:center; color:var(--sub); font-size:12px; letter-spacing:2px; padding:18px 0; }
+</style>
+</head>
+<body>
+<main class="wrap">
+  <a class="back-home" href="/" data-clkn-avoid="1">← HOME</a>
+  <div class="header">
+    <h1 data-clkn-avoid="1">The Solana Room</h1>
+    <p data-clkn-avoid="1">HOW SOLANA ACTUALLY WORKS · NO WALLET NEEDED</p>
+  </div>
+
+  <div id="content" data-i18n-skip="1"><div class="status">LOADING…</div></div>
+</main>
+
+<script src="/cluck-util.js"></script>
+<script>
+(function () {
+  var esc = CluckUtil.esc;
+  var contentEl = document.getElementById('content');
+
+  // ── i18n for the strings THIS SCRIPT builds — same small page-local lookup as
+  // public/hub-glossary.html and public/hub-verify.html: a curated dict lookup over
+  // window.CLKN_I18N.dict (loaded sitewide by cluck-nav.js), English literal on a miss, no
+  // machine-translation fallback for this page's own copy. scripts/i18n-audit.cjs's Hub-pages
+  // gate (and scripts/solana-room-test.cjs) scan this file's <script> block for every literal
+  // passed to t() and require it in all six dictionaries.
+  function t(s) {
+    try {
+      var d = window.CLKN_I18N && window.CLKN_I18N.dict;
+      if (d && d[s]) return d[s];
+    } catch (_) {}
+    return s;
+  }
+  function waitForI18n(timeoutMs) {
+    return new Promise(function (resolve) {
+      if (window.CLKN_I18N) return resolve();
+      var start = Date.now();
+      (function poll() {
+        if (window.CLKN_I18N || Date.now() - start > (timeoutMs || 1500)) return resolve();
+        setTimeout(poll, 30);
+      })();
+    });
+  }
+
+  // The pages shipped so far, in two groups. THE MECHANICS is how the machine works — the six
+  // tier-1 topics. THE BIGGER PICTURE is the four tier-2 topics: what the chain is used for,
+  // what you actually own, where the ecosystem meets, and the safe copy of the domains people
+  // get phished on. Add a topic to one of these lists, give it its own page + route, and it
+  // shows up here. COMING_NEXT is empty for now; render() hides that section entirely rather
+  // than showing an empty card (CLAUDE.md: public docs must match the code).
+  var MECHANICS = [
+    { title: "The deposit you didn't know you made", blurb: 'Solana just started giving back part of a deposit that\'s baked into every token account you own. What it actually is, and the scam it\'s about to invite.', href: '/solana/rent' },
+    { title: "What your wallet actually holds", blurb: "A wallet doesn't hold tokens the way a folder holds files. What's really sitting on-chain under your address, and why.", href: '/solana/wallet' },
+    { title: 'What a token mint is', blurb: "The one address that defines a token — and why it's the first thing worth checking before you trust anything else about it.", href: '/solana/mint' },
+    { title: 'What actually happens when you buy', blurb: "Clicking \"buy\" swaps against a liquidity pool, not a store. Why a big trade moves the price against you, and what a failed swap still costs.", href: '/solana/buying' },
+    { title: 'Sending tokens, and why the first one costs extra', blurb: 'A transfer moves between token accounts, not wallets — and the first send to someone new can mean creating an account for them.', href: '/solana/transfers' },
+    { title: 'What a transaction actually costs', blurb: "Base fee, priority fee, and compute units are three different things wearing one name. Here's which is which.", href: '/solana/fees' },
+  ];
+  var BIGGER_PICTURE = [
+    { title: 'What Solana is actually used for', blurb: "Most of what happens on Solana is trading. That's the honest answer — and here's everything else that's genuinely real.", href: '/solana/uses' },
+    { title: 'Buying SOL, ETFs, and what you actually own', blurb: 'Three ways people hold it, and three very different things they actually hold. Not advice — just what ends up in your hands each way.', href: '/solana/markets' },
+    { title: 'Where the Solana world actually meets', blurb: 'Conferences, hackathons and meetups — and how to tell a real one from the fake ticket page built to drain you.', href: '/solana/events' },
+    { title: 'Where to look things up', blurb: 'The real domains for explorers, docs, status pages and wallets. Type them; never reach one from a DM.', href: '/solana/links' },
+    { title: 'The Solana phone, and what it actually changes', blurb: "Keys held in hardware an app can never read, an app store with different terms, and a token whose name an impersonator is already using.", href: '/solana/phone' },
+  ];
+  var COMING_NEXT = [];
+
+  // The title/blurb strings above are read through a variable (t(topic.title)), which the
+  // regex-based audits (scripts/i18n-audit.cjs's Hub-pages gate, scripts/solana-room-test.cjs)
+  // cannot see — they only ever match a LITERAL string immediately inside t(...), documented in
+  // i18n-audit.cjs's own header. This function lists every one of those strings as a literal
+  // t() call purely so the gate sees them; it is never called. Same technique as
+  // hub-glossary.html's __glossaryGatedStrings — keep it in step with the two lists above.
+  function __solanaRoomGatedStrings() { return [
+    t("What your wallet actually holds"), t("A wallet doesn't hold tokens the way a folder holds files. What's really sitting on-chain under your address, and why."),
+    t('What a token mint is'), t("The one address that defines a token — and why it's the first thing worth checking before you trust anything else about it."),
+    t('What actually happens when you buy'), t("Clicking \"buy\" swaps against a liquidity pool, not a store. Why a big trade moves the price against you, and what a failed swap still costs."),
+    t('Sending tokens, and why the first one costs extra'), t('A transfer moves between token accounts, not wallets — and the first send to someone new can mean creating an account for them.'),
+    t('What a transaction actually costs'), t("Base fee, priority fee, and compute units are three different things wearing one name. Here's which is which."),
+    t('What Solana is actually used for'), t("Most of what happens on Solana is trading. That's the honest answer — and here's everything else that's genuinely real."),
+    t('Buying SOL, ETFs, and what you actually own'), t('Three ways people hold it, and three very different things they actually hold. Not advice — just what ends up in your hands each way.'),
+    t('Where the Solana world actually meets'), t('Conferences, hackathons and meetups — and how to tell a real one from the fake ticket page built to drain you.'),
+    t('Where to look things up'), t('The real domains for explorers, docs, status pages and wallets. Type them; never reach one from a DM.'),
+    t('The Solana phone, and what it actually changes'), t("Keys held in hardware an app can never read, an app store with different terms, and a token whose name an impersonator is already using."),
+    // The two section headings and their ledes are passed to section(), which calls t() on them
+    // itself — so they are invisible to a t()-literal scan too. Listed here for the same reason.
+    t('The mechanics'), t('How the machine actually works, one part at a time.'),
+    t('The bigger picture'), t("What it's actually used for, what you own when you hold it three different ways, where the ecosystem meets, and where to look things up without getting phished."),
+  ]; }
+
+  function render() {
+    var html = '';
+    html += '<div class="card">';
+    html += '<div class="intro">' + esc(t("You already own tokens. Nobody ever sat you down and explained what any of this actually is — what a wallet really holds, what a mint is, what happens when you buy, or what you're paying for in fees. This room is that explanation, one mechanic at a time, in plain words. No wallet, no signup, free.")) + '</div>';
+    html += '</div>';
+
+    function section(title, lede, list) {
+      var out = '<div class="card">';
+      out += '<div class="sec-title">' + esc(t(title)) + '</div>';
+      out += '<div class="sec-lede">' + esc(t(lede)) + '</div>';
+      for (var j = 0; j < list.length; j++) {
+        var live = list[j];
+        out += '<div class="topic-live">';
+        out += '<h2>' + esc(t(live.title)) + '</h2>';
+        out += '<p>' + esc(t(live.blurb)) + '</p>';
+        out += '<a class="cta" href="' + esc(live.href) + '">' + esc(t('Read it →')) + '</a>';
+        out += '</div>';
+      }
+      return out + '</div>';
+    }
+    html += section('The mechanics', 'How the machine actually works, one part at a time.', MECHANICS);
+    html += section('The bigger picture', "What it's actually used for, what you own when you hold it three different ways, where the ecosystem meets, and where to look things up without getting phished.", BIGGER_PICTURE);
+
+    // COMING_NEXT is empty now that all six topics have shipped — an empty "coming next" card
+    // would just be a section title and lede with nothing under them, so it's skipped outright
+    // rather than rendered awkwardly empty. Add a topic to COMING_NEXT and this section comes
+    // back on its own.
+    if (COMING_NEXT.length > 0) {
+      html += '<div class="card">';
+      html += '<div class="sec-title">' + esc(t('Coming next to this room')) + '</div>';
+      html += '<div class="sec-lede">' + esc(t("These aren't dead links — they're what gets written next, each one getting the same plain-words treatment as the rent page below.")) + '</div>';
+      for (var i = 0; i < COMING_NEXT.length; i++) {
+        var topic = COMING_NEXT[i];
+        html += '<div class="topic"><div class="topic-head"><h2>' + esc(t(topic.title)) + '</h2><span class="badge">' + esc(t('COMING NEXT')) + '</span></div>';
+        html += '<p>' + esc(t(topic.blurb)) + '</p></div>';
+      }
+      html += '</div>';
+    }
+
+    contentEl.innerHTML = html;
+  }
+
+  render();
+  waitForI18n(1500).then(render);
+})();
+</script>
+<!-- STORE:OUT --><script defer src="/cluck-nav.js"></script><!-- /STORE:OUT -->
+</body>
+</html>

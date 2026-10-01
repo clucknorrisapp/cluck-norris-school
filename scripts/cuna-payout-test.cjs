@@ -323,6 +323,25 @@ t("an unsent row of a pending batch is held; a sent row in a pending batch is se
   assert.strictEqual(o2[W], BigInt(CUNA(4)), "new credits beyond the settled row are owed");
 });
 
+section("N5 (docs/HUB_JOURNAL_VERIFY_2026-09-18.md, Round 3) — the (batchId, wallet) composite row key");
+t("rowKeyOf throws rather than build an ambiguous key when the batch id OR the wallet contains a space", () => {
+  const W = "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM";
+  assert.throws(() => p.rowKeyOf("bad batch", W), /space/);
+  assert.throws(() => p.rowKeyOf("b1", "bad wallet"), /space/);
+  assert.strictEqual(p.rowKeyOf("b1", W), "b1 " + W, "the ordinary case still builds the same key as before");
+});
+t("walletFromRowKey uses the SAME split the builder relies on being safe — round-trips exactly for any batch id/wallet without a space", () => {
+  const W = "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM";
+  assert.strictEqual(p.walletFromRowKey(p.rowKeyOf("hb_deadbeef00", W)), W);
+  assert.strictEqual(p.walletFromRowKey(p.rowKeyOf("cb_00000000ff", W)), W);
+  assert.strictEqual(p.walletFromRowKey("not a real key"), "a real key", "documents the naive split's behavior — only safe because rowKeyOf refuses to ever build such a key");
+});
+t("a journal row whose batch was purged from `pending` still attributes to the RIGHT wallet via owedNow, using rowKeyOf/walletFromRowKey consistently", () => {
+  const W = "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM";
+  const journal = { k1: { projectId: "zeta", batchId: "hb_gonebatch01", wallet: W, appliedRaw: CUNA(7) } };
+  const owed = p.owedNow({ days: { "2026-09-10": day({ [W]: CUNA(7) }) }, paid: {}, pending: {}, journal, projectId: "zeta" });
+  assert.strictEqual(owed[W], 0n, "the purged batch's settlement is still found and not re-offered");
+});
 
 (async () => {
   for (const [n, f] of queue) {

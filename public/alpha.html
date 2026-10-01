@@ -5,10 +5,9 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>🐔 Cluck's Daily Alpha — Solana Market Brief</title>
-<meta name="description" content="Cluck Norris's daily Solana market brief — majors, trending coins, fresh pools, and real LP fee yields. Powered by live on-chain + GeckoTerminal data. Not financial advice."/>
+<meta name="description" content="Cluck Norris's daily Solana market brief — majors, trending coins, fresh pools, and the busiest pools with their fees-to-TVL ratio. Powered by live on-chain + GeckoTerminal data. Not financial advice."/>
 <meta property="og:title" content="🐔 Cluck's Daily Alpha — Solana Market Brief"/>
-<meta property="og:description" content="The flock's daily read on Solana: the mood, what's hot, fresh pools, and where the real LP fees are."/>
-<link rel="preconnect" href="https://fonts.googleapis.com">
+<meta property="og:description" content="The flock's daily read on Solana: the mood, what's hot, fresh pools, and where the fees are actually being paid."/>
 <style>
   :root{ color-scheme: dark; }  /* palette comes from theme.css — the private :root that shadowed it was removed 2026-07-30 */
   *{box-sizing:border-box;margin:0;padding:0;}
@@ -85,6 +84,11 @@ body{background:transparent;font-family:var(--body);}
   var pct=function(n){if(n==null)return"";var v=Number(n);return '<span class="'+(v>=0?'up':'dn')+'">'+(v>=0?'+':'')+v.toFixed(1)+'%</span>';};
   var fmt=function(n){n=Number(n)||0;return n>=1e6?'$'+(n/1e6).toFixed(2)+'M':n>=1e3?'$'+(n/1e3).toFixed(0)+'K':'$'+Math.round(n);};
   function card(title,inner){return '<div class="card"><div class="sec-title">'+title+'</div>'+inner+'</div>';}
+  // Fees ÷ TVL per day is a MEASURED ratio of the pool (7-day average volume × fee tier ÷ TVL, or the
+  // 24h figure when the scanner has no 7-day read) — not what an LP earns, and every cell says which
+  // period it is. It is never called a yield here: that word is a claim about someone's return.
+  var ratio=function(p){if(p.yieldPct==null)return '<span class="muted">—</span>';return '<span class="yv">'+p.yieldPct+'%/d</span> <span class="muted" style="font-size:11px;">'+(p.period==='24h'?'24h':'7d avg')+'</span>';};
+  var RATIO_NOTE='<div class="disclaimer" style="margin-top:10px;">Fees ÷ TVL is a measured ratio of the pool — fees paid per day against the liquidity in it — not what a liquidity provider earns. Range, impermanent loss and price moves decide that. <a href="/lp-scanner" style="color:var(--gold)">Scan a pair yourself →</a></div>';
 
   (async function(){
     try{
@@ -107,12 +111,12 @@ body{background:transparent;font-family:var(--body);}
         html+=card('📊 24H MOVERS','<div class="grid2">'+col('Gainers',data.gainers||[])+col('Losers',data.losers||[])+'</div>');
       }
       if((data.hotPools||[]).length){
-        var rows=data.hotPools.map(function(p){return '<tr><td><span class="pair">'+esc(p.pair||'?')+'</span><div class="dex">'+esc(p.dex||'')+(p.risk==='high'?' · <span class="risk">⚠ HIGH RISK</span>':'')+'</div></td><td>'+fmt(p.vol)+'</td><td>'+(p.yieldPct!=null?'<span class="yv">'+p.yieldPct+'%/d</span>':'<span class="muted">—</span>')+'</td></tr>';}).join('');
-        html+=card('💧 HOTTEST SOLANA POOLS','<table><thead><tr><th>Pair · DEX</th><th>24h Vol</th><th>Fee Yield</th></tr></thead><tbody>'+rows+'</tbody></table>');
+        var rows=data.hotPools.map(function(p){return '<tr><td><span class="pair">'+esc(p.pair||'?')+'</span><div class="dex">'+esc(p.dex||'')+(p.risk==='high'?' · <span class="risk">⚠ HIGH RISK</span>':'')+'</div></td><td>'+fmt(p.vol)+'</td><td>'+ratio(p)+'</td></tr>';}).join('');
+        html+=card('💧 HOTTEST SOLANA POOLS','<table><thead><tr><th>Pair · DEX</th><th>24h Vol</th><th>Fees ÷ TVL /day</th></tr></thead><tbody>'+rows+'</tbody></table>'+RATIO_NOTE);
       }
       if((data.lpPicks||[]).length){
-        var lp=data.lpPicks.map(function(p){return '<tr><td><span class="pair">'+esc(p.pair||'?')+'</span><div class="dex">'+esc(p.dex||'')+'</div></td><td>'+(p.yieldPct!=null?'<span class="yv">'+p.yieldPct+'%/d</span>':'—')+'</td></tr>';}).join('');
-        html+=card('💎 BLUE-CHIP LP YIELD <span style="font-weight:400;color:#6B7280;font-size:13px;">(our scanner · fees/TVL)</span>','<table><thead><tr><th>Pair · DEX</th><th>Fee Yield</th></tr></thead><tbody>'+lp+'</tbody></table>');
+        var lp=data.lpPicks.map(function(p){return '<tr><td><span class="pair">'+esc(p.pair||'?')+'</span><div class="dex">'+esc(p.dex||'')+'</div></td><td>'+ratio(p)+'</td></tr>';}).join('');
+        html+=card('💧 ESTABLISHED-PAIR POOLS <span style="font-weight:400;color:#6B7280;font-size:13px;">(both sides on our established list · busiest first)</span>','<table><thead><tr><th>Pair · DEX</th><th>Fees ÷ TVL /day</th></tr></thead><tbody>'+lp+'</tbody></table>'+RATIO_NOTE);
       }
       if((data.newPools||[]).length){
         var np=data.newPools.map(function(p){return '<tr><td class="pair">'+esc(p.name||'?')+'</td><td>'+fmt(p.vol)+'</td><td>'+fmt(p.liq)+'</td><td>'+(p.ageH!=null?p.ageH+'h':'—')+'</td></tr>';}).join('');

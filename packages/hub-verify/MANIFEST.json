@@ -1,0 +1,66 @@
+{
+  "generator": "scripts/build-hub-verify-package.cjs",
+  "package": "@clkn/hub-verify",
+  "files": [
+    {
+      "source": "scripts/reproduce-receipt.cjs",
+      "dest": "bin/hub-verify.cjs",
+      "sha256": "ecc8eeb1456e5c6b23def97f5758e0374221f64b8abff1307535197909fe6ef7"
+    },
+    {
+      "source": "lib/buycomp-payout.js",
+      "dest": "lib/buycomp-payout.js",
+      "sha256": "1d0f240019e46729971db7be2255a9f414925b11ecd8cd70382e350c5d8b077b"
+    },
+    {
+      "source": "lib/hub/bundle.js",
+      "dest": "lib/hub/bundle.js",
+      "sha256": "33965d11f2225bdf321dbdd818c32f4bd9f2c720d1cf8a2ad5e605b4806bf486"
+    },
+    {
+      "source": "lib/hub/canonical.js",
+      "dest": "lib/hub/canonical.js",
+      "sha256": "26a140662e11d3384d5a15b5dc1e36ba6c9358defc7e68193e9c7f3541398bcd"
+    },
+    {
+      "source": "lib/hub/reproduce.js",
+      "dest": "lib/hub/reproduce.js",
+      "sha256": "78fe479ebc26e088af3f789ba3c3d7ad1ed328b1aba5d49de6ece49124a45dab"
+    },
+    {
+      "source": "lib/hub/schema-validate.js",
+      "dest": "lib/hub/schema-validate.js",
+      "sha256": "a8c01874a72d8110aa125ce79d2bedc6e24de3756939b76b709e70bb291e6336"
+    },
+    {
+      "source": "lib/hub/version-for.js",
+      "dest": "lib/hub/version-for.js",
+      "sha256": "b79dcfcd7f78e1a44afa134336e0e287ef80bb410091ee792d41cb009a39f0eb"
+    },
+    {
+      "source": "lib/sol-addr-re.js",
+      "dest": "lib/sol-addr-re.js",
+      "sha256": "5ca107483484583e3a1ffc0dc5424669f01ec77cb66fd741ed4aa0702c67449f"
+    },
+    {
+      "source": "lib/hub/schema/batch.schema.json",
+      "dest": "schema/batch.schema.json",
+      "sha256": "2ef4dc0de065929ceec5dfbbdb6da1e27bbf4370a5685f4f4995d3ecd263c67e"
+    },
+    {
+      "source": "lib/hub/schema/program-version.schema.json",
+      "dest": "schema/program-version.schema.json",
+      "sha256": "6c252939b71d12b7f9a578e6734edde75da2b64bbcbee72ed8adb20fb27a585c"
+    },
+    {
+      "source": "lib/hub/schema/project-public.schema.json",
+      "dest": "schema/project-public.schema.json",
+      "sha256": "03b90cd4a9c5f20e259f4ec87b5ac317a19f4f4183622b2ba313fddcb66bff8a"
+    },
+    {
+      "source": "lib/hub/schema/receipt.schema.json",
+      "dest": "schema/receipt.schema.json",
+      "sha256": "99fd60ac6cc3669af9d40dcba86db55985dd3f4db9d2bb736ad34621b0720f96"
+    }
+  ]
+}

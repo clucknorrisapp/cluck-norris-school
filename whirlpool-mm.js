@@ -535,6 +535,33 @@ router.all("/vault/close-position", async (req, res) => {
   catch (e) { res.status(500).json({ error: e.message || "close failed" }); }
 });
 
+// /api/whirlpool/vault/pair-pool?project=treasury&pair=CUNA/MCM&feeTier=1&price=<CUNA in MCM>
+//   [&down=90&up=900][&maxToken=][&maxQuote=][&add=1][&upOnly=1][&fundSol=1][&run=1]
+// &upOnly=1 opens a token-only tranche from just above spot to the main position's top tick.
+// Create (if needed) an Orca pool between two ALLOWLISTED tokens (lib/whirlpool-vault.js
+// PAIR_POOLS) and open ONE wide position with as much of both as the wallet holds. A GET is
+// always a dry run; &run=1 is POST-only (admin routes that act are POST-only).
+router.all("/vault/pair-pool", async (req, res) => {
+  if (!adminOK(req)) return res.status(404).json({ error: "Not found" });
+  if (req.query.run === "1" && req.method !== "POST") return res.status(405).json({ error: "run=1 is POST-only" });
+  try {
+    res.json(await vault.pairPool({
+      projectId: projExplicit(req),
+      pair: String(req.query.pair || ""),
+      feeTierPct: req.query.feeTier != null ? Number(req.query.feeTier) : undefined,   // pinned per pair; a different value is refused
+      priceInQuote: req.query.price != null ? Number(req.query.price) : undefined,
+      downPct: req.query.down != null ? Number(req.query.down) : 90,
+      upPct: req.query.up != null ? Number(req.query.up) : 900,
+      maxToken: req.query.maxToken != null ? Number(req.query.maxToken) : undefined,
+      maxQuote: req.query.maxQuote != null ? Number(req.query.maxQuote) : undefined,
+      add: req.query.add === "1",
+      upOnly: req.query.upOnly === "1",
+      fundSol: req.query.fundSol === "1",
+      dryRun: !(req.query.run === "1" && req.method === "POST"),
+    }));
+  } catch (e) { res.status(500).json({ error: e.message || "pair-pool failed" }); }
+});
+
 // GET /api/whirlpool/vault/open-anchor?key=&project=&quote=USDC|SOL|JUP|CLKN&usd=10&down=85&up=400[&run=1]
 // Open a tiny, ultra-wide, NEVER-auto-closed "anchor" position that keeps the pool
 // continuously quotable so pulling the tight positions doesn't leave it empty/stale —
@@ -633,10 +660,38 @@ router.post("/vault/pause", (req, res) => {
   if (!p) return res.status(400).json({ error: "Specify ?project= explicitly (e.g. project=treasury or project=clkn) — refusing to pause an unspecified project so STOP can't hit the wrong one." });
   res.json(vault.pause(p));
 });
+// One-armed-engine-per-wallet — checked on RESUME too (Codex review on #444: cheap to add here,
+// and resuming a paused sibling is exactly the move that would silently break the invariant the
+// cuna/dnc/rose/bullen arm routes enforce, since bullen's own arm check requires those siblings
+// explicitly paused). Kept self-contained (reads the same kv arm keys + hard-kill envs the arm
+// routes use, and compares operator PUBKEYS via vault.operatorPubkey — not env-var names, so two
+// different env vars that happened to hold the same secret would still be caught) rather than
+// reaching into server.js, which whirlpool-mm.js is required BY and can't require back.
+const WALLET_SHARED_ARM_KEYS = {
+  cuna: ["cunaEngineArmed", "CUNA_ENGINE_OFF"], dnc: ["dncEngineArmed", "DNC_ENGINE_OFF"],
+  rose: ["roseEngineArmed", "ROSE_ENGINE_OFF"], bullen: ["bullenEngineArmed", "BULLEN_ENGINE_OFF"],
+};
+function walletSharedEngineArmed(id) {
+  const cfg = WALLET_SHARED_ARM_KEYS[id];
+  if (!cfg) return false;
+  if (process.env[cfg[1]] === "1") return false;   // hard kill beats the kv flag
+  try { return require("./lib/kvstore").get(cfg[0], null) === true; } catch { return false; }
+}
 router.post("/vault/resume", (req, res) => {
   if (!adminOK(req)) return res.status(404).json({ error: "Not found" });
   const p = projExplicit(req);
   if (!p) return res.status(400).json({ error: "Specify ?project= explicitly (e.g. project=treasury or project=clkn) — refusing to resume an unspecified project." });
+  if (WALLET_SHARED_ARM_KEYS[p]) {
+    const myPubkey = vault.operatorPubkey(p);
+    if (myPubkey) {
+      for (const otherId of Object.keys(WALLET_SHARED_ARM_KEYS)) {
+        if (otherId === p) continue;
+        if (vault.operatorPubkey(otherId) === myPubkey && walletSharedEngineArmed(otherId)) {
+          return res.status(409).json({ ok: false, error: "wallet_conflict", detail: `${otherId}-engine is armed on the same operator wallet — resuming ${p} would break the one-armed-engine-per-wallet rule; disarm ${otherId} first` });
+        }
+      }
+    }
+  }
   res.json(vault.resume(p));
 });
 

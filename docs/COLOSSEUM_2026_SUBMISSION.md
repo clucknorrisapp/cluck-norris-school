@@ -308,7 +308,7 @@ Judges weight traction and revenue. These are all verifiable on-chain or on the 
 | **Project Hub — outcome counters (W9)** | Instrumented, not yet a headline figure: wallets connected, programs published, program versions, receipts issued/opened, batches signed, repeat operators and revenue are each derived from a durable store and reproducible by re-running the script — never hand-typed. **[measured by `scripts/traction-report.cjs` on \<date\>]** | `scripts/traction-report.cjs`; owner-only `GET /api/traction` |
 | Project Hub — second project | POKEAHOE (`/hub/poke`) is seeded as a clearly labelled **dry run** — branded, `dryRun:true`, excluded from every count — while terms and a funding wallet are agreed with that team; the no-wallet walkthrough at `/hub/demo` (and `/hub/demo-b`, proving isolation) is fixture data, also excluded from every count. Neither is presented as a live program. | `/hub/poke`, `/hub/demo` |
 | Live product, public | clucknorris.app, since 2025; Seeker dApp Store listing; education-only Google Play build shipped 2026-09-11 | site |
-| Curriculum | 35 lessons, 7 languages, read-aloud, plus the LP Lab and reference Library | `/`, `/lp-lab` |
+| Curriculum | 36 lessons, 7 languages, read-aloud, plus the LP Lab and reference Library | `/`, `/lp-lab` |
 | Services model | verification, lock-to-earn, buy comps, engine — priced per project `[OWNER]` | this doc §5 |
 | Community | `[OWNER — Telegram members, X followers]` | |
 | Security | Cloudflare WAF cutover + origin lockdown live since 2026-08-04, from findings by our scan partner RootCrak (@ro0TCr4k, https://rootcrak.com/?ref=clucknorris) | README |
@@ -485,6 +485,11 @@ re-run any of these searches.
 
 ## 8. Pre-submission checklist
 
+- [ ] **Videos** — scripts are written and word-for-word: the 2–3 minute presentation video is
+      `docs/PITCH_SCRIPT.md` (436 words, timed to 2:54), the ≤3 minute demo video's narration is
+      `docs/DEMO_NARRATION.md` (aligned to `docs/DEMO_STORYBOARD.md`'s shot list). Re-check both
+      against `develop` immediately before recording — they're dated 2026-09-18 and note which
+      lines depend on `develop` → `main` promotion.
 - [ ] Owner registers on colosseum.com before **Sep 14**; confirms the track/prize category on the
       live site (the pasted schedule was out of date — the event is the Crypto World's Fair).
 - [x] Settle the Liquidity Engine / JVP wording — README, `/about`, `/liquidity-engine` and this

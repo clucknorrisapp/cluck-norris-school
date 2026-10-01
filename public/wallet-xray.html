@@ -6,8 +6,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>🩻 Wallet X-Ray — Full Wallet Deep Dive</title>
 <meta name="description" content="Full-wallet deep dive for any Solana address — true funding origin traced back as far as the chain allows (to genesis for most wallets), every trade across every token, bot/dumper/cash-out signals, and a built-in AI to ask about any transaction."/>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <style>
   /* palette comes from theme.css — the private :root that used to shadow it was removed 2026-07-29 */
   *{box-sizing:border-box;margin:0;padding:0;}
@@ -652,7 +650,7 @@ document.getElementById('chatInput').addEventListener('keydown',e=>{if(e.key==='
 document.getElementById('askFab').classList.add('show');
 
 // Unified tools pass (owner, 2026-08-18): the page previews free — RUN needs the pass
-// (hold $50 of CLKN = free, else the 0.05 SOL 7-day all-tools pass). /cluck-gate.js.
+// (hold CLKN worth the live figure = free, else the 0.05 SOL 7-day all-tools pass). /cluck-gate.js.
 run = CluckGate.guard(run, { tool: 'Wallet X-Ray', anchor: '#runBtn' });
 // Ask Cluck answers with a paid model call, so it sits behind the same pass as the scan (P1-064).
 sendChat = CluckGate.guard(sendChat, { tool: 'Wallet X-Ray', anchor: '#runBtn' });

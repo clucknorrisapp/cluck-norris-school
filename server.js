@@ -53,6 +53,7 @@ const kv = require("./lib/kvstore");
 const { freshSince } = require("./lib/sig-cursor"); // shared "fresh sigs since the durable cursor" walk — see the ROSE/generic buy bots + burn watcher below
 const tgRooms = require("./lib/telegram-rooms"); // room policy: the Cluck bot never posts in the OnlyRose room (owner, 2026-09-17) — enforced in tgApi and the direct senders
 const payoutVerify = require("./lib/payout-verify");
+const airdropReceipt = require("./lib/airdrop-receipt"); // per-drop public receipt (Colosseum roadmap §W4/Extension) — see the file header
 const engineRatchet = require("./lib/engine-ratchet"); // pure merge/diff shared by the four liquidity-engine config ratchets below
 const { redeemPaidPass } = require("./lib/tool-pass-redeem");
 const recap = require("./lib/recap");
@@ -61,6 +62,8 @@ const credentials = require("./lib/credentials");
 const jvpDashboard = require("./lib/jvp-dashboard");
 const curriculumPage = require("./lib/curriculum"); // lesson COUNTS only — the SEO mirror page was removed 2026-07-29
 const rpc = require("./lib/rpc"); // resilient RPC: primary Helius + automatic failover
+const { scanReclaimable } = require("./lib/rent-reclaim"); // Rent Reclaim, READ SIDE ONLY — Seeker app increment 2
+const { computeSurplusForAccounts } = require("./lib/rent-surplus"); // Firepit surplus-rent job, pure decision logic
 const {
   SOL_ADDR_RE, base58Decode, base58Encode, isOnCurveBytes, isOnCurve, deriveAta,
   DEX_PROGRAMS, LOCKER_PROGRAMS, TOKEN_PROGRAMS, PROGRAM_LABELS,
@@ -136,6 +139,14 @@ function publicErrMsg(err, fallback = "internal error") {
   // 1500 keeps full on-chain simulation logs readable for ops debugging while
   // still bounding pathological blobs; secrets are already stripped above.
   return m.length > 1500 ? m.slice(0, 1500) + "…" : m;
+}
+
+// The first `text` block of a Messages API response — read by block type, never by position.
+// Sonnet 5.5 can put a `thinking` block (the between-tool-call progress notes) ahead of the text,
+// so `data.content[0].text` is not safe. "" when the response has no text (a refusal, an error).
+function claudeText(data) {
+  const b = data && Array.isArray(data.content) ? data.content.find((x) => x && x.type === "text" && typeof x.text === "string") : null;
+  return b ? b.text : "";
 }
 
 // ── Multi-language support for the AI endpoints ──────────────────────────────
@@ -450,11 +461,25 @@ function recapTick() {
   }
 }
 
-// ── Daily locked-supply report ───────────────────────────────────────────────
-// PUBLIC community trust signal: how much CLKN is locked (removed from circulation),
-// updated daily with the change since the last report. Reads the real on-chain total
+// ── Locked-supply report ─────────────────────────────────────────────────────
+// How much CLKN is locked (removed from circulation), read from the real on-chain total
 // (Jupiter Lock + Streamflow + self-owned), not the broken owner=program query.
-const LOCK_REPORT_ENABLED = true;
+//
+// ⛔ THE DAILY POST IS RETIRED (owner, 2026-09-20: "I want to quit posting the lock supply
+// to CLKN room daily. No one seems to care."). The scheduler is not registered and the flag
+// is off in code; `LOCK_REPORT_ON=1` in the env brings the daily 16:00 UTC post back without
+// a deploy, for whenever the owner wants it again.
+//
+// What this does NOT turn off — on purpose:
+//   • the NEW-LOCK celebration (lockWatchTick below). That one only fires when a real lock
+//     lands, it is the Locker Room's whole social-proof story, and it keeps its own baseline
+//     (lockWatchTotal) so it is unaffected by this.
+//   • the /lock Telegram command and /lock/<mint> page — both on-demand, someone asked.
+//   • /api/lock-report-test (&post=1) — left working on purpose as a one-off operator lever,
+//     the same way the Wallet Watch manual run is.
+// Turning the daily post off also stops its daily X post: postLockToX is called only from
+// notifyLockReport. New locks still reach X through the celebration path.
+const LOCK_REPORT_ENABLED = process.env.LOCK_REPORT_ON === "1";
 function fmtTokensShort(n) {
   n = Number(n) || 0;
   if (n >= 1e6) return (n / 1e6).toFixed(2) + "M";
@@ -1443,6 +1468,227 @@ if (!roseEngineHardKilled()) {
 } else {
   console.log("[rose-engine] ROSE_ENGINE_OFF=1 — engine hard-killed, loop not started.");
 }
+// ── BULLEN (BULLENCIAGA) volume engine — JVP CLIENT, OFF BY DEFAULT (owner, 2026-09-25) ──
+// First Token-2022 JVP client. Mint BULLENxRbvuwjo4DLBKBbh23cNQ4ZbpDeQKuoVXL7exN, 6 decimals,
+// Token-2022 with ONLY metadataPointer + tokenMetadata extensions (no transfer fee/permanent
+// delegate/transfer hook — confirmed on-chain 2026-09-25; mint+freeze authority revoked).
+// A read-only mainnet simulation the same day confirmed InitializePoolV2 succeeds for BULLEN
+// paired with both USDC and wSOL at the 0.01% tier (tickSpacing 1) — no TokenBadge required
+// (the on-chain program only needs a badge for extensions it can't handle permissionlessly;
+// ImmutableOwner is auto-added and is fine). The open/increase/decrease/close-position and
+// balance-read code paths this engine uses (lib/orca-whirlpools.js buildOpenPosition /
+// buildIncreaseLiquidity / buildDecreaseLiquidity / buildClosePosition, lib/whirlpool-vault.js
+// getFloat) already resolve each mint's OWN token program from chain (via the Orca SDK's
+// TokenExtensionUtil + resolveOrCreateATAs, and getFloat's dual-program scan) — they are NOT
+// legacy-Token-only. The one hand-rolled path that WAS legacy-only, buildRepriceStep, gained a
+// Token-2022 branch (swapV2Ix, resolved programs + ATAs, hook mints refused) the same night —
+// it was NOT moot: BULLEN's pools sold out above their bands, pinned at the edge while the market
+// ran 7% higher, and walking an emptied pool back to market is the only clean recenter.
+//
+// TWO pools only (owner): BULLEN/USDC + BULLEN/SOL, both 0.01% (tickSpacing 1), ±1.5% bands.
+// Canonical PDAs verified free on-chain 2026-09-25: USDC Bb8pCvrTtB9EdCkR9siwpfnWXL4vspeUyivFouaQDwx9,
+// SOL Grsyrh21rnUaqXU73TbisGwNnjSbCQ6mMwNj5yDXzf2e (both match poolAddressFor exactly). A THIRD
+// pool (BULLEN/JUP) is a config switch, not new code — jupEnabled stays false below at the same
+// 0.01%/±1.5% preset; its canonical PDA FgXGaLnEvXUBbo6UGzRyMxxqGEy17a7S3FsTpPgM4JkV is ALSO
+// confirmed free on-chain (checked 2026-09-25) — flipping it on later needs create-pool + the
+// flag, nothing else.
+//
+// OPERATOR: the SHARED CUNA/DNC/ROSE wallet (owner, 2026-09-25: "bind the bullen engine to the
+// EXISTING engine wallet" — no new MM_OPERATOR_SECRET_BULLEN). This is the SAME wallet those
+// three sign with, and per the JVP protocol's own trap #1 ("one armed engine per wallet"), only
+// ONE of {cuna, dnc, rose, bullen} may be armed at a time — see bullenWalletConflict() below,
+// enforced symmetrically on all four arm routes via ENGINE_ARM_TABLE. That wallet ALSO holds
+// other projects' inventory (ROSE, CUNA, and other mints) which this engine must NEVER touch:
+// structurally guaranteed, not just promised — every builder call here is parameterized by
+// tok().mint (BULLEN) + this project's own quoteMints [USDC, wSOL, (JUP, disabled)], so
+// listPositions()/evenPools()'s orphan sweep only ever sees positions whose POOL involves
+// BULLEN (checked on-chain against the pool's own mints, not a guess), getFloat() only ever
+// counts SOL/USDC/BTC/JUP/BULLEN balances by mint (never ROSE/CUNA/anything else), and
+// manualSwap()'s fromSym/toSym vocabulary is hardcoded to {SOL,USDC,CLKN(=BULLEN),BTC,JUP} — it
+// has no way to reference another project's mint even if asked to.
+//
+// SIZING (owner, 2026-09-25, after funding the wallet with 300 USDC + 0.6234 SOL): four equal
+// legs — BULLEN+USDC for the USDC pool, BULLEN+SOL for the SOL pool — sized off LIVE
+// balances/prices by bullenBootstrap() below, targeting ~$180 total per pool (~$90/side at
+// today's prices). The deploy-threshold calibration band (JVP protocol Phase 2) is "≈half a
+// typical trim, above idle dust": deployFrac 0.95 leaves ~5% (~$4.50 on a $90 side) idle after
+// every roll — that's the floor. A full close+reopen (~$90) is the ceiling. A "typical trim" for
+// a pool this small sits around $15 (moving into/out of range once); HALF of that is ~$7-8 — well
+// above the ~$4.50 dust floor, well below the $90 ceiling. Same ratio for the SOL leg in SOL terms
+// (~$8 / ~$122 SOL ≈ 0.065, rounded to 0.06). maxUsd/solMaxSol carry headroom above the ~$90/
+// ~0.75 SOL targets so organic growth deploys instead of stranding at the cap.
+const BULLEN_MINT = "BULLENxRbvuwjo4DLBKBbh23cNQ4ZbpDeQKuoVXL7exN";
+const BULLEN_QUOTES = [
+  "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",  // USDC
+  "So11111111111111111111111111111111111111112",   // wSOL
+  "JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN",    // JUP — quoteMint present so the PDA/config
+                                                      // preset exists; jupEnabled stays false.
+];
+const BULLEN_ARM_KEY = "bullenEngineArmed";
+function bullenHardKilled() { return process.env.BULLEN_ENGINE_OFF === "1"; }
+function bullenEngineArmed() {
+  if (bullenHardKilled()) return false;
+  // kv is the ONLY arm switch (2026-09-17 P1-032 lesson, applied from day one here) — an
+  // absent key is OFF, and there is deliberately no BULLEN_ENGINE_ON env fallback to go inert.
+  return kv.get(BULLEN_ARM_KEY, null) === true;
+}
+function bullenEngineSetArmed(on) { kv.set(BULLEN_ARM_KEY, !!on); return bullenEngineArmed(); }
+
+// ── One-armed-engine-per-wallet guard (owner, 2026-09-25) ──────────────────────────────────
+// bullen shares its signing wallet with cuna/dnc/rose. Resolved from each project's OWN
+// registered operatorEnv (never hardcoded to "these four are always on that wallet") so this
+// stays correct if any of them is ever repointed to its own dedicated wallet — at that point
+// its operatorEnv simply stops matching and it drops out of the conflict set automatically.
+const WALLET_SHARED_ENGINE_IDS = ["cuna", "dnc", "rose", "bullen"];
+function walletSharedArmedFn(id) {
+  return { cuna: cunaArmed, dnc: dncArmed, rose: roseEngineArmed, bullen: bullenEngineArmed }[id] || (() => false);
+}
+function walletConflictFor(requestingId) {
+  // Compare resolved operator PUBKEYS, not operatorEnv NAMES (Codex review on #444): two
+  // different env vars that happen to hold the same secret would still share a wallet and
+  // still need this guard, and comparing the actual signer is the ground truth either way.
+  const reqPubkey = whirlpoolMM.vault.operatorPubkey(requestingId);
+  if (!reqPubkey) return null;   // no operator loaded — the no-operator check (run first) catches this
+  for (const id of WALLET_SHARED_ENGINE_IDS) {
+    if (id === requestingId) continue;
+    if (!whirlpoolMM.vault.getProject(id)) continue;   // not registered — nothing to conflict with
+    const otherPubkey = whirlpoolMM.vault.operatorPubkey(id);
+    if (!otherPubkey || otherPubkey !== reqPubkey) continue;   // different (or unloaded) wallet — no conflict
+    if (walletSharedArmedFn(id)()) return { id, reason: `${id}-engine is armed on the same operator wallet (${reqPubkey}) — only one engine may be armed on a shared wallet at a time` };
+    // Extra caution ONLY on bullen's OWN arm attempt (owner, 2026-09-25): bullen is new to this
+    // wallet and holds no history on it, so it additionally refuses while a sibling's vault
+    // project isn't explicitly paused. cuna/dnc/rose arming EACH OTHER never required that (a
+    // fresh/never-paused sibling is their normal resting state) — only the "armed" check above
+    // applies there, or a clean install would permanently deadlock all three.
+    if (requestingId === "bullen" && !whirlpoolMM.vault.isPaused(id)) {
+      return { id, reason: `${id}'s vault project is not paused (shares the ${reqPubkey} wallet) — pause it first: /api/whirlpool/vault/pause?project=${id}` };
+    }
+  }
+  return null;
+}
+
+function bullenEngineConfigRatchet() {
+  const wantEnv = process.env.CUNA_OPERATOR_ENV || "MM_OPERATOR_SECRET_CUNA";
+  const proj = whirlpoolMM.vault.getProject("bullen");
+  // telegramChatId !== "off" is in this condition on purpose (Codex review on #444): the
+  // client's community room is PUBLIC, so notify()'s room fallback must never be able to land
+  // there — the live record was registered "off" by hand, but this makes it durably enforced
+  // rather than merely assumed. Every other field's prev-fallback below is unaffected.
+  if (!proj || proj.operatorEnv !== wantEnv || proj.tokenSellOk !== true || proj.telegramChatId !== "off") {
+    whirlpoolMM.vault.registerProject({
+      id: "bullen", label: (proj && proj.label) || "BULLENCIAGA", symbol: (proj && proj.symbol) || "BULLEN",
+      tokenMint: BULLEN_MINT, decimals: 6, quoteMints: BULLEN_QUOTES,
+      // BULLEN is Token-2022 — getFloat() reads this to make its balance scan mandatory
+      // rather than best-effort (Codex review on #444; see registerProject's own comment).
+      tokenProgram: "token2022",
+      venue: "orca", operatorEnv: wantEnv,
+      // Owner, 2026-09-25: "full permission to buy/sell any asset involved (BULLEN/USDC/SOL
+      // only)" — inventory, not a brand bag; manualSwap may sell BULLEN for pool balancing.
+      tokenSellOk: true,
+      // Client room is public — ops/roll noise never lands there (mirrors rose/cuna/dnc).
+      // Hardcoded "off", not a prev-fallback (Codex review on #444): a prev-fallback would just
+      // copy a drifted value straight back in, defeating the re-register condition above.
+      telegramChatId: "off",
+      ownerWallet: (proj && proj.ownerWallet) || null,
+    });
+    console.log(`[bullen-engine] project bound to operator env ${wantEnv} (tokenSellOk on)`);
+  }
+  const c = whirlpoolMM.vault.getConfig("bullen");
+  const want = {
+    pair: "BULLEN/USDC", baseEnabled: true,
+    // ±1.5% uniform (owner, 2026-09-25) on both pools — tight enough that every real move
+    // recenters (fresh arb trade), wide enough not to sit out-of-range constantly at this size.
+    feeTierPct: 0.01, widthPct: 1.5, solFeeTierPct: 0.01, solWidthPct: 1.5, solEnabled: true,
+    // Preset, disabled (owner: "config switch that is OFF … so turning it on later is a config
+    // change + create-pool, not new code"). PDA confirmed free on-chain 2026-09-25.
+    jupEnabled: false, jupFeeTierPct: 0.01, jupWidthPct: 1.5,
+    slippageBps: 250, priceGapGuardPct: 10,        // thin-book numbers, matches cuna/rose
+    buybackEnabled: false,                          // wallet is funded via bootstrap swaps, not organic inventory
+    edgeTriggerFrac: 0.3, deployFrac: 0.95, minRebalanceIntervalSec: 300,
+    // Calibration band for ~$90/side pools (see the block comment above for the math):
+    // baseDeployThresholdUsd ~half a typical $15 trim, above the ~$4.50 idle-dust floor.
+    baseDeployThresholdUsd: 8,
+    // maxUsd/solMaxSol are DELIBERATELY NOT in `want` (Codex review on #444): evenPools()
+    // recomputes both EVERY cycle from actual capital (lib/whirlpool-vault.js ~3002-3009,
+    // "caps stop being a hand-tuned input") — asserting a fixed value here every boot would
+    // fight that live sizing on the next deploy. They're seeded once via `floor` below instead
+    // (only fires while still at an unset/pre-launch value; evenPools owns them after that).
+    //
+    // NO FLOORS (owner, live-fire correction 2026-09-25, after go-live on this tiny shared
+    // wallet): the vault's stock swapSolFloor DEFAULT is 2 SOL — sized for CLKN-scale
+    // treasuries, not a ~0.6 SOL client wallet. Left unset here it made tickSol read
+    // solAvail as 0 and fall back to "deploy 100% of the token side" with no check that the
+    // implied SOL half was even affordable — a real deploy failed needing more SOL than the
+    // wallet held. usdcFloor 0 and swapSolFloor/solGasReserve down to a bare fee/rent
+    // reserve (~0.03 SOL) fixed the sizing; lib/whirlpool-vault.js tickSol also gained a
+    // guard that clamps (rather than blindly attempts) a token-primary deploy against the
+    // wallet's real spendable SOL, so this class of failure can't recur even if a future
+    // project's floors drift too high again.
+    usdcFloor: 0, swapSolFloor: 0.03, solGasReserve: 0.03,
+    solDeployThreshold: 0.03,
+    // Deployed-value cap (owner, 2026-09-25): bounds how much TOTAL position value this
+    // engine will ever grow to, so stray SOL/USDC sent to the SHARED cuna/dnc/rose/bullen
+    // operator wallet (5WUjHiUVxmUuBnYZx3b5SyFiR7vW2N19VUhgCr2ZRZQ — free quote there belongs
+    // to bullen only while it holds the arm, per the one-armed-engine-per-wallet guard above)
+    // isn't silently absorbed without bound.
+    maxDeployedUsd: 400,
+    // Small pools must stay about the SAME USD value so price impact is even across both —
+    // tight evenness tolerance (owner, 2026-09-25), tighter than rose/cuna/dnc's 10%.
+    swapEnabled: true, poolBalanceTolPct: 5, maxSwapUsdPerCycle: 30, minSwapUsd: 5,
+    maxSwapSolPerCycle: 0.3, swapSlippageBps: 150, maxSwapsPerDay: 24,
+    scaleUpUsdPerCycle: 10, scaleUpDailyCapUsd: 60,
+    // Roll rebalance (review round 2026-09-26, after the SOL pool went $167→$109 and the JUP
+    // pool never reopened): rebalance a fresh close's freed float toward 50/50 before reopening.
+    // OFF for every other project (DEFAULT_CONFIG ships 0) — bullen opts in with a $300/day cap.
+    rollRebalanceUsdPerDay: 300,
+    askWallEnabled: false, btcEnabled: false, dualSleeveEnabled: false,
+    maxActionsPerDay: 96,   // cautious floor to start (matches rose's own ramp-up floor); raise
+                            // live via /api/whirlpool/vault/config?project=bullen&durable=1
+    notifyRolls: false,
+  };
+  const overrides = kv.get("ratchetOverrides:bullen", {}) || {};
+  const { patch } = engineRatchet.ratchetPatch({
+    current: c, want, overrides,
+    // Seeds maxUsd/solMaxSol ONCE, only while they're still at an unset or absurdly-low
+    // pre-launch value — evenPools' own live sizing (see the `want` comment above) owns them
+    // from the first real cycle onward, and an override still wins over this floor either way.
+    // The "still untouched" range excludes BOTH ends: unset/absurdly-low (never seeded) AND
+    // the vault's generic CLKN-scale default (maxUsd:1000, DEFAULT_CONFIG) — a fresh project
+    // reads the default until something writes it, so the default itself must trip this floor
+    // too, or a brand-new bullen would launch with a $1000 cap sized for a treasury.
+    floor: {
+      when: (cc) => cc.maxUsd == null || cc.maxUsd < 20 || cc.maxUsd >= 500 || cc.solMaxSol == null || cc.solMaxSol < 0.1 || cc.solMaxSol >= 3,
+      values: { maxUsd: 200, solMaxSol: 0.66 },
+    },
+  });
+  if (Object.keys(patch).length) {
+    whirlpoolMM.vault.setConfig(patch, "bullen");
+    console.log("[bullen-engine] config ratchet corrected:", Object.keys(patch).join(", "));
+  }
+}
+try { bullenEngineConfigRatchet(); } catch (e) { console.warn("[bullen-engine] register:", e.message); }
+let bullenEngineTickBusy = false;
+async function bullenEngineTick() {
+  if (!bullenEngineArmed()) return;   // checked EVERY tick — &off=1 stops it inside one cycle
+  if (bullenEngineTickBusy) return;
+  bullenEngineTickBusy = true;
+  try {
+    bullenEngineConfigRatchet();
+    try { await whirlpoolMM.vault.evenPools({ projectId: "bullen" }); } catch (e) { console.warn("[bullen-engine] even:", e.message); }
+    try { await whirlpoolMM.vault.tick({ projectId: "bullen" }); } catch (e) { console.warn("[bullen-engine] base tick:", e.message); }
+    try { await whirlpoolMM.vault.tickSol({ projectId: "bullen" }); } catch (e) { console.warn("[bullen-engine] sol tick:", e.message); }
+    try { await whirlpoolMM.vault.tickJup({ projectId: "bullen" }); } catch (e) { console.warn("[bullen-engine] jup tick:", e.message); }  // no-op while jupEnabled:false
+    try { await whirlpoolMM.vault.buyback({ projectId: "bullen" }); } catch (e) { console.warn("[bullen-engine] buyback:", e.message); }   // no-op while buybackEnabled:false
+    try { await whirlpoolMM.vault.flushNotifyDigest({ projectId: "bullen" }); } catch (e) { console.warn("[bullen-engine] digest:", e.message); }
+  } finally { bullenEngineTickBusy = false; }
+}
+if (!bullenHardKilled()) {
+  console.log(`[bullen-engine] loop up — currently ${bullenEngineArmed() ? "ARMED" : "DISARMED"} (toggle: /api/bullen-engine?key=…&on=1|&off=1)`);
+  setInterval(() => bullenEngineTick().catch((e) => console.warn("[bullen-engine] tick:", e.message)), 90000);
+  setTimeout(() => bullenEngineTick().catch((e) => console.warn("[bullen-engine] first tick:", e.message)), 35000);
+} else {
+  console.log("[bullen-engine] BULLEN_ENGINE_OFF=1 — engine hard-killed, loop not started.");
+}
 // 1×/day (owner's call 2026-06-20 — was 3×/day): ONE full lesson at 13:00 UTC
 // (8am CT), then amplified by lessonBumpTick (self-replies at later slots tagging
 // different ecosystem groups) instead of posting more new lessons. Odd hour so it
@@ -1741,6 +1987,19 @@ function burnBroadcastFloor(receipt) {
   if (usd < BURN_BROADCAST_MIN_USD) return `below-floor:${usd.toFixed(2)}<${BURN_BROADCAST_MIN_USD}`;
   return null;
 }
+// Where the burn broadcaster's OWN failure notes go: the operator DM, never TELEGRAM_CHAT_ID.
+// TELEGRAM_CHAT_ID is the public CLKN community room — the "operator chat" alerts below used to
+// land there, so every failed X post showed the community a "⚠️ … failed" line (owner, 2026-09-28).
+function burnOpsChat() { return operatorChatId() || OPERATOR_DM_FALLBACK; }
+// X's own reason for a refused post, so the alert says WHY (a bare "403" can be a duplicate, a
+// permission problem or a spend cap, and each has a different fix).
+function xFailReason(xres) {
+  if (!xres) return "?";
+  const b = xres.body || {};
+  const e0 = Array.isArray(b.errors) && b.errors[0] ? b.errors[0] : {};
+  const why = String(b.detail || b.title || e0.message || e0.detail || b.reason || xres.error || "").replace(/\s+/g, " ").slice(0, 200);
+  return `${xres.status || "no status"}${why ? " — " + why : ""}`;
+}
 function burnSymbolSafe(sym) {
   const s = String(sym || "").replace(/[^A-Za-z0-9]/g, "").slice(0, 12);
   return s || "TOKEN";
@@ -1768,9 +2027,8 @@ async function broadcastBurnCelebration(receipt) {
     }
     if (gate.hourCount >= BURN_BROADCAST_HOURLY_CAP) {
       console.warn(`[burn-celebrate] hourly cap ${BURN_BROADCAST_HOURLY_CAP} hit — skipping`);
-      const chat = process.env.TELEGRAM_CHAT_ID;
-      if (chat && process.env.TELEGRAM_BOT_TOKEN && !gate.capAlerted) {
-        tgSend(chat, `⚠️ Project-burn auto-broadcast hit its hourly cap (${BURN_BROADCAST_HOURLY_CAP}). Extra burns still get receipts; they just aren't auto-posting this hour.`, null, { silent: true }).catch(() => {});
+      if (process.env.TELEGRAM_BOT_TOKEN && !gate.capAlerted) {
+        tgSend(burnOpsChat(), `⚠️ Project-burn auto-broadcast hit its hourly cap (${BURN_BROADCAST_HOURLY_CAP}). Extra burns still get receipts; they just aren't auto-posting this hour.`, null, { silent: true }).catch(() => {});
         gate.capAlerted = true;
       }
       kv.set("burnBroadcastGate", gate);
@@ -1786,11 +2044,13 @@ async function broadcastBurnCelebration(receipt) {
     const pct = receipt.pctSupply != null ? (receipt.pctSupply < 0.01 ? "<0.01%" : receipt.pctSupply.toFixed(receipt.pctSupply < 1 ? 2 : 2) + "%") : null;
     const usd = receipt.usdValue != null && receipt.usdValue >= 0.01 ? `$${receipt.usdValue.toLocaleString(undefined, { maximumFractionDigits: 0 })}` : null;
     const url = `https://clucknorris.app/burn/${receipt.sig}`;
-    // X post (force carve-out). URL not a bare CA → dodges the post-auth raw-CA 403.
+    // X post (force carve-out). The SHORT receipt link, never the full one: an 88-char base58
+    // signature in the URL read as a crypto address and X 403'd every burn post (2026-09-28).
+    // Telegram keeps the full URL — it has no such filter.
     const xText =
       `🔥 ${amt} $${sym} just got burned forever${pct ? ` — ${pct} of supply` : ""}.\n\n` +
       `${usd ? usd + " " : ""}permanently destroyed on Solana, verified on-chain. Burned free & non-custodially 🐔\n\n` +
-      `Receipt 👉 ${url}`;
+      `Receipt 👉 ${burnShortUrl(receipt.sig)}`;
     const xres = await postToX(xText, { force: true });
     // Telegram to the PUBLIC community chat (celebration). Not silent — a celebration should
     // ping. Preview ON so the receipt card renders. Include the X link if the tweet landed.
@@ -1807,10 +2067,10 @@ async function broadcastBurnCelebration(receipt) {
       await tgApi("sendMessage", { chat_id: chat, text: tgText, parse_mode: "HTML", disable_web_page_preview: false });
     }
     // Per the house rule: if the X carve-out failed for a real reason (not the pause), alert
-    // the operator chat rather than failing silently.
-    if (xres && !xres.ok && !xres.paused && !xres.skipped) {
-      const opchat = process.env.TELEGRAM_CHAT_ID;
-      if (opchat && token) tgSend(opchat, `⚠️ Burn celebration X post failed (${xres.status || xres.error || "?"}) for ${amt} $${tgEsc(sym)}. Receipt: ${url}`, null, { silent: true }).catch(() => {});
+    // the OPERATOR DM rather than failing silently — never the public room (see burnOpsChat).
+    if (xres && !xres.ok && !xres.paused && !xres.skipped && !xres.staging) {
+      console.warn(`[burn-celebrate] X post failed: ${xFailReason(xres)} — ${receipt.sig}`);
+      if (token) tgSend(burnOpsChat(), `⚠️ Burn celebration X post failed (${tgEsc(xFailReason(xres))}) for ${amt} $${tgEsc(sym)}. Receipt: ${url}`, null, { silent: true }).catch(() => {});
     }
     return { xPosted: !!(xres && xres.ok), xId: xres && xres.id };
   } catch (e) {
@@ -1999,6 +2259,10 @@ async function xBlitzTick() {
 // for the run of a token buy competition. The board is explicitly PROVISIONAL —
 // it can't fully filter wash-trading in real time; official winners come from the
 // retroactive Rose scan after the hold period. State is volume-backed (survives redeploys).
+// The pure half (split arithmetic, payout journal guards) — shared by buyCompVerify() below and
+// the /api/buycomp/send route, so both ever run the SAME split function, never two copies that
+// could drift.
+const buycompPayout = require("./lib/buycomp-payout");
 const BUYCOMP_KEY = "buyComps";
 let buyCompRunning = false;
 function buyCompsAll() { return kv.get(BUYCOMP_KEY, {}); }
@@ -2121,7 +2385,10 @@ async function walletPositionMulti(wallet, mint, { fromMs = null, toMs = null } 
     const h = await getWalletTokenPositionHelius(wallet, mint, {
       heliusKey: process.env.HELIUS_API_KEY, heliusEnhancedBatched, txCache: BC_ENH_CACHE, fromMs, toMs,
     });
-    if (h) return { sells: h.sells, balance: h.balance, transfersOut: h.transfersOut, source: "helius" };
+    // sellSig/transferOutSig/lockSig/locks: the on-chain evidence a hold-through call was made
+    // on (Colosseum roadmap §7, the public standings page) — the first transaction of each class,
+    // never a motive, just the signature a reader can open on Solscan themselves.
+    if (h) return { sells: h.sells, balance: h.balance, transfersOut: h.transfersOut, locks: h.locks, sellSig: h.sellSig || null, transferOutSig: h.transferOutSig || null, lockSig: h.lockSig || null, source: "helius" };
   } catch (e) { console.warn("[BUY] helius position failed:", e.message); }
   try {
     const pos = premiumForensics.parseStPosition(await solanaTracker.getWalletTokenPosition(wallet, mint));
@@ -2256,20 +2523,28 @@ async function buyCompVerify(c) {
   const candidates = standings.slice(0, c.places.length + 6);   // buffer for DQs
   const results = [];
   for (const s of candidates) {
-    let status = "qualified", note = "still holding";
+    let status = "qualified", note = "still holding", evidenceSig = null, locksSeen = 0;
     try {
       // Sells are scoped to comp-start onward (through the hold period — no toMs):
       // dumping pre-comp bags doesn't DQ, selling the comp buys does. Matches the
       // live board's in-window filter so a wallet shown live can't be DQ'd for
       // ancient history at payout.
       const pos = await walletPositionMulti(s.wallet, c.mint, { fromMs: c.startTs });
+      locksSeen = (pos && pos.locks) || 0;
       if (!pos) { status = "manual"; note = "no position data — verify by hand (Trace)"; }
-      else if ((pos.sells || 0) > 0) { status = "dq"; note = `sold on-chain (${pos.sells} sell${pos.sells > 1 ? "s" : ""})`; }
-      else if ((pos.transfersOut || 0) > 0) { status = "dq"; note = `moved the bag out during the hold (${pos.transfersOut} transfer${pos.transfersOut > 1 ? "s" : ""} out) — not eligible`; }
-      else if ((pos.balance || 0) <= 0) { status = "manual"; note = "holds 0 but the scan saw no sell and no transfer — coverage gap or RPC miss; verify by hand (a confirmed transfer out = not eligible)"; }
+      else if ((pos.sells || 0) > 0) { status = "dq"; note = `sold on-chain (${pos.sells} sell${pos.sells > 1 ? "s" : ""})`; evidenceSig = pos.sellSig || null; }
+      else if ((pos.transfersOut || 0) > 0) { status = "dq"; note = `moved the bag out during the hold (${pos.transfersOut} transfer${pos.transfersOut > 1 ? "s" : ""} out) — not eligible`; evidenceSig = pos.transferOutSig || null; }
+      else if ((pos.balance || 0) <= 0) {
+        // A LOCK is not a sell (PR #298) — a wallet whose whole buy went into a Jupiter Lock
+        // escrow shows balance 0 with no sell and no transfer, and used to fall into the same
+        // "manual — coverage gap or RPC miss" bucket as a genuine scan failure. Say what was
+        // actually observed instead: the tokens are immobilised, not moved out.
+        if (locksSeen > 0) { status = "manual"; note = `holds 0 — the scan saw ${locksSeen} lock transfer${locksSeen > 1 ? "s" : ""} (a lock is not a sell) and no sell or transfer out; verify by hand that the lock covers the whole buy`; evidenceSig = pos.lockSig || null; }
+        else { status = "manual"; note = "holds 0 but the scan saw no sell and no transfer — coverage gap or RPC miss; verify by hand (a confirmed transfer out = not eligible)"; }
+      }
       else { status = "qualified"; note = `holds ${Math.round(pos.balance).toLocaleString()}, no sells`; }
     } catch (e) { status = "manual"; note = "lookup failed — verify by hand"; }
-    results.push({ wallet: s.wallet, value: s[key] || 0, tokensBought: Number(s.tokensBought) || 0, status, note });
+    results.push({ wallet: s.wallet, value: s[key] || 0, tokensBought: Number(s.tokensBought) || 0, status, note, evidenceSig, locksSeen });
   }
   // Auto-pay ONLY affirmatively-qualified holders. "manual" (no-data / lookup-failed) wallets
   // are surfaced in verifyResults for the operator to check by hand — never auto-included in
@@ -2279,17 +2554,12 @@ async function buyCompVerify(c) {
   // be percentage of ROSE that they bought, not a rated ROSE"), so the amount is in the comp
   // token and pastes straight into the airdropper. The Helius scan carries tokensBought; the
   // GeckoTerminal / Solana Tracker fallbacks only carry SOL volume, in which case the amount
-  // is still SOL-terms and amountUnit says so — never silently mix the two.
+  // is still SOL-terms and amountUnit says so — never silently mix the two. The split itself is
+  // lib/buycomp-payout.js's verifiedRow() — the exact function the public standings page's "how
+  // this number was computed" walkthrough and reproduce-a-receipt call too, never a copy that
+  // could drift from what was actually paid.
   const eligible = results.filter(r => r.status === "qualified");
-  c.verified = eligible.slice(0, c.places.length).map((r, i) => {
-    const pct = c.places[i].amount;
-    const tok = r.tokensBought > 0;
-    const amount = !c.pctPrize ? pct : tok ? +((r.tokensBought * pct) / 100).toFixed(2) : +((r.value || 0) * pct / 100).toFixed(4);
-    const extra = !c.pctPrize ? {} : tok
-      ? { amountUnit: "token", amountNote: `${pct}% of ${Math.round(r.tokensBought).toLocaleString()} ${c.ticker || "tokens"} bought` }
-      : { amountUnit: "sol", amountNote: `${pct}% of ${(r.value || 0).toFixed(2)} SOL bought (SOL terms — the buy source had no token amounts; operator converts/pays manually)` };
-    return { rank: i + 1, wallet: r.wallet, amount, ...extra, status: r.status, note: r.note };
-  });
+  c.verified = eligible.slice(0, c.places.length).map((r, i) => buycompPayout.verifiedRow(c, r, i));
   c.verifyResults = results;
   c.verifiedAt = Date.now();
   if (!c.payoutToken) c.payoutToken = randomBytes(8).toString("hex");
@@ -2489,7 +2759,7 @@ function tgCommandReply(cmd, arg) {
     case "dex":
       return `📊 <b>CLKN on DexScreener</b>\nhttps://${CLKN_DEXSCREENER}`;
     case "walletxray":
-      return `🩻 <b>Wallet X-Ray</b> — full wallet deep dive: funding origin, every trade, bot/dumper signals\n${link("/wallet-xray", "wallet")}` + (addr ? "" : "\n\nTip: <code>/walletxray &lt;wallet&gt;</code> pre-fills a wallet.");
+      return `🩻 <b>Wallet X-Ray</b> — wallet deep dive: funding origin and the activity the scan can find\n${link("/wallet-xray", "wallet")}` + (addr ? "" : "\n\nTip: <code>/walletxray &lt;wallet&gt;</code> pre-fills a wallet.");
     case "autopsy":
       return `🪦 <b>Token Autopsy</b> — deep forensic breakdown\n${link("/autopsy", "mint")}` + (addr ? "" : "\n\nTip: <code>/autopsy &lt;mint&gt;</code>.");
     case "trace":
@@ -2537,6 +2807,7 @@ function tgCommandReply(cmd, arg) {
         "🌐 /website (or /app) — clucknorris.app\n" +
         "💵 /price — CLKN price, market cap &amp; volume\n" +
         "🔒 /lock — locked supply + Jupiter Lock proof\n" +
+        "🧾 /receipt <code>&lt;signature&gt;</code> — check a Hub settlement receipt against the published rule\n" +
         "🩻 /walletxray <code>&lt;wallet&gt;</code> — full wallet deep dive\n" +
         "🔍 /trace <code>&lt;wallet&gt;</code> — wallet × token history\n" +
         "👥 /holders <code>&lt;mint&gt;</code> — true holders vs LP, locks &amp; programs + CSV\n" +
@@ -2630,10 +2901,36 @@ async function priceReply(chatId, replyTo) {
   }
 }
 
-const TG_KNOWN_CMDS = ["ca","x","website","app","dex","walletxray","autopsy","trace","snapshot","holders","lock","lockerroom","locker","securitycoop","walletcheckup","buyspecial","rose","hatchery","firepit","projectburn","burn","lprescue","rescue","bags","tools","liquidity","price","commands","start","help","guide","buyleaders","chatid"];
+// /receipt <signature> — BB4 (Colosseum roadmap §12): looks a settlement signature up across
+// every registered, non-demo Hub project and replies with the reproduce() verdict for it. Pulled
+// out to lib/hub/receipt-command.js so scripts/telegram-receipt-command-test.cjs can exercise the
+// real logic directly; this wiring only supplies the live pieces (the project registry, kv,
+// tgSend). The OnlyRose refusal is NOT special-cased here — it fires inside tgSend/tgApi exactly
+// like every other command's reply (lib/telegram-rooms.js; owner 2026-09-17: never add an allow).
+// hubProjects/hubProjectView/hubPublic/hubStore/hubReproduce/hubProject/kv are all defined further
+// down in this file (next to the /api/hub/* routes) — safe to reference here because this function
+// only runs once a Telegram update arrives, long after the whole module (and those consts) has
+// finished loading, same pattern every other cross-referencing function in this monolith already
+// relies on.
+const hubReceiptCommand = require("./lib/hub/receipt-command");
+function receiptCommandReply(chatId, replyTo, arg) {
+  // P3-10: hubProjectViewCached, not the raw hubProjectView — see its own comment beside the
+  // definition. findHubReceiptBySig walks every registered project per lookup; this keeps a burst
+  // of /receipt commands across rooms from repeating that walk more than once a minute per project.
+  return hubReceiptCommand.handleReceiptCommand({
+    arg, chatId, replyToId: replyTo, send: tgSend,
+    hubProjects, hubProjectView: hubProjectViewCached, hubPublic, hubStore, hubReproduce, hubProject, kv,
+    publicBase: TG_PUBLIC_BASE,
+  }).catch((e) => console.warn("[TELEGRAM] /receipt error:", e.message));
+}
+
+const TG_KNOWN_CMDS = ["ca","x","website","app","dex","walletxray","autopsy","trace","snapshot","holders","lock","lockerroom","locker","securitycoop","walletcheckup","buyspecial","rose","hatchery","firepit","projectburn","burn","lprescue","rescue","bags","tools","liquidity","price","receipt","commands","start","help","guide","buyleaders","chatid"];
 // In a non-CLKN project room (e.g. ROSE) the bot only serves that project's liquidity +
 // buy competitions; chatid stays so an operator can wire a buy comp. Everything else off.
-const PROJECT_ROOM_CMDS = ["liquidity","price","buyleaders","buyspecial","chatid"];
+// /receipt is included: a project room's own community is exactly who a Hub receipt lookup is
+// for. The OnlyRose room itself still gets nothing — not from this gate (ROSE IS a project room),
+// but from the tgSend/tgApi choke point (lib/telegram-rooms.js) the reply attempt runs into.
+const PROJECT_ROOM_CMDS = ["liquidity","price","buyleaders","buyspecial","chatid","receipt"];
 // /buyspecial is an on-demand board drop; this keeps a room from being spammed with them.
 const TG_BUYSPECIAL_COOLDOWN_MS = 90 * 1000;
 const lbCooldown = new Map();      // chatId -> last LIVE pull ts (quota guard)
@@ -3289,6 +3586,13 @@ function handleTelegramUpdate(update) {
       priceReply(msg.chat.id, msg.message_id);
       return;
     }
+    // /receipt <sig> → BB4: look up a Hub settlement signature across every registered project
+    // and reply with the reproduce() verdict. Fire-and-forget like every other command here;
+    // receiptCommandReply already swallows and logs its own errors.
+    if (cmd === "receipt") {
+      receiptCommandReply(msg.chat.id, msg.message_id, arg);
+      return;
+    }
     // /lock → on-demand locked-supply report (same data as the daily message) + Jupiter Lock proof link.
     if (cmd === "lock") {
       buildLockReport()
@@ -3339,6 +3643,75 @@ app.disable("x-powered-by");
 // boots slowly or can fail. A healthcheck that can go red on a downstream hiccup would
 // block deploys for reasons that have nothing to do with whether the app can serve.
 app.get("/healthz", (req, res) => res.status(200).type("text/plain").send("ok"));
+
+// ── /api/build — the git sha/branch this container is actually running (Colosseum roadmap §10
+// Z2). Computed ONCE at boot, never re-read per request: a git sha cannot change under a running
+// process, so there is nothing to gain from re-reading disk on every hit, only latency. Nothing
+// secret — a commit sha and a branch name are already public on GitHub.
+//   1. Railway sets RAILWAY_GIT_COMMIT_SHA / RAILWAY_GIT_BRANCH on every deploy from a connected
+//      repo (Railway's own docs; this repo had no prior reader for them — grepped for RAILWAY_
+//      and found none — so this is the first). Preferred when present: it is what Railway itself
+//      believes it deployed, with zero disk reads.
+//   2. Otherwise fall back to reading `.git/HEAD` (+ the ref it points at) directly — covers a
+//      local `node server.js` and a no-build CI boot, where Railway's env vars don't exist. This
+//      handles a plain clone's `.git/HEAD` ("ref: refs/heads/<branch>" or a bare sha for a detached
+//      checkout) and a git WORKTREE's `.git` file (a `gitdir: <path>` pointer, never the ref
+//      itself, so a worktree's own HEAD lives at `<that path>/HEAD`).
+//   3. Env is derived from the branch, never from Railway's own environment name (this project's
+//      two Railway services and its `main`/`develop` branches are already the source of truth —
+//      CLAUDE.md "Branching"): `main` -> production, `develop` -> staging, anything else -> local.
+function readGitHeadInfo() {
+  try {
+    let gitDir = join(__dirname, ".git");
+    const st = fs.statSync(gitDir);
+    if (!st.isDirectory()) {
+      // A worktree checkout: `.git` is a text file, "gitdir: /path/to/main/.git/worktrees/<name>".
+      const pointer = fs.readFileSync(gitDir, "utf8").trim();
+      const m = /^gitdir:\s*(.+)$/.exec(pointer);
+      if (!m) return null;
+      gitDir = m[1];
+    }
+    const head = fs.readFileSync(join(gitDir, "HEAD"), "utf8").trim();
+    const refMatch = /^ref:\s*(\S+)$/.exec(head);
+    if (refMatch) {
+      const branch = refMatch[1].replace(/^refs\/heads\//, "");
+      let sha = null;
+      // Try the loose ref file first, then packed-refs (a ref just merged/fetched with no loose
+      // file yet — a worktree's own dir won't have this, so check the common dir it points at too).
+      for (const dir of [gitDir, join(gitDir, "..", "..")]) {
+        try { sha = fs.readFileSync(join(dir, refMatch[1]), "utf8").trim(); break; } catch (_) {}
+      }
+      if (!sha) {
+        for (const dir of [gitDir, join(gitDir, "..", "..")]) {
+          try {
+            const packed = fs.readFileSync(join(dir, "packed-refs"), "utf8");
+            const line = packed.split("\n").find((l) => l.endsWith(" " + refMatch[1]));
+            if (line) { sha = line.split(" ")[0]; break; }
+          } catch (_) {}
+        }
+      }
+      return { sha: sha || null, branch };
+    }
+    // Detached HEAD: the file itself is the sha, no branch name available.
+    if (/^[0-9a-f]{40}$/i.test(head)) return { sha: head, branch: null };
+    return null;
+  } catch (_) { return null; }
+}
+const BUILD_INFO = (() => {
+  const envSha = String(process.env.RAILWAY_GIT_COMMIT_SHA || "").trim();
+  const envBranch = String(process.env.RAILWAY_GIT_BRANCH || "").trim();
+  let sha = envSha || null, branch = envBranch || null;
+  if (!sha || !branch) {
+    const git = readGitHeadInfo();
+    if (git) { sha = sha || git.sha; branch = branch || git.branch; }
+  }
+  const env = branch === "main" ? "production" : branch === "develop" ? "staging" : "local";
+  return { sha: sha || null, branch: branch || null, builtAt: Date.now(), env };
+})();
+app.get("/api/build", (req, res) => {
+  res.setHeader("Cache-Control", "public, max-age=300");
+  return res.status(200).json({ ok: true, ...BUILD_INFO });
+});
 
 // gzip/brotli-style compression for every response (HTML, JS bundle, and the
 // large i18n dictionaries). Cuts the school dict from ~700KB to ~150KB on the
@@ -3641,6 +4014,11 @@ app.use((req, res, next) => {
 // as the in-memory Telegram trackers). Railway sits behind a proxy, so trust
 // X-Forwarded-For for the real client IP rather than the proxy's.
 app.set("trust proxy", true);
+// Explicit, not just relying on Express's default: weak ETags on every res.json/res.send body,
+// so the Hub's public read routes (Colosseum roadmap Z3) answer a matching If-None-Match with a
+// bare 304 for free — no per-route code needed, Express's own `fresh` check does it inside
+// res.send(). scripts/public-route-hygiene-test.cjs pins this against a real conditional request.
+app.set("etag", "weak");
 
 // Last-resort guards: on Node ≥15 an unhandled promise rejection (e.g. a throw inside an
 // un-.catch'd setInterval tick) terminates the process, taking down every scheduler AND the
@@ -3695,7 +4073,7 @@ function clientIp(req) {
 // that long — so introducing one day-long limiter would quietly make all fifteen minute-long ones
 // retain a day of timestamps each. The sweep now trims each key by its own window.
 const RL_WINDOWS = new Map();   // bucket -> windowMs
-function rateLimit(bucket, { windowMs, max, message, onLimit }) {
+function rateLimit(bucket, { windowMs, max, message, onLimit, cors }) {
   RL_WINDOWS.set(bucket, Math.max(RL_WINDOWS.get(bucket) || 0, windowMs));
   if (windowMs > RL_MAX_WINDOW_MS) RL_MAX_WINDOW_MS = windowMs;   // fallback for un-prefixed keys
   return (req, res, next) => {
@@ -3712,8 +4090,24 @@ function rateLimit(bucket, { windowMs, max, message, onLimit }) {
       const retryAfter = Math.ceil((windowMs - (now - arr[0])) / 1000);
       if (typeof onLimit === "function") { try { onLimit(ip, req); } catch (_) {} }
       res.setHeader("Retry-After", Math.max(1, retryAfter));
-      return res.status(429).json({ success: false,
-        error: message || "Rate limit exceeded — slow down.", retryAfterSec: Math.max(1, retryAfter) });
+      // `cors: true` for a limiter mounted on a route that itself answers with
+      // Access-Control-Allow-Origin (Colosseum roadmap Z3 — the Hub's cross-origin public
+      // reads): the 429 short-circuits BEFORE the route handler ever runs, so without this the
+      // limited response would carry no CORS header and a cross-origin caller (e.g. /hub/verify
+      // reproducing a receipt published on another host) would see an opaque network error
+      // instead of a readable 429. Never used for the store-edition contract routes — see
+      // STORE_API_RE and the store-CORS middleware above, which this is mounted after.
+      if (cors) { res.setHeader("Access-Control-Allow-Origin", "*"); }
+      // `windowSec` is ADDITIVE and exists so a client never has to GUESS which limit it hit.
+      // Two limiters sit on the same AI routes — a 15/minute one and a ~150/day cap — and they
+      // answered with an identical body, so the Seeker app was inferring "retryAfterSec > 90
+      // means the daily cap". That is true today and silently wrong the moment either window is
+      // retuned. The window length is right here in scope; say it rather than make the caller
+      // reverse-engineer it. Purely additive, so the PINNED store-edition app (STORE_API_RE —
+      // its response shapes are a versioned contract) is unaffected: it ignores unknown fields.
+      return res.status(429).json({ success: false, ok: false,
+        error: message || "Rate limit exceeded — slow down.", retryAfterSec: Math.max(1, retryAfter), retryAfter: Math.max(1, retryAfter),
+        windowSec: Math.round(windowMs / 1000) });
     }
     arr.push(now);
     next();
@@ -3741,7 +4135,10 @@ setInterval(() => {
 // mints, locks or sends is reachable this way, and the Origin header grants nothing by itself
 // (every endpoint keeps its own rules; this only lets the browser read the answer).
 const STORE_APP_ORIGINS = new Set(String(process.env.STORE_APP_ORIGINS || "capacitor://localhost,https://localhost,http://localhost,ionic://localhost").split(",").map((o) => o.trim()).filter(Boolean));
-const STORE_API_RE = /^\/api\/(ask-cluck(\/report)?|track|claim\/certificate|certificate\/[A-Za-z0-9]{6,32}|i18n\/translate|tts|helius-rpc|wallet-checkup|listing-checkup\/(config|run|report))$/;
+// `alpha` joined the contract with store-edition v1.1.0 (the Seeker-shell Play/iOS edition,
+// 2026-09-21): its Daily pane reads GET /api/alpha for the majors. Read-only, unauthenticated,
+// cached 10 min; the pane renders prices only (no picks, no brief — see tools/DailyBrief.jsx).
+const STORE_API_RE = /^\/api\/(ask-cluck(\/report)?|track|claim\/certificate|certificate\/[A-Za-z0-9]{6,32}|i18n\/translate|tts|helius-rpc|wallet-checkup|listing-checkup\/(config|run|report)|alpha)$/;
 app.use((req, res, next) => {
   const origin = String(req.get("origin") || "");
   if (!origin || !STORE_APP_ORIGINS.has(origin) || !STORE_API_RE.test(req.path)) return next();
@@ -3749,6 +4146,34 @@ app.use((req, res, next) => {
   res.setHeader("Vary", "Origin");
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  res.setHeader("Access-Control-Max-Age", "600");
+  if (req.method === "OPTIONS") return res.status(204).end();
+  next();
+});
+// ── SEEKER edition (Solana dApp Store bundle) — CORS for the FULL product ────────────────────
+// The Seeker app is the same shell built with the wallet half IN (src/seeker/edition/full.jsx),
+// bundled by the wrapper and calling this backend from the SAME webview origins as the store
+// edition (https://localhost on Android). STORE_API_RE above is the education edition's contract
+// and deliberately excludes everything that pays, signs, mints, locks or sends — which is exactly
+// what the Seeker app does. Until 2026-09-22 nothing granted CORS for those, so on the owner's
+// phone the pass sheet said "Could not reach the pass service", and every POST and every gated
+// GET (x-clkn-pass triggers a preflight) would have failed the same way: 15 of the 23 endpoints
+// the app calls answered its preflight with the /api/* 404. Green in a browser, red in the app —
+// the same class as the store-edition trap, on the other edition. This list is the Seeker app's
+// contract; scripts/seeker-cors-test.cjs derives the app's endpoint inventory from src/seeker
+// and refuses any path that neither regex covers. The Origin header still grants nothing: every
+// endpoint keeps its own gate (the tools pass, the receipt sign-in, the payment checks), and the
+// store UA refusal below still answers 403 to the education editions on these — now WITH the
+// CORS headers, so that app reads the refusal instead of an opaque network error.
+const SEEKER_API_RE = /^\/api\/(tool-gate\/(config|challenge|session)|seeker\/reclaimable|wallet-xray|snapshot|trace|airdrop\/record|lock\/(create-tx|record)|locks|burn-(scan|token-info|receipt)|hatchery\/(config|build|submit|minted))$/;
+app.use((req, res, next) => {
+  const origin = String(req.get("origin") || "");
+  if (!origin || !STORE_APP_ORIGINS.has(origin) || !SEEKER_API_RE.test(req.path)) return next();
+  res.setHeader("Access-Control-Allow-Origin", origin);
+  res.setHeader("Vary", "Origin");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  // x-clkn-pass: the tools pass / receipt sign-in token (toolPassGate, receiptSessionGate).
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, X-Clkn-Pass");
   res.setHeader("Access-Control-Max-Age", "600");
   if (req.method === "OPTIONS") return res.status(204).end();
   next();
@@ -3833,6 +4258,9 @@ app.use("/api/token-card", rateLimit("forensic", { windowMs: 60000, max: 15 }));
 // class. Both were covered only by the global 150/min cap — 10x looser than their siblings. (sec M3)
 app.use("/api/burn-scan", rateLimit("forensic", { windowMs: 60000, max: 15 }));
 app.use("/api/wallet-checkup", rateLimit("forensic", { windowMs: 60000, max: 15 }));
+// Rent Reclaim (Seeker app, read side): 2 billed getTokenAccountsByOwner reads per request,
+// unauthenticated — same "forensic" budget as its siblings above, for the same reason (sec M3).
+app.use("/api/seeker/reclaimable", rateLimit("forensic", { windowMs: 60000, max: 15 }));
 // Owners Snapshot: /start queues an hours-long paced crawl, so it gets its own tight cap; the
 // status/result/history reads are cheap file reads and only need the global /api cap.
 app.use("/api/owners-snapshot/start", rateLimit("ownersstart", { windowMs: 3600000, max: 6 }));
@@ -3953,10 +4381,14 @@ app.post("/api/i18n/translate", rateLimit("i18nmt", { windowMs: 60000, max: 90 }
 //   ELEVENLABS_API_KEY      — required to enable; unset = off
 //   ELEVENLABS_VOICE_ID     — the custom Cluck voice (per-lang override: *_ZH / *_ES)
 //   ELEVENLABS_MODEL        — default eleven_flash_v2_5 (HALF-price credits, multilingual)
-//   TTS_DAILY_CHAR_CAP      — daily budget on NEW synthesis (default 40000)
+//   TTS_DAILY_CHAR_CAP      — daily budget on NEW synthesis (default 250000). Raised from 40000 on
+//                             2026-09-30 (owner) to spend the Pro plan's credits warming the cache
+//                             before the account drops to the $6 plan (~30k credits/month). ⚠️ Lower
+//                             this default again when that plan takes effect — at 250k it no longer
+//                             guards the monthly quota; ElevenLabs' own quota does.
 const TTS_DIR = join(process.env.DATA_DIR || "/data", "tts");
 const TTS_MODEL = process.env.ELEVENLABS_MODEL || "eleven_flash_v2_5";
-const TTS_DAILY_CHAR_CAP = parseInt(process.env.TTS_DAILY_CHAR_CAP || "40000", 10);
+const TTS_DAILY_CHAR_CAP = parseInt(process.env.TTS_DAILY_CHAR_CAP || "250000", 10);
 let ttsNewChars = 0, ttsNewDay = "";
 function ttsVoiceId(lang) {
   return process.env["ELEVENLABS_VOICE_ID_" + String(lang || "").toUpperCase()] ||
@@ -4872,11 +5304,11 @@ ${ctx || "(no pools found for this pair)"}`;
     const r = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-api-key": ANTHROPIC_KEY, "anthropic-version": "2023-06-01" },
-      body: JSON.stringify({ model: "claude-sonnet-5", max_tokens: 800, thinking: { type: "disabled" }, system, messages: [{ role: "user", content: String(question) }] }),
+      body: JSON.stringify({ model: "claude-sonnet-5-5", max_tokens: 800, thinking: { type: "between_tools" }, output_config: { effort: "high" }, system, messages: [{ role: "user", content: String(question) }] }),
     });
     const data = await r.json();
-    if (data && data.content && data.content[0]) {
-      const answer = data.content[0].text.replace(/\*\*([^*]+)\*\*/g, "$1").replace(/\*([^*]+)\*/g, "$1").replace(/#{1,3}\s/g, "").trim();
+    if (claudeText(data)) {
+      const answer = claudeText(data).replace(/\*\*([^*]+)\*\*/g, "$1").replace(/\*([^*]+)\*/g, "$1").replace(/#{1,3}\s/g, "").trim();
       return res.status(200).json({ success: true, pair: scan.pair, answer, pools: scan.pools });
     }
     return res.status(500).json({ success: false, error: (data && data.error && data.error.message) || "No response from AI" });
@@ -4937,7 +5369,11 @@ async function gatherAlphaData() {
   } catch (_) {}
   try {
     const tp = await lpScanner.topPools({ kind: "trending" });
-    d.hotPools = (tp.pools || []).slice(0, 6).map((p) => ({ pair: p.pair, dex: p.dex, vol: (p.volume && p.volume.h24) || 0, yieldPct: p.feeYield7dPctDay != null ? p.feeYield7dPctDay : p.feeYieldPctDay, risk: p.ilRisk && p.ilRisk.level }));
+    // `yieldPct` is fees ÷ TVL per day — a measured ratio (7-day average volume × fee tier ÷ TVL, or the
+    // 24h figure when the scanner has no 7-day read), NOT what an LP earns. Every row says which
+    // period it is (`period`) so no renderer can label a seven-day average "24h" again (Codex, #390).
+    // The key name stays `yieldPct` for the /api/alpha contract (STORE_API_RE).
+    d.hotPools = (tp.pools || []).slice(0, 6).map((p) => ({ pair: p.pair, dex: p.dex, vol: (p.volume && p.volume.h24) || 0, yieldPct: p.feeYield7dPctDay != null ? p.feeYield7dPctDay : p.feeYieldPctDay, period: p.feeYield7dPctDay != null ? "7d" : "24h", basis: "feesToTvlPctDay", risk: p.ilRisk && p.ilRisk.level }));
   } catch (_) {}
   try {
     const np = await lpScanner.cgFetch("/networks/solana/new_pools");
@@ -4946,7 +5382,9 @@ async function gatherAlphaData() {
   } catch (_) {}
   try {
     const bc = await lpScanner.topPools({ kind: "bluechip" });
-    d.lpPicks = (bc.pools || []).slice(0, 4).map((p) => ({ pair: p.pair, dex: p.dex, yieldPct: p.feeYield7dPctDay != null ? p.feeYield7dPctDay : p.feeYieldPctDay }));
+    // Established-both-sides pools (lib/lp-scanner ESTABLISHED), busiest first. The key is still
+    // `lpPicks` for the payload contract; nothing that renders it may call them picks or blue-chip.
+    d.lpPicks = (bc.pools || []).slice(0, 4).map((p) => ({ pair: p.pair, dex: p.dex, yieldPct: p.feeYield7dPctDay != null ? p.feeYield7dPctDay : p.feeYieldPctDay, period: p.feeYield7dPctDay != null ? "7d" : "24h", basis: "feesToTvlPctDay" }));
   } catch (_) {}
   return d;
 }
@@ -4957,9 +5395,17 @@ function alphaDataSummary(d) {
   if (d.trending.length) lines.push("TRENDING ON SOLANA (GeckoTerminal): " + d.trending.map((t) => `${t.sym}${t.chg != null ? " " + pct(t.chg) : ""}`).join(", "));
   if (d.gainers.length) lines.push("TOP SOLANA MOVERS ↑ (24h): " + d.gainers.map((g) => `${g.sym} ${pct(g.chg)}`).join(", "));
   if (d.losers.length) lines.push("TOP SOLANA MOVERS ↓ (24h): " + d.losers.map((g) => `${g.sym} ${pct(g.chg)}`).join(", "));
-  if (d.hotPools.length) lines.push("HOTTEST SOLANA POOLS (by volume): " + d.hotPools.map((p) => `${p.pair} on ${p.dex} ($${Math.round(p.vol / 1000)}K 24h vol${p.yieldPct != null ? ", " + p.yieldPct + "%/day fee yield" : ""}${p.risk === "high" ? ", HIGH IL risk" : ""})`).join("; "));
+  // ⚠️ NO FEE-RATIO FIGURE IN THE BRIEF, in either the hot-pools line or the (deleted) "picks"
+  // line. Three reasons, each found separately: "blue-chip"/"picks" is a verdict and a
+  // recommendation (AGENTS.md forbids both); the preferred figure is feeYield7dPctDay — a
+  // SEVEN-DAY average — and the first relabel called it "last 24h", which was simply wrong
+  // (Codex, PR #390); and the prompt cannot protect the FALLBACK path — cluckBrief() returns this
+  // raw summary when the AI call fails, so an instruction to the model never reaches the reader
+  // there. The only wording that survives both paths is the wording that is not here. The
+  // scanner's own pages (/lp-scanner, /alpha) still carry the figure with its period; this is
+  // the brand's daily post and it does not.
+  if (d.hotPools.length) lines.push("BUSIEST SOLANA POOLS (by 24h volume): " + d.hotPools.map((p) => `${p.pair} on ${p.dex} ($${Math.round(p.vol / 1000)}K 24h vol${p.risk === "high" ? ", HIGH IL risk" : ""})`).join("; "));
   if (d.newPools.length) lines.push("BRAND-NEW SOLANA POOLS: " + d.newPools.map((p) => `${tgEsc(p.name)} ($${Math.round(p.vol / 1000)}K vol, $${Math.round(p.liq / 1000)}K liq, ${p.ageH}h old)`).join("; "));
-  if (d.lpPicks.length) lines.push("BLUE-CHIP LP YIELD (our scanner, fees/TVL): " + d.lpPicks.map((p) => `${p.pair} on ${p.dex} ${p.yieldPct}%/day`).join(", "));
   return lines.join("\n");
 }
 async function cluckBrief(d) {
@@ -4971,17 +5417,17 @@ STYLE: punchy, confident, funny, a chicken pun or two, but genuinely informative
 🌡️ THE MOOD — read the majors (BTC/ETH/SOL) in one or two lines.
 🔥 WHAT'S HOT — trending coins + the standout 24h gainers; note if a gainer looks like a pump.
 🌶️ FRESH OFF THE GRILL — the brand-new Solana pools; remind them new pools are high rug risk.
-💧 WHERE THE FEES ARE — the hottest Solana pools and our blue-chip LP yield picks (fee yield = the real LP money metric, not volume).
+💧 WHERE THE ACTION IS — the busiest Solana pools by volume, as plain observation of what already traded. NEVER call a pool or token blue-chip, safe, solid or quality, never present any pool as a pick or a recommendation, and never quote, estimate or imply a yield, a return, an APR or anything anyone will earn — you have no fee data, and this school teaches that volume is not income.
 🎓 CLUCK'S LESSON — one sharp educational takeaway tied to today's data.
-RULES: Never tell anyone to buy/sell or predict prices. Flag risk honestly (memecoins/new pools can go to zero). No markdown asterisks or headers (#). Write tickers plain (BONK, not $BONK) — never put a $ before a ticker. Keep the whole thing under ~320 words. End with: "Not financial advice — now go do your homework. 🐔"`;
+RULES: Never tell anyone to buy/sell or predict prices. Never recommend, rank or endorse a token or pool, and never promise or imply a return. Flag risk honestly (memecoins/new pools can go to zero). No markdown asterisks or headers (#). Write tickers plain (BONK, not $BONK) — never put a $ before a ticker. Keep the whole thing under ~320 words. End with: "Not financial advice — now go do your homework. 🐔"`;
   try {
     const r = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-api-key": KEY, "anthropic-version": "2023-06-01" },
-      body: JSON.stringify({ model: "claude-sonnet-5", max_tokens: 1500, thinking: { type: "disabled" }, system, messages: [{ role: "user", content: `Here's today's live Solana market data:\n\n${summary}\n\nWrite today's Daily Alpha.` }] }),
+      body: JSON.stringify({ model: "claude-sonnet-5-5", max_tokens: 1500, thinking: { type: "between_tools" }, output_config: { effort: "high" }, system, messages: [{ role: "user", content: `Here's today's live Solana market data:\n\n${summary}\n\nWrite today's Daily Alpha.` }] }),
     });
     const data = await r.json();
-    if (data && data.content && data.content[0]) return data.content[0].text.replace(/\*\*([^*]+)\*\*/g, "$1").replace(/\*([^*]+)\*/g, "$1").replace(/^#{1,3}\s/gm, "").trim();
+    if (claudeText(data)) return claudeText(data).replace(/\*\*([^*]+)\*\*/g, "$1").replace(/\*([^*]+)\*/g, "$1").replace(/^#{1,3}\s/gm, "").trim();
   } catch (_) {}
   return `🐔 CLUCK'S DAILY ALPHA\n\n${summary}\n\nNot financial advice — now go do your homework. 🐔`;
 }
@@ -5070,7 +5516,7 @@ async function classroomLiveExample(course, lesson) {
     if (/liquid|pool|amm|fee|lp|impermanent|concentrat|yield|slippage|price impact|bonding/.test(t)) {
       const tp = await lpScanner.topPools({ kind: "bluechip" });
       const p = (tp.pools || [])[0];
-      if (p) return `\n\nLIVE EXAMPLE (a real Solana pool RIGHT NOW — weave it in to make the lesson concrete): ${p.pair} on ${p.dex} — TVL $${Math.round(p.tvlUsd).toLocaleString()}, 24h volume $${Math.round((p.volume && p.volume.h24) || 0).toLocaleString()}, fee tier ${p.feeTier}%, ~${p.feeYield7dPctDay != null ? p.feeYield7dPctDay : p.feeYieldPctDay}%/day fee yield.`;
+      if (p) return `\n\nLIVE EXAMPLE (a real Solana pool RIGHT NOW — weave it in to make the lesson concrete): ${p.pair} on ${p.dex} — TVL $${Math.round(p.tvlUsd).toLocaleString()}, 24h volume $${Math.round((p.volume && p.volume.h24) || 0).toLocaleString()}, fee tier ${p.feeTier}%, fees ÷ TVL ≈ ${p.feeYield7dPctDay != null ? p.feeYield7dPctDay : p.feeYieldPctDay}% per day (${p.feeYield7dPctDay != null ? "7-day average volume" : "24h volume"} × fee tier ÷ TVL — a measured ratio of the pool, NOT what an LP earns; range, impermanent loss and price moves decide that. Teach it as the ratio it is, never as a yield or a return).`;
     }
     if (/market cap|price|token|research|on-?chain|volatil|trading|alpha|stablecoin|tokenomics|solscan/.test(t)) {
       // In-process since the 2026-08-18 review — this was a loopback self-fetch the origin
@@ -5125,11 +5571,11 @@ RULES: Never give financial advice or price predictions. Encouraging but blunt. 
     const r = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-api-key": KEY, "anthropic-version": "2023-06-01" },
-      body: JSON.stringify({ model: "claude-sonnet-5", max_tokens: 950, thinking: { type: "disabled" }, system, messages }),
+      body: JSON.stringify({ model: "claude-sonnet-5-5", max_tokens: 950, thinking: { type: "between_tools" }, output_config: { effort: "high" }, system, messages }),
     });
     const data = await r.json();
-    if (data && data.content && data.content[0]) {
-      let reply = data.content[0].text.replace(/\*\*([^*]+)\*\*/g, "$1").replace(/\*([^*]+)\*/g, "$1").replace(/^#{1,3}\s/gm, "").trim();
+    if (claudeText(data)) {
+      let reply = claudeText(data).replace(/\*\*([^*]+)\*\*/g, "$1").replace(/\*([^*]+)\*/g, "$1").replace(/^#{1,3}\s/gm, "").trim();
       const complete = /\[LESSON COMPLETE\]/i.test(reply);
       reply = reply.replace(/\[LESSON COMPLETE\]/ig, "").trim();
       return res.status(200).json({ success: true, reply, complete });
@@ -5336,11 +5782,11 @@ RULES: No financial advice. Encouraging but honest. No markdown headers/asterisk
     const r = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-api-key": KEY, "anthropic-version": "2023-06-01" },
-      body: JSON.stringify({ model: "claude-sonnet-5", max_tokens: 950, thinking: { type: "disabled" }, system, messages }),
+      body: JSON.stringify({ model: "claude-sonnet-5-5", max_tokens: 950, thinking: { type: "between_tools" }, output_config: { effort: "high" }, system, messages }),
     });
     const data = await r.json();
-    if (data && data.content && data.content[0]) {
-      let reply = data.content[0].text.replace(/\*\*([^*]+)\*\*/g, "$1").replace(/\*([^*]+)\*/g, "$1").replace(/^#{1,3}\s/gm, "").trim();
+    if (claudeText(data)) {
+      let reply = claudeText(data).replace(/\*\*([^*]+)\*\*/g, "$1").replace(/\*([^*]+)\*/g, "$1").replace(/^#{1,3}\s/gm, "").trim();
       const passed = /\[EXAM PASSED\]/i.test(reply);
       const failed = /\[EXAM FAILED\]/i.test(reply);
       reply = reply.replace(/\[EXAM (PASSED|FAILED)\]/ig, "").trim();
@@ -6832,6 +7278,27 @@ app.get("/api/jvp/project/:id", async (req, res) => {
     return res.status(200).json({ success: true, updatedAt: Date.now(), project: out });
   } catch (e) { console.warn("[jvp] project failed:", e.message); return res.status(500).json({ success: false, error: "unavailable" }); }
 });
+// X5: the three evidence classes merged into one time-ordered, capped array, with a pure
+// replay of the retained decision rows against the real gates. Read-only, same GET-only shape
+// as the two routes above — no flag on this route can arm, pause, roll or sign anything.
+// Rate-limited (Z3): unlike /overview and /project (bounded lookups), this one fans out to the
+// paid Helius history endpoint for up to 720 hours of evidence per call.
+app.get("/api/jvp/project/:id/timeline", rateLimit("hubheavy", { windowMs: 60000, max: 60 }), async (req, res) => {
+  res.setHeader("Cache-Control", "public, max-age=60");
+  const id = String(req.params.id || "").toLowerCase();
+  if (!JVP_PUBLIC_PROJECTS.includes(id)) return res.status(404).json({ success: false, error: "not_found" });
+  try {
+    const hours = Math.max(1, Math.min(720, parseInt(req.query.hours, 10) || 168));
+    const out = await jvpDashboard.timeline({ vault: whirlpoolMM.vault, kv, clknMint: CLKN_MINT_ADDR, id, hours, helius: JVP_HELIUS });
+    if (!out) return res.status(404).json({ success: false, error: "not_found" });
+    // Z3: `updatedAt` is floored to the Cache-Control window, not a raw Date.now() — a literal
+    // live timestamp embedded in the body would give this route a fresh ETag on every single
+    // call, so a matching If-None-Match could never actually 304 no matter how unchanged the
+    // underlying rows were. Flooring to the 60s window it's already cached for means two calls
+    // in the same minute (the only case a real revalidation would ever hit) hash identically.
+    return res.status(200).json({ success: true, updatedAt: Math.floor(Date.now() / 60000) * 60000, id, ...out });
+  } catch (e) { console.warn("[jvp] timeline failed:", e.message); return res.status(500).json({ success: false, error: "unavailable" }); }
+});
 
 app.get("/api/engine-proof", async (req, res) => {
   res.setHeader("Cache-Control", "public, max-age=120");
@@ -6929,8 +7396,10 @@ app.get("/api/recap-test", async (req, res) => {
   } catch (e) { return res.status(500).json({ success: false, error: publicErrMsg(e) }); }
 });
 
-// Locked-supply report — dry-run the daily post (returns the computed report +
-// message); add &post=1 to actually fire it to the community chat. Gated.
+// Locked-supply report — dry-run it (returns the computed report + message); add &post=1 to
+// actually fire it to the community chat and X. Gated. The DAILY schedule is retired (owner,
+// 2026-09-20) but this lever stays: it is how a locked-supply post goes out when the owner
+// wants one, rather than every day whether or not anyone asked.
 app.get("/api/lock-report-test", async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   const KEY = process.env.PREMIUM_ACCESS_KEY;
@@ -7609,6 +8078,92 @@ app.get("/api/airdrop-handoff", (req, res) => {
   return res.status(200).json({ ok: true, ...h.payload });
 });
 
+// ── Airdrop per-drop public receipt (Colosseum roadmap §W4/§Extension) ──────────────────────────
+// See lib/airdrop-receipt.js for the design. The airdrop page (public/airdrop.html) posts here
+// as each send batch confirms; the drop id it gets back is what makes /airdrop/r/<id> public and
+// reproducible without ever showing who the operator was.
+app.use("/api/airdrop/record", rateLimit("airdropRecord", { windowMs: 60000, max: 30 }));
+app.post("/api/airdrop/record", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  // No TOOLS PASS (owner, 2026-09-22: "airdropper should be free for everyone on all platforms
+  // moving forward"): this route never asks for holdings or a payment. It does ask for the
+  // RECEIPT SIGN-IN (round 18): the operator wallet signs a nonce once, and that is the wallet
+  // every row is held to (sourceIsOperator), the wallet the daily-drop cap is keyed on, and the
+  // only wallet that may append to the drop. The public body never carries it. Rounds 15–17 read
+  // the operator off the chain instead (feePayerOf); that let a stranger claim an operator's
+  // unrecorded transfer first, which the sign-in closes. Since round 16: ONLY VERIFIED ROWS ARE
+  // STORED, a drop exists only once a row verified, one signature belongs to one receipt.
+  // Round 18 (Codex): the write needs the OPERATOR's receipt sign-in — a signature, never a
+  // holdings check or a payment, so the tool stays free; see receiptSessionGate. Every row is
+  // then held to that wallet, an existing drop must be that wallet's, and a stranger's claim of
+  // someone else's transfer is refused before anything is read from the chain.
+  const sess = receiptSessionGate(req);
+  if (!sess.ok) return res.status(sess.status).json({ success: false, error: sess.error, detail: sess.detail });
+  const b = req.body || {};
+  const rows = Array.isArray(b.rows) ? b.rows : null;
+  if (!rows || !rows.length) return res.status(400).json({ success: false, error: "rows must be a non-empty list of {wallet, amount, sig}" });
+  if (rows.length > airdropReceipt.MAX_ROWS_PER_DROP) return res.status(400).json({ success: false, error: `send at most ${airdropReceipt.MAX_ROWS_PER_DROP} rows per call` });
+  const rpcCall = heliusRpcCall(tokenMetaRpcUrl());
+  const getTx = async (sig) => {
+    const r = await rpcCall("airdrop-record", "getTransaction", [sig, { encoding: "jsonParsed", maxSupportedTransactionVersion: 1, commitment: "confirmed" }]);
+    return (r && r.result) || null;
+  };
+  let r;
+  try {
+    r = await airdropReceipt.recordDrop({
+      kv, dropId: b.dropId ? String(b.dropId) : undefined,
+      mint: String(b.mint || ""), decimals: b.decimals, createdAt: b.createdAt,
+      rows, getTx, operator: sess.wallet,
+    });
+  } catch (e) { return res.status(400).json({ success: false, error: String((e && e.message) || e) }); }
+  // A 409 ("nothing verified") carries the per-row reasons, so the operator's own screen can say
+  // which rows the chain did not confirm — the public receipt never will (Codex, round 16). Since
+  // round 17 an EXISTING drop answers it too when a batch put nothing on the receipt, and both
+  // clients count `recorded[].verified`, never the chunk they sent. The commit inside recordDrop
+  // is synchronous (verify, then re-read and write with no await between), and every verified
+  // signature has its own kv key — two batches of one drop, or one signature posted twice at
+  // once, can no longer erase each other (round 17).
+  if (!r.ok) return res.status(r.status || 400).json({ success: false, error: r.error, ...(r.results ? { recorded: r.results } : {}) });
+  return res.status(200).json({ success: true, dropId: r.dropId, url: `/airdrop/r/${r.dropId}`, recorded: r.results, totals: r.totals, nothingNew: !!r.nothingNew });
+});
+// Same route, GET refused — see the mutating-GET-guard rule (CLAUDE.md): every admin/record route
+// that writes answers 405 on a GET.
+app.get("/api/airdrop/record", (req, res) => res.status(405).json({ success: false, error: "method_not_allowed" }));
+
+// Public: the drop's full receipt. No operator identity anywhere in the body — the dropId (random,
+// unguessable, in the URL) is the only handle a reader has.
+// Cache-Control (Z3): a per-project-style read, same 60s tier as the Hub's own receipt/batch
+// reads — this was `no-store` only because nobody had gotten to it yet, not because a drop's
+// rows change so often that a minute of staleness would mislead anyone reading it.
+app.get("/api/airdrop/r/:dropId", async (req, res) => {
+  res.setHeader("Cache-Control", "public, max-age=60");
+  const drop = airdropReceipt.loadDrop(kv, String(req.params.dropId || ""));
+  if (!drop) return res.status(404).json({ success: false, error: "not_found" });
+  let symbol = null;
+  try { const meta = await tokenOverviewData(drop.mint); symbol = burnSymbolSafe(meta && meta.symbol); } catch (_) {}
+  return res.status(200).json({ success: true, ...airdropReceipt.publicDrop(drop, { symbol }) });
+});
+// Public: one recipient's row within a drop.
+app.get("/api/airdrop/r/:dropId/:wallet", async (req, res) => {
+  res.setHeader("Cache-Control", "public, max-age=60");
+  const wallet = String(req.params.wallet || "");
+  // Shape-check BEFORE loading the drop or scanning its rows (Z3): a malformed wallet is a 400,
+  // never a scan over every row in the drop just to come back empty.
+  if (!SOL_ADDR_RE.test(wallet)) return res.status(400).json({ success: false, error: "bad wallet" });
+  const drop = airdropReceipt.loadDrop(kv, String(req.params.dropId || ""));
+  if (!drop) return res.status(404).json({ success: false, error: "not_found" });
+  const row = Object.values(drop.rows || {}).find((r) => r.wallet === wallet);
+  if (!row) return res.status(404).json({ success: false, error: "no row for that wallet in this drop" });
+  let symbol = null;
+  try { const meta = await tokenOverviewData(drop.mint); symbol = burnSymbolSafe(meta && meta.symbol); } catch (_) {}
+  return res.status(200).json({ success: true, dropId: drop.dropId, mint: drop.mint, symbol, decimals: drop.decimals, createdAt: drop.createdAt, row: airdropReceipt.publicRow(row) });
+});
+// The receipt page itself — explicit route (public/ is only reachable through the vite dist copy,
+// CLAUDE.md — a route with no app.get 404s on a no-build boot).
+app.get("/airdrop/r/:dropId", (req, res) => {
+  res.sendFile(join(__dirname, "public", "airdrop-receipt.html"));
+});
+
 // PUBLIC price + decimals for any mint (Jupiter Price v3). The Buy Special tool
 // needs both: the price to convert a "% of what you bought" prize into a DIFFERENT
 // reward token, and the decimals so payout amounts are rounded at the right
@@ -7847,7 +8402,16 @@ const hubPublic = require("./lib/hub/public");
 const HUB_SCHEMA_DIR = join(__dirname, "lib", "hub", "schema");
 const HUB_SCHEMA_NAMES = new Set(["program-version", "batch", "receipt", "project-public"]);
 function HUB_SCHEMA_URL(name) { return `https://clucknorris.app/hub/schema/${name}.json`; }
+// Shared signature shape (Colosseum roadmap Z3, public-route hygiene) — the same bounds used
+// throughout server.js/lib for a Solana transaction signature. Checked BEFORE any store read on
+// a param named sig/wallet/mint so a malformed value 400s immediately rather than falling through
+// to a scan or a 500.
+const HUB_SIG_RE = /^[1-9A-HJ-NP-Za-km-z]{60,100}$/;
 const hubProject = require("./lib/hub/project");
+const hubFeed = require("./lib/hub/feed");
+// EE2 (docs/COLOSSEUM_ROADMAP.md §15): the public glossary — pure, no per-request computation,
+// so its route below needs no ledger walk and gets a long cache like a schema file.
+const hubGlossary = require("./lib/hub/glossary");
 function hubProjects() {
   const built = {
     clkn: { id: "clkn", label: "Cluck Norris", symbol: "CLKN", mint: CLKN_MINT, decimals: 9, rewardMint: CLKN_MINT, rewardDecimals: 9 },
@@ -7872,6 +8436,10 @@ function hubProjectView(project) {
   const comps = Object.values(buyCompsAll()).filter((c) => c && c.mint === project.mint);
   const draws = Object.values(bsDrawsAll()).filter((d) => d && d.mint === project.mint);
   let stake = null, giveaway = null;
+  // Read once, reused for both the accrual ledger view below and the public versions list (CC1) —
+  // a project with no programme store yet just has an empty versions[], never an error.
+  let projectState = null;
+  try { projectState = hubStore.read(kv, project.id, "state", null); } catch (_) { /* no store yet */ }
   try {
     const days = hubStore.read(kv, project.id, "days", null);
     if (days && Object.keys(days).length) {
@@ -7880,7 +8448,7 @@ function hubProjectView(project) {
         // Additive (roadmap E5, "the receipt teaches"): lets each receipt attribute its own hourly
         // accrual slices and the program version they ran under. Missing or unreadable state just
         // degrades every row's `explanation` to "not retained" — never a fabricated walkthrough.
-        project, programState: hubStore.read(kv, project.id, "state", null) });
+        project, programState: projectState });
     }
   } catch (_) { /* a project without a programme store is not an error */ }
   if (project.id === "cuna") {
@@ -7891,13 +8459,45 @@ function hubProjectView(project) {
   }
   let lessonReads = null;
   try { lessonReads = traction.lessonReadsForProject(kv, project.id); } catch (_) { /* the line just doesn't render */ }
-  return hubPublic.projectView({ project, comps, draws, stake, giveaway, lessonReads });
+  // X7 (Colosseum roadmap §8): the latest owners-snapshot holder-count record for this project's
+  // mint, if one has ever been crawled. Read-only lookup; a project that's never been snapshotted
+  // just has no holders fact line.
+  let holderSnapshot = null;
+  try { holderSnapshot = require("./lib/holders-snapshot").latest(kv, project.mint); } catch (_) { /* no snapshot yet */ }
+  const versions = (projectState && Array.isArray(projectState.versions)) ? projectState.versions : [];
+  return hubPublic.projectView({ project, comps, draws, stake, giveaway, lessonReads, holderSnapshot, versions });
 }
-app.get("/api/hub", (req, res) => {
+// P3-10 (docs/HUB_PUBLIC_SURFACES_VERIFY_2026-09-18.md): a 60s per-project cache over the SAME
+// hubProjectView() walk the routes right below already found too expensive to run unlimited
+// (P1-03) — reused here for lib/hub/receipt-command.js's findHubReceiptBySig, which calls
+// hubProjectView() once per registered project until it finds a signature, behind only a 10s
+// per-chat cooldown (so N Telegram rooms running /receipt gives N/10 full-ledger walks a second
+// with the raw function). Callers that need the guaranteed-fresh view (the /api/hub/:project
+// routes) keep calling hubProjectView() directly; this wrapper is for read paths where a few
+// seconds of staleness is a fine trade against repeating the whole computation.
+const HUB_PROJECT_VIEW_CACHE = new Map(); // projectId -> { at, view }
+const HUB_PROJECT_VIEW_CACHE_MS = 60 * 1000;
+function hubProjectViewCached(project) {
+  const cached = HUB_PROJECT_VIEW_CACHE.get(project.id);
+  if (cached && Date.now() - cached.at < HUB_PROJECT_VIEW_CACHE_MS) return cached.view;
+  const view = hubProjectView(project);
+  HUB_PROJECT_VIEW_CACHE.set(project.id, { at: Date.now(), view });
+  return view;
+}
+// P1-03 (docs/HUB_PUBLIC_SURFACES_VERIFY_2026-09-18.md): this route calls hubProjectView() once
+// PER REGISTERED PROJECT — the same full stakeView + per-receipt explanation walk the
+// reproducibility/badge routes below already gate with the "hubheavy" limiter — but it carried no
+// limiter of its own. Ten concurrent hits measured the Node event loop pinned for ~10s, stalling
+// every other route on the box (the school, the tools, the store-edition contract endpoints).
+// Same shared bucket as the other heavy reads: a burst here also counts against them.
+app.get("/api/hub", rateLimit("hubheavy", { windowMs: 60000, max: 60 }), (req, res) => {
   res.setHeader("Cache-Control", "public, max-age=60");
   try {
     const projects = Object.values(hubProjects()).map((p) => {
-      const v = hubProjectView(p);
+      // EE3 (docs/HUB_LOAD_2026-09-18.md): the list is identical for every viewer, so it reads
+      // the same 60-second per-project view cache the receipt command and the share page use —
+      // a burst at the limiter's ceiling computes each project once, not sixty times.
+      const v = hubProjectViewCached(p);
       // Dry runs (Colosseum E10) are LISTED, with the badge, so the owner can show the team the
       // page — never hidden — but their programs/receipts are always 0 (they can never arm), so
       // they add nothing to anyone reading the numbers across the list.
@@ -7906,7 +8506,107 @@ app.get("/api/hub", (req, res) => {
     return res.status(200).json({ ok: true, projects });
   } catch (e) { return res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
 });
-app.get("/api/hub/:project", (req, res) => {
+// ── AA1: one wallet, every project (Colosseum roadmap §11) ─────────────────────────────────────
+// "The strongest honest form of Earn: a holder who can check what they were owed and what
+// arrived" — across EVERY registered real project, never just one. Composed ONLY from
+// hubPublic.walletLookup(hubProjectView(p), wallet) per project — no private field, and demo/
+// fixture projects are excluded exactly as every other feed excludes them (they never reach
+// hubProjects(); see the E2 comment above). Registered BEFORE /api/hub/:project so "wallet" is
+// never read as a project id — belt-and-braces, since "wallet" is also a reserved project id
+// below (hubRoutes.mount's reservedMints) and the two path shapes don't actually collide by
+// segment count, the way /hub/demo and /hub/verify DO collide with the page catch-all.
+function hubWalletGroupPrograms(entries) {
+  const order = [], byProgram = new Map();
+  for (const e of entries || []) {
+    const { program, kind, label, ticker, ...row } = e;
+    let g = byProgram.get(program);
+    if (!g) { g = { id: program, kind, label, ticker, rows: [] }; byProgram.set(program, g); order.push(g); }
+    g.rows.push(row);
+  }
+  return order;
+}
+// P1-03: this route re-walks EVERY registered project's full ledger for a wallet the caller
+// controls in the URL, so no HTTP cache tier can ever absorb a repeat the way `/api/hub`'s
+// `public, max-age=60` can — it is `no-store` on purpose (the report a wallet sees must never be
+// another wallet's stale cache). A 60s in-memory cache keyed by wallet closes that gap without
+// giving up the no-store *response* header: the expensive per-project walk is memoised, but
+// `generatedAt` is still stamped fresh on every response, cache hit or not. Bounded to ~500
+// wallets with LRU-ish eviction (a Map preserves insertion order; re-touching a hit moves it to
+// the end, and the oldest entry is dropped once the cap is exceeded) so a burst of one-off
+// addresses can't grow this unbounded.
+const HUB_WALLET_CACHE = new Map();   // wallet -> { at, data: { projects, seenIn } }
+const HUB_WALLET_CACHE_MS = 60 * 1000;
+const HUB_WALLET_CACHE_MAX = 500;
+function hubWalletCacheGet(wallet) {
+  const e = HUB_WALLET_CACHE.get(wallet);
+  if (!e) return null;
+  if (Date.now() - e.at >= HUB_WALLET_CACHE_MS) { HUB_WALLET_CACHE.delete(wallet); return null; }
+  HUB_WALLET_CACHE.delete(wallet); HUB_WALLET_CACHE.set(wallet, e);   // touch -> most-recently-used
+  return e.data;
+}
+function hubWalletCacheSet(wallet, data) {
+  HUB_WALLET_CACHE.set(wallet, { at: Date.now(), data });
+  while (HUB_WALLET_CACHE.size > HUB_WALLET_CACHE_MAX) {
+    const oldest = HUB_WALLET_CACHE.keys().next().value;
+    HUB_WALLET_CACHE.delete(oldest);
+  }
+}
+app.get("/api/hub/wallet/:wallet", rateLimit("hubheavy", { windowMs: 60000, max: 60 }), (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  const wallet = String(req.params.wallet || "");
+  if (!SOL_ADDR_RE.test(wallet)) return res.status(400).json({ ok: false, error: "not a Solana address" });
+  try {
+    let cacheHit = true;
+    let cached = hubWalletCacheGet(wallet);
+    if (!cached) {
+      cacheHit = false;
+      const projects = [];
+      for (const p of Object.values(hubProjects())) {
+        let r;
+        try { r = hubPublic.walletLookup(hubProjectView(p), wallet); } catch (_) { continue; }
+        if (!r.ok || !r.entries.length) continue;
+        projects.push({ id: p.id, label: p.label, brand: p.brand ? { logo: p.brand.logo || null, accent: p.brand.accent || null, tagline: p.brand.tagline || null } : null, programs: hubWalletGroupPrograms(r.entries) });
+      }
+      cached = { projects, seenIn: projects.length };
+      hubWalletCacheSet(wallet, cached);
+    }
+    // Test-only visibility into the cache (never present outside NODE_ENV=test) — lets
+    // scripts/hub-wallet-test.cjs assert a second lookup within 60s served from cache without
+    // depending on timing.
+    if (process.env.NODE_ENV === "test") res.setHeader("x-hub-wallet-cache", cacheHit ? "hit" : "miss");
+    return res.status(200).json({ ok: true, wallet, projects: cached.projects, seenIn: cached.seenIn, generatedAt: Date.now() });
+  } catch (e) { return res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
+});
+// BB3 (Colosseum roadmap §12) — shields.io "endpoint badge" schema exactly
+// (https://shields.io/badges/endpoint-badge). Registered here, before the generic
+// /api/hub/:project below, for the same reason /api/hub/wallet/:wallet is — "badge.json" is a
+// 3-segment path that the :project pattern would otherwise swallow as a (nonexistent) project id.
+// hubBadgeCompute/hubBadgeColor are defined further down next to the reproducibility route they
+// share a cache with; being function/const declarations evaluated once at module load (long
+// before any request reaches this handler), where they're defined in the file makes no
+// difference to what this closure sees at call time.
+app.get("/api/hub/badge.json", rateLimit("hubheavy", { windowMs: 60000, max: 60 }), (req, res) => {
+  res.setHeader("Cache-Control", "public, max-age=300");
+  try {
+    const projectId = req.query.project ? String(req.query.project) : null;
+    const b = hubBadgeCompute(projectId);
+    if (projectId && !b) return res.status(404).json({ ok: false, error: "no such project" });
+    return res.status(200).json({ schemaVersion: 1, label: "receipts reproducible", message: b.message, color: b.color, cacheSeconds: 300 });
+  } catch (e) { return res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
+});
+// EE2: every term and reason code a public Hub surface renders, one source of truth
+// (lib/hub/glossary.js). Registered BEFORE /api/hub/:project below, same reason
+// /api/hub/wallet/:wallet and /api/hub/badge.json are — "glossary" is a 1-segment path the
+// :project pattern would otherwise swallow as a (nonexistent) project id. A light public read
+// over a pure, in-memory module (no ledger walk, no chain read), so it gets the same long cache a
+// schema file gets rather than the 30s a per-project computation gets.
+app.get("/api/hub/glossary", (req, res) => {
+  res.setHeader("Cache-Control", "public, max-age=3600");
+  return res.status(200).json({ ok: true, entries: hubGlossary.entries() });
+});
+// P1-03: same unbounded hubProjectView() cost as /api/hub above, per-request, with no limiter —
+// closed the same way, same shared bucket.
+app.get("/api/hub/:project", rateLimit("hubheavy", { windowMs: 60000, max: 60 }), (req, res) => {
   res.setHeader("Cache-Control", "public, max-age=30");
   const p = hubProjects()[String(req.params.project || "").toLowerCase()];
   if (!p) return res.status(404).json({ ok: false, error: "no such project" });
@@ -7926,16 +8626,72 @@ app.get("/api/hub/:project/wallet/:wallet", (req, res) => {
 });
 app.get("/api/hub/:project/r/:sig", (req, res) => {
   res.setHeader("Cache-Control", "public, max-age=300");
+  // CORS: public, read-only, no auth/cookies — /hub/verify (Y1) may be loaded on one host
+  // (production) while reproducing a receipt published on another (staging), and the browser
+  // enforces same-origin on fetch() unless this route says otherwise.
+  res.setHeader("Access-Control-Allow-Origin", "*");
   const p = hubProjects()[String(req.params.project || "").toLowerCase()];
   if (!p) return res.status(404).json({ ok: false, error: "no such project" });
+  const sig = String(req.params.sig || "");
+  // Shape-check BEFORE the lookup (Z3): a malformed sig is a 400, never handed to findReceipt to
+  // scan every program's payout rows just to fail the regex it already runs internally.
+  if (!HUB_SIG_RE.test(sig)) return res.status(400).json({ ok: false, error: "bad sig" });
   try {
     const sig = String(req.params.sig || "");
-    const r = hubPublic.findReceipt(hubProjectView(p), sig);
+    // W3: the settlement journal + the raw registry record (fundingWallet) + the project's own
+    // program-version state — additive context so findReceipt can serve the Addendum-B3 receipt
+    // (lib/hub/README.md "the receipt gap") once a journal event exists for this row; absent for a
+    // built-in project (clkn/cuna/rose) with no registry row, in which case findReceipt degrades to
+    // exactly the legacy shape it always served.
+    let journal = {}, batches = {}, reg = null, programState = null;
+    try { journal = hubStore.readJournal(kv) || {}; } catch (_) {}
+    try { batches = hubStore.read(kv, p.id, "batches", {}) || {}; } catch (_) {}
+    try { reg = (hubStore.readRegistry(kv) || {})[p.id] || null; } catch (_) {}
+    try { programState = hubStore.read(kv, p.id, "state", null); } catch (_) {}
+    const r = hubPublic.findReceipt(hubProjectView(p), sig, { journal, batches, project: reg, programState });
     if (!r) return res.status(404).json({ ok: false, error: "no receipt with that signature" });
     // Traction "receipts opened by a holder" (lib/traction.js) — this route recorded nothing
     // durable before this change.
     try { traction.recordReceiptOpen(kv, { project: p.id, sig }); } catch (_) { /* counter only */ }
+    // The Addendum-B3 shape (settlements[]) validates against receipt.schema.json on its own — an
+    // `ok` sibling would not (additionalProperties:false), so it is nested under `receipt` and
+    // stamped there, exactly as `project` is nested for GET /api/hub/:project. adv P1-4
+    // (docs/HUB_JOURNAL_VERIFY_2026-09-18.md): findReceipt now wraps BOTH shapes in the same
+    // {projectId, symbol, dryRun, brand, program, receipt} envelope — the legacy shape is spread
+    // flat alongside `ok` exactly as before (its `receipt` sub-object carries no $schema — it does
+    // not validate that schema, see scripts/hub-schema-test.cjs E4/"the legacy body does not"); the
+    // journal-backed shape stamps $schema onto `receipt` only, so `r.program`/`r.symbol`/`r.dryRun`
+    // are always where public/hub.html's renderReceipt already reads them.
+    if (r && r.receipt && Array.isArray(r.receipt.settlements)) return res.status(200).json({ ok: true, ...r, receipt: { ...r.receipt, $schema: HUB_SCHEMA_URL("receipt") } });
     return res.status(200).json({ ok: true, ...r });
+  } catch (e) { return res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
+});
+// ── E-buycomp: the public Buy Special standings + hold-through proof page (Colosseum roadmap
+// §7, the W4 deferred item — built ahead of the integration gate on the coordinator's ask since
+// it touches no engine and moves no money). Distinct from the whole-project view above: this is
+// the lean, GATED contract for one competition. No wallet, no tools pass, no admin key.
+//   - unsealed (status !== "verified", i.e. still live or closed-awaiting-verify): rules ONLY —
+//     no results, no review, not even empty arrays that could be mistaken for "nobody qualified
+//     yet". A live board here would let a whale time the last minute off this route.
+//   - sealed: the full compView (rank, wallet, qualifying volume, hold-through status with its
+//     on-chain evidence signature, the payout/receipt state, terms as published) plus `sealedAt`
+//     and a sha256 of exactly the sealed (rank, wallet, amount, status) list, so a reader can
+//     tell if it ever changes under them.
+// Cached 60s — a comp's standings don't need to be fresher than that once sealed, and while live
+// this route deliberately shows nothing that would benefit from being fresh.
+// Rate-limited (Z3): this walks every result/winner/review/payout row of the comp on each call,
+// so it is a "heavy" read next to the plain per-project view — `cors: true` keeps the 429 itself
+// readable by a cross-origin caller, since the 200 below always carries the same ACAO.
+app.get("/api/hub/:project/p/:compId/standings", rateLimit("hubheavy", { windowMs: 60000, max: 60, cors: true }), (req, res) => {
+  res.setHeader("Cache-Control", "public, max-age=60");
+  res.setHeader("Access-Control-Allow-Origin", "*");   // public, read-only — see the r/:sig route above
+  const p = hubProjects()[String(req.params.project || "").toLowerCase()];
+  if (!p) return res.status(404).json({ ok: false, error: "no such project" });
+  const compId = String(req.params.compId || "");
+  const c = Object.values(buyCompsAll()).find((x) => x && x.id === compId && x.mint === p.mint);
+  if (!c) return res.status(404).json({ ok: false, error: "no such buy competition" });
+  try {
+    return res.status(200).json({ ok: true, project: { id: p.id, label: p.label, symbol: p.symbol, mint: p.mint }, comp: hubPublic.compStandingsView(c) });
   } catch (e) { return res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
 });
 // ── Colosseum judges' demo (roadmap W7 acceptance target / design §6, E2): a fixture project
@@ -7945,8 +8701,12 @@ app.get("/api/hub/:project/r/:sig", (req, res) => {
 // hubStore's real registry / kv; this module never writes to either). Every JSON body here carries
 // dryRun:true. See lib/hub/demo-fixture.js for how the numbers are derived.
 const hubDemoFixture = require("./lib/hub/demo-fixture");
+// Cache headers (Z3): the fixture is built once per process (hubDemoFixture.get() memoises), so
+// there is nothing per-visitor or per-request to keep fresh — these three were `no-store` only
+// because nobody had gotten to them yet, not because the content is ever different between two
+// calls in the same deploy. Same tiers as the real Hub reads: per-project 60s, one receipt 300s.
 app.get("/api/hub-demo", (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
+  res.setHeader("Cache-Control", "public, max-age=60");
   try {
     const d = hubDemoFixture.get();
     const summarize = (p) => ({ id: p.project.id, label: p.project.label, symbol: p.project.symbol, mint: p.project.mint,
@@ -7955,7 +8715,7 @@ app.get("/api/hub-demo", (req, res) => {
   } catch (e) { return res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
 });
 app.get("/api/hub-demo/:project", (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
+  res.setHeader("Cache-Control", "public, max-age=60");
   const id = String(req.params.project || "").toLowerCase();
   try {
     const p = hubDemoFixture.get()[id];
@@ -7964,7 +8724,7 @@ app.get("/api/hub-demo/:project", (req, res) => {
   } catch (e) { return res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
 });
 app.get("/api/hub-demo/:project/r/:id", (req, res) => {
-  res.setHeader("Cache-Control", "no-store");
+  res.setHeader("Cache-Control", "public, max-age=300");
   const id = String(req.params.project || "").toLowerCase();
   try {
     const p = hubDemoFixture.get()[id];
@@ -7972,6 +8732,46 @@ app.get("/api/hub-demo/:project/r/:id", (req, res) => {
     const r = (p.receipts || {})[String(req.params.id || "")];
     if (!r) return res.status(404).json({ ok: false, error: "no such receipt" });
     return res.status(200).json({ ok: true, dryRun: true, projectId: id, receipt: r });
+  } catch (e) { return res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
+});
+// AA2's evidence bundle, for the demo fixture too — the same download shape the real Hub route
+// below serves, over the fixture's own version/batch/receipts. The demo's batch and receipts run
+// on the Addendum-B ledger model (lib/hub/ledger.js — receipt() output matches
+// lib/hub/schema/receipt.schema.json exactly, unlike any LIVE receipt today), which
+// lib/hub/reproduce.js does not read from (docs/HUB_VERIFY.md §g) — there is no per-wallet
+// periodsCreditedTo breakdown to publish, so `batch.inputs` is honestly empty rather than reshaped
+// into something that would look reproducible and isn't; `/hub/verify` reports MISSING_INPUTS for
+// these receipts, which is the true state of this project's payout path, not a bug in the bundle.
+app.get("/api/hub-demo/:project/batch/:batchId/bundle", (req, res) => {
+  res.setHeader("Cache-Control", "public, max-age=60");
+  const id = String(req.params.project || "").toLowerCase();
+  try {
+    const p = hubDemoFixture.get()[id];
+    if (!p) return res.status(404).json({ ok: false, error: "no such demo project" });
+    if (!p.batch || !p.batch.id) return res.status(404).json({ ok: false, error: "this demo project has no batch to bundle" });
+    if (String(req.params.batchId || "") !== p.batch.id) return res.status(404).json({ ok: false, error: "no such batch" });
+    // full:true (AA2 bug fix): the bundle's program version must carry every field
+    // lib/hub/project.js verifyVersionHash actually hashes, or "recompute the hash" can never
+    // pass — see lib/hub/public.js programVersionView's own comment.
+    const programVersion = { ...hubPublic.programVersionView(p.version, { full: true }), $schema: HUB_SCHEMA_URL("program-version") };
+    const receiptIds = Object.keys(p.receipts || {}).sort();
+    const receiptsOut = receiptIds.map((rid) => {
+      const r = p.receipts[rid];
+      return {
+        projectId: p.project.id, symbol: p.project.symbol, dryRun: true, brand: null,
+        program: { kind: "lock-to-earn", id: "lock-to-earn", label: "Lock to Earn", ticker: p.project.symbol, mint: p.project.mint, prizeMint: p.project.rewardMint },
+        receipt: { ...r, $schema: HUB_SCHEMA_URL("receipt") },
+      };
+    });
+    const bundle = hubBundle.buildBundle({
+      projectView: { id: p.project.id, label: p.project.label, dryRun: true },
+      programVersion,
+      batchInputs: { projectId: p.project.id, batchId: p.batch.id, decimals: p.project.decimals, wallets: {} },
+      receipts: receiptsOut,
+      note: "Fixture data for the Colosseum judge walkthrough (dryRun:true throughout). `batch.inputs` is empty because this batch runs on the not-yet-live Addendum-B settlement model (docs/HUB_VERIFY.md §g) rather than the model lib/hub/reproduce.js reads from, so /hub/verify will honestly report MISSING_INPUTS for these receipts rather than a fabricated MATCH.",
+    });
+    res.setHeader("Content-Disposition", `attachment; filename="hub-${p.project.id}-${p.batch.id}-evidence.json"`);
+    return res.status(200).json(bundle);
   } catch (e) { return res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
 });
 
@@ -7982,10 +8782,19 @@ app.get("/api/hub-demo/:project/r/:id", (req, res) => {
 // carries no program-version hash of its own today, so `programVersion`/`hash` come back null —
 // reported honestly rather than invented (see the file header for why).
 const hubReproduce = require("./lib/hub/reproduce");
-app.get("/api/hub/:project/batch/:batchId/inputs", (req, res) => {
+// Rate-limited (Z3): both routes below replay real ledger data (a whole batch, or every batch in
+// the project) on each miss, well past what "load a page" needs — `cors: true` on the one that
+// carries ACAO so its 429 is still readable cross-origin (batch/inputs is what /hub/verify, Y1,
+// fetches from a possibly different host than it's loaded on).
+app.get("/api/hub/:project/batch/:batchId/inputs", rateLimit("hubheavy", { windowMs: 60000, max: 60, cors: true }), (req, res) => {
   res.setHeader("Cache-Control", "public, max-age=60");
+  res.setHeader("Access-Control-Allow-Origin", "*");   // public, read-only — see the r/:sig route above
   const p = hubProjects()[String(req.params.project || "").toLowerCase()];
   if (!p) return res.status(404).json({ ok: false, error: "no such project" });
+  // Shape-check ?wallet= BEFORE it is used to index the built map (Z3) — a malformed value 400s
+  // instead of silently missing (or, worse, hitting an inherited key like "__proto__").
+  const wanted = String(req.query.wallet || "").trim();
+  if (wanted && !SOL_ADDR_RE.test(wanted)) return res.status(400).json({ ok: false, error: "bad wallet" });
   try {
     const batches = hubStore.read(kv, p.id, "batches", {}) || {};
     const bt = batches[String(req.params.batchId || "")];
@@ -7995,13 +8804,101 @@ app.get("/api/hub/:project/batch/:batchId/inputs", (req, res) => {
     // Only wallets already SENT in this batch are built — the same public/private line
     // lib/hub/public.js draws (a batch row with no signature is never public). Optional
     // ?wallet= narrows to one, so a reader reproducing a single receipt fetches one small file.
-    const wanted = String(req.query.wallet || "").trim();
-    const all = hubReproduce.buildBatchInputs({ batch: bt, days, batches });
+    // W3: journal + programState are additive — a row with a journal event gets its real
+    // program-version hash (lib/hub/reproduce.js buildInputsForWallet); one without still reports
+    // hash: null, exactly as before this change.
+    let journal = {}, programState = null;
+    try { journal = hubStore.readJournal(kv) || {}; } catch (_) {}
+    try { programState = hubStore.read(kv, p.id, "state", null); } catch (_) {}
+    const all = hubReproduce.buildBatchInputs({ batch: bt, days, batches, journal, programState });
+    // The program version in force when this batch was built (same lookup the AA2 bundle route
+    // runs) — attached per wallet so /hub/verify's URL path (which reads THIS route, not the
+    // bundle) can recompute the version's own hash without a second fetch, the same way the
+    // offline-files and bundle tabs already do. Absent for a project whose payout predates program
+    // versions (CUNA) — reported as no `programVersion` key at all, never invented. full:true (AA2
+    // bug fix): must carry every field lib/hub/project.js verifyVersionHash hashes.
+    let programVersion = null;
+    try {
+      const state = hubStore.read(kv, p.id, "state", {}) || {};
+      if (Array.isArray(state.versions) && state.versions.length) {
+        const dayKey = new Date((Number(bt.at) || 0) * 1000).toISOString().slice(0, 10);
+        const v = hubProject.versionFor(state, dayKey);
+        if (v) programVersion = { ...hubPublic.programVersionView(v, { full: true }), $schema: HUB_SCHEMA_URL("program-version") };
+      }
+    } catch (_) { /* no version state on this project — programVersion stays absent, reported honestly */ }
+    const withVersion = (entry) => (programVersion ? { ...entry, programVersion } : entry);
     if (wanted) {
-      if (!all[wanted]) return res.status(404).json({ ok: false, error: "no receipt for that wallet in this batch" });
-      return res.status(200).json({ ok: true, projectId: p.id, batchId: bt.id, decimals: dec, wallets: { [wanted]: all[wanted] } });
+      if (!Object.prototype.hasOwnProperty.call(all, wanted)) return res.status(404).json({ ok: false, error: "no receipt for that wallet in this batch" });
+      return res.status(200).json({ ok: true, projectId: p.id, batchId: bt.id, decimals: dec, wallets: { [wanted]: withVersion(all[wanted]) } });
     }
-    return res.status(200).json({ ok: true, projectId: p.id, batchId: bt.id, decimals: dec, wallets: all });
+    const walletsOut = {}; for (const [w, entry] of Object.entries(all)) walletsOut[w] = withVersion(entry);
+    return res.status(200).json({ ok: true, projectId: p.id, batchId: bt.id, decimals: dec, wallets: walletsOut });
+  } catch (e) { return res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
+});
+// ── AA2: the offline evidence bundle (Colosseum roadmap §11) — one JSON download that carries
+// everything the route above (plus the receipt and program-version routes) would otherwise need
+// three separate curls for: the program version this batch paid under, its published inputs, and
+// every settled receipt in it. Composed ONLY from the same public view functions those routes
+// already call (hubReproduce.buildBatchInputs, hubPublic.findReceipt, hubPublic.programVersionView
+// via hubProject.versionFor) — never a private field, never desk data. Same rate limit and CORS
+// as the route above, since it walks the same batch. `/hub/verify` (Y1) accepts this file dropped
+// in one move; `scripts/reproduce-receipt.cjs --bundle` reproduces every receipt in it on a
+// reader's own machine. See lib/hub/bundle.js for what the hash does and does not prove.
+const hubBundle = require("./lib/hub/bundle");
+app.get("/api/hub/:project/batch/:batchId/bundle", rateLimit("hubheavy", { windowMs: 60000, max: 60, cors: true }), (req, res) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");   // public, read-only — see the r/:sig route above
+  const p = hubProjects()[String(req.params.project || "").toLowerCase()];
+  if (!p) return res.status(404).json({ ok: false, error: "no such project" });
+  try {
+    const batches = hubStore.read(kv, p.id, "batches", {}) || {};
+    const bt = batches[String(req.params.batchId || "")];
+    if (!bt) return res.status(404).json({ ok: false, error: "no such batch" });
+    const days = hubStore.read(kv, p.id, "days", {}) || {};
+    const dec = Number.isInteger(p.rewardDecimals) ? p.rewardDecimals : (Number.isInteger(p.decimals) ? p.decimals : 9);
+    // Same wallets a plain /inputs fetch (no ?wallet=) would return — every wallet already SENT
+    // in this batch. Sorted so the receipts array below (and therefore the bundle's hash) comes
+    // out in the same order on every rebuild of the same settled batch.
+    const wallets = hubReproduce.buildBatchInputs({ batch: bt, days, batches });
+    const settledWallets = Object.keys(wallets).sort();
+    // The program version in force when this batch was built — the exact lookup
+    // hubPublic.stakeView's own per-receipt "explanation" already runs (lib/hub/public.js
+    // stakeView -> lib/hub/explain.js), independent of whether anything in the batch has settled
+    // yet. Absent for a project whose lock-to-earn payout predates program versions (CUNA) — that
+    // is reported as `program: null`, never invented (lib/hub/reproduce.js's own header explains
+    // why a lock-to-earn batch carries no hash of its own today).
+    let programVersion = null;
+    try {
+      const state = hubStore.read(kv, p.id, "state", {}) || {};
+      if (Array.isArray(state.versions) && state.versions.length) {
+        const dayKey = new Date((Number(bt.at) || 0) * 1000).toISOString().slice(0, 10);
+        const v = hubProject.versionFor(state, dayKey);
+        // full:true (AA2 bug fix): see the demo-bundle route above.
+        if (v) programVersion = { ...hubPublic.programVersionView(v, { full: true }), $schema: HUB_SCHEMA_URL("program-version") };
+      }
+    } catch (_) { /* no version state on this project — programVersion stays null, reported honestly */ }
+    let receiptsOut = [];
+    if (settledWallets.length) {
+      const view = hubProjectView(p);
+      receiptsOut = settledWallets.map((w) => {
+        const sig = bt.sent && bt.sent[w] && bt.sent[w].sig;
+        return sig ? hubPublic.findReceipt(view, sig) : null;
+      }).filter(Boolean);
+    }
+    // An unsettled batch (built, but nothing sent yet) is not an error — it just has nothing to
+    // bundle yet. Said in plain words rather than served as an empty-but-unexplained receipts
+    // array, which could otherwise read as "this project has never paid anyone." `settled`/`note`
+    // are passed INTO buildBundle (not merged onto its result afterward) so they are hashed along
+    // with everything else — see bundle.js's own comment on why that matters.
+    const bundle = hubBundle.buildBundle({
+      projectView: { id: p.id, label: p.label, dryRun: p.dryRun === true },
+      programVersion,
+      batchInputs: { projectId: p.id, batchId: bt.id, decimals: dec, wallets },
+      receipts: receiptsOut,
+      note: receiptsOut.length ? null : "This batch has not been settled yet — no wallet in it has been paid, so there is nothing to bundle. Check back once at least one payout from this batch has landed.",
+    });
+    res.setHeader("Content-Disposition", `attachment; filename="hub-${p.id}-${bt.id}-evidence.json"`);
+    res.setHeader("Cache-Control", "public, max-age=300");
+    return res.status(200).json(bundle);
   } catch (e) { return res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
 });
 // { batches: [{batchId, total, reproduced, mismatched, missingInputs, period}], overall } —
@@ -8010,22 +8907,208 @@ app.get("/api/hub/:project/batch/:batchId/inputs", (req, res) => {
 // header, same pattern as the other Hub read routes.
 const HUB_REPRO_CACHE = new Map();   // projectId -> { at, data }
 const HUB_REPRO_CACHE_MS = 5 * 60 * 1000;
-app.get("/api/hub/:project/reproducibility", (req, res) => {
+// Shared by the route below AND /api/hub/badge.json (BB3, Colosseum roadmap §12): pulled out so
+// the badge sums the SAME per-project computation — and hits the SAME 5-minute cache — that a
+// direct call to /api/hub/:project/reproducibility would, rather than growing a second code path
+// that could quietly drift from what the route publishes.
+function hubReproducibilityFor(id, p) {
+  const cached = HUB_REPRO_CACHE.get(id);
+  if (cached && Date.now() - cached.at < HUB_REPRO_CACHE_MS) return cached.data;
+  const batches = hubStore.read(kv, id, "batches", {}) || {};
+  const days = hubStore.read(kv, id, "days", {}) || {};
+  const otherPrograms = hubProjectView(p).programs.filter((pr) => pr.kind !== "lock-to-earn");
+  // W3: journal + programState are additive — a row with a journal event gets its real
+  // program-version hash (lib/hub/reproduce.js buildInputsForWallet); one without still reports
+  // hash: null, exactly as before the journal was wired in.
+  let journal = {}, programState = null;
+  try { journal = hubStore.readJournal(kv) || {}; } catch (_) {}
+  try { programState = hubStore.read(kv, id, "state", null); } catch (_) {}
+  const rep = hubReproduce.projectReproducibility({ batches, days, otherPrograms, journal, programState });
+  const data = { ok: true, project: id, batches: rep.batches, overall: rep.overall };
+  HUB_REPRO_CACHE.set(id, { at: Date.now(), data });
+  return data;
+}
+app.get("/api/hub/:project/reproducibility", rateLimit("hubheavy", { windowMs: 60000, max: 60 }), (req, res) => {
   res.setHeader("Cache-Control", "public, max-age=300");
   const id = String(req.params.project || "").toLowerCase();
   const p = hubProjects()[id];
   if (!p) return res.status(404).json({ ok: false, error: "no such project" });
   try {
-    const cached = HUB_REPRO_CACHE.get(id);
-    if (cached && Date.now() - cached.at < HUB_REPRO_CACHE_MS) return res.status(200).json(cached.data);
-    const batches = hubStore.read(kv, id, "batches", {}) || {};
-    const days = hubStore.read(kv, id, "days", {}) || {};
-    const otherPrograms = hubProjectView(p).programs.filter((pr) => pr.kind !== "lock-to-earn");
-    const rep = hubReproduce.projectReproducibility({ batches, days, otherPrograms });
-    const data = { ok: true, project: id, batches: rep.batches, overall: rep.overall };
-    HUB_REPRO_CACHE.set(id, { at: Date.now(), data });
-    return res.status(200).json(data);
+    return res.status(200).json(hubReproducibilityFor(id, p));
   } catch (e) { return res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
+});
+// ── CC4 (Colosseum roadmap §13): the dated series behind the ratio above — a daily append-only,
+// hashed record per project (lib/reproducibility-history.js, written by the tick registered next
+// to the other Hub schedulers below), so the badge/ratio has a TREND and a regression is visible
+// the day it happens rather than only in the current snapshot. Same route shape/segment count as
+// /api/hub/:project/batch/:batchId/inputs above (4 segments vs :project's 3) — Express matches by
+// exact segment count with no wildcard in :project, so this cannot be swallowed by the route
+// above it; verified with a live boot in scripts/reproducibility-history-test.cjs regardless,
+// per the roadmap's own instruction to test that rather than assume it. `hubheavy` (not a new
+// "light" tier): recomputing the chain's hashes is cheap (<=90 small records), but it is a read
+// of the same class as its siblings on this line and there is no established light tier for a
+// Hub reproducibility route to break new ground with — see scripts/public-route-hygiene-test.cjs.
+app.get("/api/hub/:project/reproducibility/history", rateLimit("hubheavy", { windowMs: 60000, max: 60 }), (req, res) => {
+  res.setHeader("Cache-Control", "public, max-age=300");
+  const id = String(req.params.project || "").toLowerCase();
+  const p = hubProjects()[id];
+  if (!p) return res.status(404).json({ ok: false, error: "no such project" });
+  try {
+    const days = reproHistory.series(kv, id);
+    const chain = reproHistory.verifyChain(kv, id);
+    return res.status(200).json({ ok: true, project: id, days, chainOk: chain.ok });
+  } catch (e) { return res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
+});
+// ── DD2 (Colosseum roadmap §14): "Follow a project without a wallet" — a JSON Feed + RSS listing
+// of what happened in this project's public record, newest first. lib/hub/feed.js is the pure
+// item builder + serializers; everything handed to it here is already a public view this file
+// composes for its OTHER Hub read routes (hubProjectView, hubReproducibilityFor's per-batch
+// rows — the exact numbers /api/hub/:project/reproducibility publishes — and
+// holdersSnapshot.series/reproHistory.series, both defined further down this file and safe to
+// reference here for the same reason hubReceiptCommand/reproHistory already are above: this only
+// runs inside a request handler, long after the whole module has finished loading). `versions`
+// here are the FULL public docs (programVersionView with `full:true`), never the trimmed
+// {version,hash,publishedAt} index projectView.versions carries — the feed needs each version's
+// `commitment` too, and lib/hub/feed.js derives its commitment items from exactly that field.
+function hubFeedItemsFor(id, p, req) {
+  const projectView = hubProjectView(p);
+  const state = hubStore.read(kv, id, "state", {}) || {};
+  const versions = Array.isArray(state.versions) ? state.versions.map((v) => hubPublic.programVersionView(v, { full: true })) : [];
+  const batches = hubStore.read(kv, id, "batches", {}) || {};
+  const repData = hubReproducibilityFor(id, p);
+  const receiptsByBatch = {};
+  for (const b of (repData && repData.batches) || []) receiptsByBatch[b.batchId] = b;
+  let snapshots = [];
+  try { snapshots = holdersSnapshot.series(kv, p.mint); } catch (_) { /* no crawl yet */ }
+  let history = [];
+  try { history = reproHistory.series(kv, id); } catch (_) { /* accepted, unused today */ }
+  const base = `${req.protocol}://${req.get("host")}`;
+  return hubFeed.buildFeedItems({ projectView, versions, batches, receiptsByBatch, snapshots, history, base });
+}
+// AA1 follow-up (Colosseum roadmap §14 DD2 + §11 AA1): "follow a wallet without a project" — the
+// wallet twin of hubFeedItemsFor above. Scoped to exactly the projects GET /api/hub/wallet/:wallet
+// already resolves this wallet into (hubPublic.walletLookup over hubProjects()) — a project the
+// wallet has never appeared in contributes nothing, same honesty rule that route already keeps.
+// Per project: every published program version + its on-chain commitment (project-wide — the
+// wallet doesn't have to be paid under a version to want the rules), and only the settled batches
+// that actually paid THIS wallet (lib/hub/feed.js's buildWalletFeedItems filters on `b.sent[wallet]`
+// itself, from the same raw `batches` store hubFeedItemsFor already reads). No snapshot items — a
+// holder-count snapshot is a fact about the mint, not about one wallet.
+function hubWalletFeedItemsFor(wallet, req) {
+  const base = `${req.protocol}://${req.get("host")}`;
+  const projects = [];
+  for (const [id, p] of Object.entries(hubProjects())) {
+    let view;
+    try { view = hubProjectView(p); } catch (_) { continue; }
+    let lookup;
+    try { lookup = hubPublic.walletLookup(view, wallet); } catch (_) { continue; }
+    if (!lookup.ok || !lookup.entries.length) continue;   // this wallet never appears in this project
+    const state = hubStore.read(kv, id, "state", {}) || {};
+    const versions = Array.isArray(state.versions) ? state.versions.map((v) => hubPublic.programVersionView(v, { full: true })) : [];
+    const batches = hubStore.read(kv, id, "batches", {}) || {};
+    const receiptsByBatch = {};
+    try {
+      const repData = hubReproducibilityFor(id, p);
+      for (const b of (repData && repData.batches) || []) receiptsByBatch[b.batchId] = b;
+    } catch (_) { /* omit the ratio rather than guess */ }
+    projects.push({ projectId: id, label: p.label, versions, batches, receiptsByBatch });
+  }
+  return hubFeed.buildWalletFeedItems({ wallet, projects, base });
+}
+app.get("/api/hub/:project/feed.json", rateLimit("hubheavy", { windowMs: 60000, max: 60 }), (req, res) => {
+  res.setHeader("Cache-Control", "public, max-age=300");
+  const id = String(req.params.project || "").toLowerCase();
+  const p = hubProjects()[id];
+  if (!p) return res.status(404).json({ ok: false, error: "no such project" });
+  try {
+    const base = `${req.protocol}://${req.get("host")}`;
+    const items = hubFeedItemsFor(id, p, req);
+    const body = hubFeed.toJsonFeed(items, {
+      title: `${p.label} — Hub feed`,
+      home_page_url: `${base}/hub/${encodeURIComponent(id)}`,
+      feed_url: `${base}/api/hub/${encodeURIComponent(id)}/feed.json`,
+    });
+    res.setHeader("Content-Type", "application/feed+json; charset=utf-8");
+    return res.status(200).json(body);
+  } catch (e) { return res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
+});
+// ── BB3 (Colosseum roadmap §12): a reproducibility badge that is COMPUTED, not typed. Both
+// routes below sum hubReproducibilityFor() over every registered, non-demo project — the exact
+// same set /api/hub lists and hub-status.html walks (hubProjects() never contains "demo"/"demo-b";
+// those live only in lib/hub/demo-fixture.js and are never registered in the real kv registry —
+// see the reservedMints comment above). `?project=<id>` narrows to one project's own ratio; an
+// unknown or demo id 404s (a demo id can never resolve through hubProjects() either, since it was
+// never registered there). The message is built ONLY from integers this file computed and a
+// small set of fixed words — never a project's label, symbol or any other attacker-influenced
+// field — so nothing user-controlled can ever reach the badge text. Keep it that way.
+const HUB_BADGE_COLORS = { green: "#3fb950", yellow: "#d4a72c", lightgrey: "#9aa0a6" };
+function hubBadgeColor(reproduced, total) {
+  if (!total) return "lightgrey";
+  return reproduced === total ? "green" : "yellow";
+}
+// Returns null when `projectId` is set but doesn't resolve to a registered, non-demo project —
+// the caller 404s. With no projectId, sums across every registered project. `K` in the aggregate
+// message counts only projects that actually contributed a row to the ratio (total > 0) — a
+// project with a Hub page but zero settled receipts (the poke dry-run carve-out registers this
+// way at boot, and any freshly-onboarded project starts this way too) has nothing to "reproduce"
+// yet and would otherwise inflate K with projects the ratio never touched.
+function hubBadgeCompute(projectId) {
+  const projects = hubProjects();
+  if (projectId) {
+    const id = String(projectId).toLowerCase();
+    const p = projects[id];
+    if (!p) return null;
+    const data = hubReproducibilityFor(id, p);
+    const n = data.overall.reproduced, m = data.overall.total;
+    return { message: m ? `${n} of ${m}` : "no receipts yet", color: hubBadgeColor(n, m) };
+  }
+  let totalAll = 0, reproducedAll = 0, k = 0;
+  for (const [id, p] of Object.entries(projects)) {
+    const data = hubReproducibilityFor(id, p);
+    if (data.overall.total > 0) k++;
+    totalAll += data.overall.total;
+    reproducedAll += data.overall.reproduced;
+  }
+  const message = totalAll ? `${reproducedAll} of ${totalAll} across ${k} project${k === 1 ? "" : "s"}` : "no receipts yet";
+  return { message, color: hubBadgeColor(reproducedAll, totalAll) };
+}
+// The route for this is registered ABOVE, next to /api/hub/wallet/:wallet — a 3-segment path
+// collides with the generic /api/hub/:project pattern the same way "wallet" does (see the AA1
+// comment there), so it must be registered before it or Express reads "badge.json" as a project
+// id and 404s "no such project" (this bit once, before the reorder).
+//
+// A small server-rendered flat badge, same numbers as the JSON above, for README/markdown
+// embeds that want an <img> rather than a shields.io round-trip. Width is a fixed per-character
+// estimate (no font metrics available server-side) — close enough for a two-box flat badge, and
+// every text node is escHtml'd even though (see the comment above) nothing user-controlled can
+// ever reach it.
+function hubBadgeCharWidth(s) { return Math.round(String(s).length * 6.2) + 10; }
+function renderHubBadgeSvg(label, message, colorName) {
+  const color = HUB_BADGE_COLORS[colorName] || HUB_BADGE_COLORS.lightgrey;
+  const labelW = hubBadgeCharWidth(label);
+  const msgW = hubBadgeCharWidth(message);
+  const w = labelW + msgW, h = 20;
+  const labelText = escHtml(label), msgText = escHtml(message);
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" role="img" aria-label="${labelText}: ${msgText}">` +
+    `<clipPath id="hbr"><rect width="${w}" height="${h}" rx="3" fill="#fff"/></clipPath>` +
+    `<g clip-path="url(#hbr)">` +
+    `<rect width="${labelW}" height="${h}" fill="#555"/>` +
+    `<rect x="${labelW}" width="${msgW}" height="${h}" fill="${color}"/>` +
+    `</g>` +
+    `<g fill="#fff" text-anchor="middle" font-family="Verdana,Geneva,DejaVu Sans,sans-serif" font-size="11">` +
+    `<text x="${labelW / 2}" y="14">${labelText}</text>` +
+    `<text x="${labelW + msgW / 2}" y="14">${msgText}</text>` +
+    `</g></svg>`;
+}
+app.get("/hub/badge.svg", rateLimit("hubheavy", { windowMs: 60000, max: 60 }), (req, res) => {
+  res.setHeader("Cache-Control", "public, max-age=300");
+  try {
+    const projectId = req.query.project ? String(req.query.project) : null;
+    const b = hubBadgeCompute(projectId);
+    if (projectId && !b) return res.status(404).type("text/plain").send("not found");
+    res.type("image/svg+xml");
+    return res.status(200).send(renderHubBadgeSvg("receipts reproducible", b.message, b.color));
+  } catch (e) { return res.status(500).type("text/plain").send("error rendering badge"); }
 });
 // Live platform-access pricing for the pre-registration apply page (hub-apply.html) — the
 // per-project quote at /api/hub/:project/access needs an already-registered project, but a
@@ -8046,6 +9129,7 @@ app.get("/hub/schema/:name.json", (req, res) => {
   const name = String(req.params.name || "");
   if (!HUB_SCHEMA_NAMES.has(name)) return res.status(404).json({ ok: false, error: "not_found" });
   res.setHeader("Cache-Control", "public, max-age=3600");
+  res.setHeader("Access-Control-Allow-Origin", "*");   // public, read-only — see the r/:sig route above
   res.type("application/schema+json");
   res.sendFile(join(HUB_SCHEMA_DIR, `${name}.schema.json`));
 });
@@ -8053,15 +9137,329 @@ app.get("/hub/schema/:name.json", (req, res) => {
 app.get("/hub/apply", (req, res) => { res.sendFile(join(__dirname, "public", "hub-apply.html")); });
 app.get("/hub/:project/pay", (req, res) => { res.sendFile(join(__dirname, "public", "hub-pay.html")); });
 app.get("/hub/:project/desk", (req, res) => { res.sendFile(join(__dirname, "public", "hub-desk.html")); });
+// DD2 (Colosseum roadmap §14): the RSS twin of GET /api/hub/:project/feed.json — same ordering
+// reason as /pay and /desk above, registered BEFORE the /hub/:project catch-all further down (a
+// literal 3rd segment, "feed.xml", never collides with any of that array's own patterns, but this
+// is still verified against the real, running route table by scripts/hub-feed-test.cjs, not
+// assumed from reading the file top to bottom). hubFeedItemsFor is defined above, next to the
+// JSON route it shares its computation with.
+app.get("/hub/:project/feed.xml", rateLimit("hubheavy", { windowMs: 60000, max: 60 }), (req, res) => {
+  res.setHeader("Cache-Control", "public, max-age=300");
+  const id = String(req.params.project || "").toLowerCase();
+  const p = hubProjects()[id];
+  if (!p) return res.status(404).json({ ok: false, error: "no such project" });
+  try {
+    const base = `${req.protocol}://${req.get("host")}`;
+    const items = hubFeedItemsFor(id, p, req);
+    const xml = hubFeed.toRss(items, {
+      title: `${p.label} — Hub feed`,
+      description: `Published program versions, settled batches, holder snapshots and on-chain commitments for ${p.label} on the Cluck Norris Project Hub.`,
+      home_page_url: `${base}/hub/${encodeURIComponent(id)}`,
+      feed_url: `${base}/hub/${encodeURIComponent(id)}/feed.xml`,
+    });
+    res.setHeader("Content-Type", "application/rss+xml; charset=utf-8");
+    return res.status(200).send(xml);
+  } catch (e) { return res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
+});
+// AA1 follow-up (Colosseum roadmap §14 DD2 + §11 AA1): "follow a wallet without a project" — the
+// per-wallet twin of the two project-feed routes above, same JSON Feed 1.1 / RSS 2.0 split
+// (/api/…/feed.json vs /hub/…/feed.xml — matching the project feeds' own split, not "fixed").
+// Registered here (a literal 4th/5th path segment, "feed.json"/"feed.xml", never collides with the
+// 3-segment /api/hub/wallet/:wallet or the generic /api/hub/:project pattern regardless of route
+// order — verified with a live boot in scripts/hub-wallet-feed-test.cjs, not assumed). Read-only:
+// this walks the exact same public views GET /api/hub/wallet/:wallet already composes; it writes
+// nothing and arms nothing. `wallet` is shape-checked with the same SOL_ADDR_RE (32-44 char base58,
+// length-capped by the regex itself) BEFORE it ever reaches hubProjects()/walletLookup, same as
+// every other wallet-keyed Hub route.
+app.get("/api/hub/wallet/:wallet/feed.json", rateLimit("hubheavy", { windowMs: 60000, max: 60 }), (req, res) => {
+  res.setHeader("Cache-Control", "public, max-age=300");
+  const wallet = String(req.params.wallet || "");
+  if (!SOL_ADDR_RE.test(wallet)) return res.status(400).json({ ok: false, error: "not a Solana address" });
+  try {
+    const base = `${req.protocol}://${req.get("host")}`;
+    const items = hubWalletFeedItemsFor(wallet, req);
+    const body = hubFeed.toJsonFeed(items, {
+      title: `Wallet ${wallet} — Hub feed`,
+      home_page_url: `${base}/hub/wallet/${encodeURIComponent(wallet)}`,
+      feed_url: `${base}/api/hub/wallet/${encodeURIComponent(wallet)}/feed.json`,
+    });
+    res.setHeader("Content-Type", "application/feed+json; charset=utf-8");
+    return res.status(200).json(body);
+  } catch (e) { return res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
+});
+app.get("/hub/wallet/:wallet/feed.xml", rateLimit("hubheavy", { windowMs: 60000, max: 60 }), (req, res) => {
+  res.setHeader("Cache-Control", "public, max-age=300");
+  const wallet = String(req.params.wallet || "");
+  if (!SOL_ADDR_RE.test(wallet)) return res.status(400).json({ ok: false, error: "not a Solana address" });
+  try {
+    const base = `${req.protocol}://${req.get("host")}`;
+    const items = hubWalletFeedItemsFor(wallet, req);
+    const xml = hubFeed.toRss(items, {
+      title: `Wallet ${wallet} — Hub feed`,
+      description: `Program-version changes and settled payout batches, across every Cluck Norris Project Hub project this wallet has appeared in.`,
+      home_page_url: `${base}/hub/wallet/${encodeURIComponent(wallet)}`,
+      feed_url: `${base}/hub/wallet/${encodeURIComponent(wallet)}/feed.xml`,
+    });
+    res.setHeader("Content-Type", "application/rss+xml; charset=utf-8");
+    return res.status(200).send(xml);
+  } catch (e) { return res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
+});
+// CC1 (Colosseum roadmap §13): "what changed in the rules" between two program versions. Same
+// ordering reason as /pay and /desk above — registered BEFORE the /hub/:project/programs and
+// /hub/:project catch-all patterns further down, or Express would need to match a LONGER path
+// (/hub/<project>/programs/compare has 4 segments; /hub/:project/programs only matches 3) and
+// this route would never be reached at all, 404ing through to the SPA/static fallback instead of
+// serving the compare page. scripts/hub-compare-test.cjs asserts this exact ordering with a real
+// boot, not just by reading the file top-to-bottom.
+app.get("/hub/:project/programs/compare", (req, res) => { res.sendFile(join(__dirname, "public", "hub-compare.html")); });
+// ── Y1: reproduce a receipt in the browser, offline-capable (Colosseum roadmap §9) ──────────────
+// The bundle is generated by `npm run build:hubverify` (vite.hubverify.config.js) straight from
+// the SAME pure lib/hub/reproduce.js + lib/hub/schema-validate.js + lib/hub/canonical.js the
+// /api/hub/* routes above and scripts/reproduce-receipt.cjs already run — never committed
+// (.gitignore'd), so a no-build boot (a fresh CI checkout before `npm run build` has run) 404s
+// with a clear message rather than serving a stale copy or silently 404ing as a generic asset.
+const HUB_VERIFY_BUNDLE_PATH = join(__dirname, "public", "hub-verify.bundle.js");
+app.get("/hub-verify.bundle.js", (req, res) => {
+  if (!fs.existsSync(HUB_VERIFY_BUNDLE_PATH)) {
+    return res.status(404).json({ ok: false, error: "hub-verify.bundle.js has not been built yet — run `npm run build` (or `npm run build:hubverify`) first" });
+  }
+  // Z3: same 3600s tier as /hub/schema/*.json — a built bundle only ever changes on a new
+  // deploy, same as a schema file, so it gets the same long cache rather than the 300s a live
+  // computation (reproducibility) gets.
+  res.setHeader("Cache-Control", "public, max-age=3600");
+  res.type("application/javascript");
+  res.sendFile(HUB_VERIFY_BUNDLE_PATH);
+});
+// Registered BEFORE the generic /hub/:project pattern below, or "verify" would be read as a
+// project id and served hub.html instead.
+app.get("/hub/verify", (req, res) => { res.sendFile(join(__dirname, "public", "hub-verify.html")); });
+// AA1: one wallet, every project — a typed address, no connect. Same ordering reason as
+// /hub/verify above: registered before the /hub/:project catch-all so "wallet" is never read as
+// a project id (it is also a reserved project id, hubRoutes.mount's reservedMints, above).
+app.get(["/hub/wallet", "/hub/wallet/:wallet"], (req, res) => { res.sendFile(join(__dirname, "public", "hub-wallet.html")); });
+
+// AA5 (Colosseum roadmap §11): the trust-boundary page — what the Hub does NOT prove, in plain
+// words. Static content, same reason it needs its own route as /hub/verify above: registered
+// BEFORE the generic /hub/:project pattern below, or "trust" would be read as a project id and
+// served hub.html instead. Meta is static (like for-projects.html) rather than the dynamic
+// per-request OG build below — there is no project/program/receipt to vary the text by.
+app.get("/hub/trust", (req, res) => { res.sendFile(join(__dirname, "public", "hub-trust.html")); });
+
+// AA4 (Colosseum roadmap §11): the judge's fifteen minutes — one page mapping each judging
+// criterion to the exact URLs to open. Same reason for its own route as /hub/verify and
+// /hub/trust above: registered BEFORE the generic /hub/:project pattern below, or "judge" would
+// be read as a project id and served hub.html instead. public/hub-judge.html is GENERATED from
+// docs/JUDGE_GUIDE.md by scripts/build-judge-page.cjs and committed (unlike hub-verify.bundle.js,
+// it must serve on a no-build boot), so this is a plain sendFile like hub-trust.html's, not a
+// build-time dependency check.
+app.get("/hub/judge", (req, res) => { res.sendFile(join(__dirname, "public", "hub-judge.html")); });
+
+// EE2 (docs/COLOSSEUM_ROADMAP.md §15): the public glossary page — every term and reason code a
+// receipt, the wallet look-up, the compare page, the standings or a lesson can show, defined in
+// plain words. Same ordering reason as /hub/verify, /hub/wallet, /hub/trust and /hub/judge above:
+// registered BEFORE the generic /hub/:project pattern below, or "glossary" would be read as a
+// project id and served hub.html instead. "glossary" is also in lib/hub/project.js
+// RESERVED_PROJECT_IDS (docs/HUB_PUBLIC_SURFACES_VERIFY_2026-09-18.md P2-05, landed with #342), so
+// no project can ever be created under that id; scripts/hub-reserved-ids-test.cjs pins it.
+app.get("/hub/glossary", (req, res) => { res.sendFile(join(__dirname, "public", "hub-glossary.html")); });
+
+// ── Y4: shareable Hub pages — server-rendered Open Graph / Twitter Card meta (Colosseum roadmap
+// §9). One static branded image (public/og/hub-card.png, 1200x630 — no dynamic image generation,
+// the roadmap line, and served below with a long cache) shared by every route; only the <title>/
+// description/url text is computed per request, from the SAME public view functions the JSON
+// routes above already call — hubProjectView() (wraps lib/hub/public.js projectView) and
+// hubPublic.findReceipt() — never a private field. Every value is escaped with the shared
+// Node-side escaper (escHtml, lib/html-escape.js) before it reaches the page, same discipline as
+// the Lock of Fame / LP Lab cards elsewhere in this file. A missing project/program/receipt still
+// serves 200 with the GENERIC Hub meta (the client renders its own not-found state) — a share
+// link that outlives its target must not itself look broken to an unfurler, and the meta build
+// never throws the page itself: any error here falls back to the unmodified file.
+const HUB_OG_IMAGE = "https://clucknorris.app/og/hub-card.png";
+const HUB_OG_BASE = "https://clucknorris.app/hub";
+const HUB_OG_DEFAULT = Object.freeze({
+  title: "Project Hub — receipts you can verify",
+  desc: "What a project promised its holders, who qualified, and the transaction that paid each one — re-checked against Solana in your browser. No wallet needed.",
+});
+const HUB_OG_REPRO_LINE = "reproducible from the published inputs";
+function ogClamp(s, max) {
+  s = String(s == null ? "" : s).replace(/\s+/g, " ").trim();
+  return s.length > max ? s.slice(0, Math.max(0, max - 1)).trim() + "…" : s;
+}
+// Read once per file, cached — the placeholder is swapped in fresh on every request (the VALUES
+// are per-request; the shell they sit inside is not).
+let _hubOgShell = null, _hubDemoOgShell = null;
+function hubOgShell() { if (!_hubOgShell) _hubOgShell = fs.readFileSync(join(__dirname, "public", "hub.html"), "utf8"); return _hubOgShell; }
+function hubDemoOgShell() { if (!_hubDemoOgShell) _hubDemoOgShell = fs.readFileSync(join(__dirname, "public", "hub-demo.html"), "utf8"); return _hubDemoOgShell; }
+// Replacement is a FUNCTION, never a plain string — a label or tagline containing a literal "$"
+// would otherwise be read by String.replace as a $&/$1-style backreference token.
+function renderHubOgHtml(rawHtml, meta) {
+  const t = escHtml(ogClamp(meta.title, 70));
+  const d = escHtml(ogClamp(meta.desc, 200));
+  const u = escHtml(String(meta.url || HUB_OG_BASE));
+  // DD2 (Colosseum roadmap §14): feed discovery tags, only when this request actually resolved to
+  // a real, registered project (`meta.feedProjectId` — set by hubOgFor, never by HUB_OG_DEFAULT or
+  // the demo fixture's own hubDemoOgFor, so the generic /hub index and a demo page never advertise
+  // a feed that 404s). Two `<link rel="alternate">`s, the same pair a feed reader's autodiscovery
+  // looks for: JSON Feed at /api/hub/:project/feed.json, RSS at /hub/:project/feed.xml.
+  const feedLinks = meta.feedProjectId ? [
+    `<link rel="alternate" type="application/feed+json" title="${t} feed" href="${HUB_OG_BASE.replace(/\/hub$/, "/api/hub")}/${encodeURIComponent(meta.feedProjectId)}/feed.json">`,
+    `<link rel="alternate" type="application/rss+xml" title="${t} feed" href="${HUB_OG_BASE}/${encodeURIComponent(meta.feedProjectId)}/feed.xml">`,
+  ].join("\n") : "";
+  const block = [
+    `<meta property="og:title" content="${t}">`,
+    `<meta property="og:description" content="${d}">`,
+    `<meta property="og:type" content="website">`,
+    `<meta property="og:url" content="${u}">`,
+    `<meta property="og:image" content="${HUB_OG_IMAGE}">`,
+    `<meta property="og:image:width" content="1200">`,
+    `<meta property="og:image:height" content="630">`,
+    `<meta name="twitter:card" content="summary_large_image">`,
+    `<meta name="twitter:title" content="${t}">`,
+    `<meta name="twitter:description" content="${d}">`,
+    `<meta name="twitter:image" content="${HUB_OG_IMAGE}">`,
+    feedLinks,
+  ].filter(Boolean).join("\n");
+  return rawHtml
+    .replace(/<title>[\s\S]*?<\/title>/i, () => `<title>${t}</title>`)
+    .replace(/<meta name="description"[^>]*>/i, () => `<meta name="description" content="${d}">`)
+    .replace("<!-- OG -->", () => block);
+}
+// One real Hub project/program/receipt. kind: "project" | "program" | "receipt"; sub: the
+// program id or receipt signature. Text built ONLY from hubProjectView()/hubPublic.findReceipt().
+function hubOgFor(projectId, kind, sub) {
+  if (!projectId) return { ...HUB_OG_DEFAULT, url: HUB_OG_BASE };
+  const base = `${HUB_OG_BASE}/${encodeURIComponent(projectId)}`;
+  const p = hubProjects()[projectId];
+  if (!p) return { ...HUB_OG_DEFAULT, url: base };
+  let v;
+  try { v = hubProjectView(p); } catch (_) { return { ...HUB_OG_DEFAULT, url: base }; }
+  // dryRun (E10, e.g. POKE): a plain, generic label — no project-specific wording, so this is
+  // never a second code path per project.
+  const dryNote = v.dryRun === true ? " DRY RUN — terms not yet agreed with the project team; nothing here is live." : "";
+  // DD2: `feedProjectId` is carried on EVERY branch below once `p` is known to be a real,
+  // registered project (the exact set GET /api/hub/:project/feed.json and /hub/:project/feed.xml
+  // resolve too) — renderHubOgHtml uses it to add the <link rel="alternate"> discovery tags. A
+  // dry-run project (E10) still gets one: its feed is just honestly empty (no batch/version/
+  // commitment/snapshot can exist for it), never a broken link.
+  if (kind === "receipt") {
+    const url = `${base}/r/${encodeURIComponent(sub || "")}`;
+    let rec; try { rec = hubPublic.findReceipt(v, sub); } catch (_) { rec = null; }
+    if (!rec) return { ...HUB_OG_DEFAULT, url, feedProjectId: p.id };
+    const row = rec.receipt || {};
+    const amt = row.amountUi != null ? row.amountUi : "?";
+    // "committed on-chain" only when the program object itself carries an observed commitment
+    // (roadmap E3) — not wired into the public program view as of this writing, so this branch
+    // is inert today and the line below is what actually renders; kept so a future E3 field on
+    // `rec.program` upgrades the claim automatically, without a second call site to remember.
+    const claim = (rec.program && rec.program.commitment && rec.program.commitment.sig) ? "independently committed on-chain" : HUB_OG_REPRO_LINE;
+    const progLabel = (rec.program && rec.program.label) || "the program";
+    return {
+      title: `${amt} ${v.symbol} receipt — ${v.label}`,
+      desc: `${v.label} paid ${amt} ${v.symbol} through ${progLabel} — ${claim}.${dryNote}`,
+      url, feedProjectId: p.id,
+    };
+  }
+  if (kind === "program") {
+    const url = `${base}/p/${encodeURIComponent(sub || "")}`;
+    const prog = (v.programs || []).find((pr) => pr && pr.id === sub);
+    if (!prog) return { ...HUB_OG_DEFAULT, url, feedProjectId: p.id };
+    return {
+      title: `${prog.label} — ${v.label} — Project Hub`,
+      desc: `${prog.label} for ${v.label} ($${v.symbol}) on the Project Hub — ${HUB_OG_REPRO_LINE}.${dryNote}`,
+      url, feedProjectId: p.id,
+    };
+  }
+  const n = v.totals || {};
+  return {
+    title: `${v.label} ($${v.symbol}) — Project Hub`,
+    desc: `${v.label}: ${n.receipts || 0} receipt${n.receipts === 1 ? "" : "s"} across ${n.programs || 0} program${n.programs === 1 ? "" : "s"} — ${HUB_OG_REPRO_LINE}.${dryNote}`,
+    url: base, feedProjectId: p.id,
+  };
+}
+// P1-03 (docs/HUB_PUBLIC_SURFACES_VERIFY_2026-09-18.md): the `/hub/:project` share-page route
+// below calls hubOgFor() on EVERY request — the exact same hubProjectView() walk /api/hub/:project
+// just gained a limiter for — purely to fill in <meta> tags for a link-unfurl crawler. That page
+// route must always render 200 for a real browser (never 429 a person clicking a shared link), so
+// it gets a cache instead of a limiter: the computed OG meta is memoised per (project, kind, sub)
+// for 60s. A stale meta line for up to a minute after a payout lands is a fine trade against
+// recomputing the whole ledger on every Discord/Twitter unfurl of a popular link.
+const HUB_OG_CACHE = new Map();   // "projectId:kind:sub" -> { at, meta }
+const HUB_OG_CACHE_MS = 60 * 1000;
+function hubOgForCached(projectId, kind, sub) {
+  const key = `${projectId || ""}:${kind}:${sub || ""}`;
+  const cached = HUB_OG_CACHE.get(key);
+  if (cached && Date.now() - cached.at < HUB_OG_CACHE_MS) return cached.meta;
+  const meta = hubOgFor(projectId, kind, sub);
+  HUB_OG_CACHE.set(key, { at: Date.now(), meta });
+  return meta;
+}
+// The Colosseum judges' demo fixture (E2) — same treatment, labelled DRY RUN — fixture data
+// rather than the real dryNote above (there is no "project team" to agree terms with here).
+function hubDemoOgFor(projectId, kind, sub) {
+  const isB = projectId === "demo-b";
+  const url = isB ? `${HUB_OG_BASE}/demo-b`
+    : kind === "receipt" ? `${HUB_OG_BASE}/demo/r/${encodeURIComponent(sub || "")}`
+    : kind === "program" ? `${HUB_OG_BASE}/demo/p/${encodeURIComponent(sub || "")}`
+    : `${HUB_OG_BASE}/demo`;
+  let fx; try { fx = hubDemoFixture.get()[projectId]; } catch (_) { fx = null; }
+  if (!fx || !fx.project) return { ...HUB_OG_DEFAULT, url };
+  const label = fx.project.label, symbol = fx.project.symbol;
+  const dryNote = " DRY RUN — fixture data.";
+  if (kind === "receipt") {
+    const r = (fx.receipts || {})[sub];
+    if (!r) return { ...HUB_OG_DEFAULT, url };
+    const amt = hubPublic.rawToUi(r.totals ? r.totals.owedRaw : "0", r.rewardDecimals);
+    return {
+      title: `${amt} ${symbol} receipt — ${label} (demo)`,
+      desc: `${r.holderLabel || "A holder"} received ${amt} ${symbol} through ${label}'s Lock to Earn — ${HUB_OG_REPRO_LINE}.${dryNote}`,
+      url,
+    };
+  }
+  if (kind === "program") {
+    return {
+      title: `Lock to Earn — ${label} — Hub demo`,
+      desc: `${label}'s Lock to Earn program: who qualifies, funding coverage and a paid receipt — ${HUB_OG_REPRO_LINE}.${dryNote}`,
+      url,
+    };
+  }
+  return {
+    title: `${label} — Hub demo walkthrough`,
+    desc: `A guided, no-wallet walkthrough of the Project Hub's single-holder story.${dryNote}`,
+    url,
+  };
+}
+// The static card is committed under public/, which (CLAUDE.md — public/ is only mounted through
+// the vite-built dist/ copy) 404s on a no-build boot without an explicit route.
+app.get("/og/hub-card.png", (req, res) => {
+  res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+  res.type("png");
+  res.sendFile(join(__dirname, "public", "og", "hub-card.png"));
+});
+// Registered BEFORE the generic /hub/:project pattern below for the same reason — or "status"
+// would be read as a project id (Colosseum roadmap §10 Z2).
+app.get("/hub/status", (req, res) => { res.sendFile(join(__dirname, "public", "hub-status.html")); });
 // Registered BEFORE the generic /hub/:project pattern below so a literal "demo" / "demo-b" always
 // hits the fixture page, never the real one — a pasted /hub/demo link can never resolve to a real
 // project id later reusing that name (store.js's ID_RE would allow "demo" to be registered for
 // real; this ordering plus the fixture never touching the real registry is the actual guarantee).
 app.get(["/hub/demo", "/hub/demo/p/:program", "/hub/demo/r/:id", "/hub/demo-b"], (req, res) => {
-  res.sendFile(join(__dirname, "public", "hub-demo.html"));
+  try {
+    const projectId = req.path === "/hub/demo-b" ? "demo-b" : "demo";
+    const meta = req.params.id ? hubDemoOgFor(projectId, "receipt", req.params.id)
+      : req.params.program ? hubDemoOgFor(projectId, "program", req.params.program)
+      : hubDemoOgFor(projectId, "project", null);
+    res.type("html").send(renderHubOgHtml(hubDemoOgShell(), meta));
+  } catch (e) { res.sendFile(join(__dirname, "public", "hub-demo.html")); }
 });
 app.get(["/hub", "/hub/:project", "/hub/:project/programs", "/hub/:project/p/:program", "/hub/:project/r/:sig"], (req, res) => {
-  res.sendFile(join(__dirname, "public", "hub.html"));
+  try {
+    const projectId = req.params.project ? String(req.params.project).toLowerCase() : null;
+    const meta = !projectId ? { ...HUB_OG_DEFAULT, url: HUB_OG_BASE }
+      : req.params.sig ? hubOgForCached(projectId, "receipt", req.params.sig)
+      : req.params.program ? hubOgForCached(projectId, "program", req.params.program)
+      : hubOgForCached(projectId, "project", null);
+    res.type("html").send(renderHubOgHtml(hubOgShell(), meta));
+  } catch (e) { res.sendFile(join(__dirname, "public", "hub.html")); }
 });
 
 // ── For Projects — the guided front door (Colosseum W4, cut to two days). LINKS the tools that
@@ -8104,7 +9502,45 @@ const hubScanDeps = (() => {
     creationTimes: async (escrows) => scanLib.creationTimes((await getProgram()).provider.connection, escrows),
   };
 })();
-const hubAlert = (m) => { console.warn("[hub] " + m); try { cunaOpsAlert(`⚠️ Hub: ${m}`, "hub:" + String(m).slice(0, 40)).catch(() => {}); } catch (_) {} };
+// N-1 (Round 4, docs/HUB_JOURNAL_VERIFY_2026-09-18.md): this used to write the 6-hour dedupe
+// watermark BEFORE calling tgSend, which swallows its own errors and returns null on failure — a
+// Telegram outage silently ate the next 6 hours of fraud-refusal/summary alerts for that key
+// (CLAUDE.md: tgSend never throws; check its return value, never advance durable state on a send
+// that did not land). It also deduped on a 40-char slice of the free-text message, which collapsed
+// distinct batches (even distinct projects) together once the project id ran past ~19 characters —
+// see lib/hub/alert-key.js for that half of the fix.
+//
+// Deliberately its OWN map, never CUNA_ALERT_SEEN: touching cunaOpsAlert itself to fix the
+// watermark timing would move it for EVERY other caller (CUNA accrual/burn/watchdog alerts, the
+// kv-load alert, the lock-celebration fallback) — none of which this fix is scoped to, and all of
+// which are worth leaving exactly as audited. So hubAlert calls cunaOpsAlert with dedupeKey=null
+// (bypassing its internal dedupe entirely — see the `if (dedupeKey)` guard there) and does its own
+// check-then-send-then-set around it instead.
+//
+// NEW-1 (Round 5, docs/HUB_JOURNAL_VERIFY_2026-09-18.md): the check-then-AWAIT-send-then-set above
+// raced. Every call inside one synchronous loop (e.g. one alert per row of a batch) reads
+// HUB_ALERT_SEEN, finds it unset, and starts its own `await cunaOpsAlert(...)` BEFORE any of the
+// earlier calls' sends have resolved and set the watermark — so a burst sharing one dedupe key
+// sent one Telegram message per row instead of one per request. The claim has to happen
+// SYNCHRONOUSLY, in the same tick as the check, so the second call in a burst sees it already
+// taken. A falsy send result (cunaOpsAlert/tgSend swallow their own errors and return null/0 —
+// never throw, never `{ok:false}`) deletes the claim so the NEXT occurrence retries rather than
+// being silenced for 6 hours by a send that never landed; a defensive catch does the same.
+const { hubAlertKey } = require("./lib/hub/alert-key");
+const HUB_ALERT_SEEN = new Map();
+const hubAlert = (m, meta) => {
+  console.warn("[hub] " + m);
+  const key = hubAlertKey(m, meta);
+  const now = Date.now();
+  if (now - (HUB_ALERT_SEEN.get(key) || 0) < 6 * 60 * 60 * 1000) return;
+  HUB_ALERT_SEEN.set(key, now);
+  (async () => {
+    try {
+      const sent = await cunaOpsAlert(`⚠️ Hub: ${m}`, null);
+      if (!sent) HUB_ALERT_SEEN.delete(key);
+    } catch (_) { HUB_ALERT_SEEN.delete(key); }
+  })();
+};
 // A corrupt app-state.json boots the kv store IN-MEMORY with the file preserved (lib/kvstore.js,
 // deep dive P0-005): every verified write refuses until an operator restores it. That must be
 // seen, not found three payouts later. Delayed so the Telegram config is loaded.
@@ -8130,14 +9566,61 @@ hubRoutes.mount(app, {
   // declared further down.
   // "demo" / "demo-b" are the Colosseum fixture ids (lib/hub/demo-fixture.js, /hub/demo) — reserved
   // by id (not mint) so a real project can never be approved under either name and collide with
-  // the fixture's routes.
-  reservedMints: () => ({ clkn: CLKN_MINT, cuna: SUPPLY_FEEDS.cuna.mint, rose: SUPPLY_FEEDS.rose.mint, demo: null, "demo-b": null }),
+  // the fixture's routes. Item 5 / Round 3 (docs/HUB_JOURNAL_VERIFY_2026-09-18.md): every other
+  // page-shadowing id (apply/verify/status/wallet/trust/judge/schema/registry/hub/settle/badge) is
+  // ALSO merged in by lib/hub/routes.js's own `reserved()` from hubProject.RESERVED_PROJECT_IDS —
+  // spelled out here too, explicitly, as the second of the two places this finding named.
+  reservedMints: () => {
+    const base = { clkn: CLKN_MINT, cuna: SUPPLY_FEEDS.cuna.mint, rose: SUPPLY_FEEDS.rose.mint, demo: null, "demo-b": null };
+    for (const id of hubProject.RESERVED_PROJECT_IDS) if (!(id in base)) base[id] = null;
+    return base;
+  },
   getTx: async (sig) => {
-    const r = await heliusRpcCall(`https://mainnet.helius-rpc.com/?api-key=${process.env.HELIUS_API_KEY}`)("hub-access", "getTransaction", [sig, { encoding: "jsonParsed", maxSupportedTransactionVersion: 1, commitment: "confirmed" }]);
+    // crash P2-9 (docs/HUB_JOURNAL_VERIFY_2026-09-18.md): the settlement journal has no
+    // "unconsume" — a confirmed-but-later-forked transaction would be journaled permanently.
+    // `finalized` closes the fork-depth window this read is used for (both the platform-access
+    // payment check above and every settlement journal write in lib/hub/routes.js); the small
+    // extra latency is paid once, at settlement time, never on every read of a project's numbers.
+    const r = await heliusRpcCall(`https://mainnet.helius-rpc.com/?api-key=${process.env.HELIUS_API_KEY}`)("hub-access", "getTransaction", [sig, { encoding: "jsonParsed", maxSupportedTransactionVersion: 1, commitment: "finalized" }]);
     return r && r.result;
   },
 });
 hubRoutes.startScheduler({ kv, scanDeps: async () => hubScanDeps, alert: hubAlert });
+
+// ── CC4 (Colosseum roadmap §13): the daily reproducibility-history tick — registered here, next
+// to the Hub's own scheduler above, UNCONDITIONALLY (not inside the TELEGRAM_BOT_TOKEN/CHAT_ID
+// gate the alerts/lessons/radar block needs — CLAUDE.md: that whole block only starts with both
+// set, and this must run on every boot regardless). Once at boot and then every 6 hours, for
+// every registered non-demo project (hubProjects() never contains "demo"/"demo-b" — the fixture
+// module is separate and never registered in the real kv registry), write today's UTC-day record
+// if one doesn't already exist. lib/reproducibility-history.js's own day_exists refusal in
+// record() IS the "never twice in the same UTC day per project" guard — no separate lock needed.
+// Reuses hubReproducibilityFor() — the exact function the reproducibility route and the badge
+// already share a 5-minute cache with — so this can never compute a different number than what a
+// reader sees if they hit that route the same moment. Never throws out of the interval; logs one
+// line per project actually written, and stays silent (not an error) on a day already recorded.
+// The two env overrides exist ONLY for scripts/reproducibility-history-test.cjs to observe two
+// ticks without waiting six hours — same idiom as ROSE_POLL_MS/BUYBOT_POLL_MS elsewhere in this
+// file; production never sets either and gets the real defaults.
+const reproHistory = require("./lib/reproducibility-history");
+const HUB_REPRO_HIST_TICK_MS = Math.max(3000, parseInt(process.env.HUB_REPRO_HIST_TICK_MS || String(6 * 60 * 60 * 1000), 10) || (6 * 60 * 60 * 1000));
+const HUB_REPRO_HIST_BOOT_MS = Math.max(0, parseInt(process.env.HUB_REPRO_HIST_BOOT_MS || "60000", 10) || 0);
+function hubReproHistoryTick(reason) {
+  const day = new Date().toISOString().slice(0, 10);
+  let projects = {};
+  try { projects = hubProjects(); } catch (e) { console.warn("[hub-repro-history] " + reason + ": could not list projects — " + (e && e.message)); return; }
+  for (const [id, p] of Object.entries(projects)) {
+    try {
+      const data = hubReproducibilityFor(id, p);
+      const missingInputs = (data.batches || []).reduce((t, b) => t + (Number(b && b.missingInputs) || 0), 0);
+      const r = reproHistory.record(kv, { projectId: id, day, reproduced: data.overall.reproduced, total: data.overall.total, missingInputs, at: Date.now() });
+      if (r.ok) console.log(`[hub-repro-history] ${id} ${day}: ${data.overall.reproduced}/${data.overall.total} (${missingInputs} missing input${missingInputs === 1 ? "" : "s"})`);
+      else if (r.reason !== "day_exists") console.warn(`[hub-repro-history] ${id} ${day}: write did not verify (check DATA_DIR)`);
+    } catch (e) { console.warn(`[hub-repro-history] ${id}: ${(e && e.message) || e}`); }
+  }
+}
+setInterval(() => { try { hubReproHistoryTick("timer"); } catch (e) { console.warn("[hub-repro-history] tick: " + (e && e.message)); } }, HUB_REPRO_HIST_TICK_MS);
+setTimeout(() => { try { hubReproHistoryTick("boot"); } catch (e) { console.warn("[hub-repro-history] boot tick: " + (e && e.message)); } }, HUB_REPRO_HIST_BOOT_MS);
 
 // ── Traction (Colosseum W9 part 1) — owner-only READ of the product OUTCOME counters ──────────
 // Everything here is derived from durable stores by lib/traction.js; this route reads, it never
@@ -8400,9 +9883,13 @@ const SOL_UNLOCK_MIN_LAMPORTS = 50_000_000;
 // /api/token-overview, cached 60s in memory and last-known-good in kv — if pricing is down we
 // publish clknNeeded:null and the client fails OPEN (an outage on our side never locks users
 // out). TOOLGATE_OFF=1 kills the whole gate without a deploy.
+// Owner, 2026-09-22: "lower it to 20 dollars of SKR or 10 dollars of CLKN to get access to
+// advanced tools" — so the two doors carry their OWN figures (was one $50 figure for both),
+// and the Airdropper left the pass entirely the same day ("free for everyone on all platforms").
 const TOOLGATE_TERMS = require("./lib/tool-pass-terms");
 const TOOLGATE = {
-  usd: Number(process.env.TOOLGATE_USD) || 50,
+  usd: Number(process.env.TOOLGATE_USD) || 10,
+  skrUsd: Number(process.env.TOOLGATE_SKR_USD) || 20,   // the Seeker app's SKR door (lib/tool-pass-qualify.js)
   // days + lamports come from the immutable terms schedule (lib/tool-pass-terms.js), NOT env,
   // since 2026-09-11: a payment's terms are fixed at payment time and resolve from that schedule,
   // so the offer the page advertises must be the schedule's current entry by construction. To
@@ -8425,7 +9912,32 @@ for (const k of ["TOOLGATE_LAMPORTS", "TOOLGATE_DAYS"]) {
 // Seeded from the volume at declaration (2026-08-18 review): the kv fallback used to live only
 // inside the refresh branch, so every request racing a cold-start refresh read usd=0 and the
 // paywall failed open for the whole first-fetch window after each deploy.
-let toolGatePrice = { at: 0, usd: Number(kv.get("toolGateClknUsd", 0)) || 0, p: null };
+const TOOL_PASS_QUALIFY = require("./lib/tool-pass-qualify");
+const SKR_MINT = TOOL_PASS_QUALIFY.SKR_MINT;
+// A persisted price is trusted only if it is a finite positive number (Codex, round 13 P2: a
+// stored -1 would otherwise be loaded at boot and make the sanity band refuse every valid tick).
+const loadedPrice = (k) => { const v = Number(kv.get(k, 0)); return Number.isFinite(v) && v > 0 ? v : 0; };
+let toolGatePrice = { at: 0, usd: loadedPrice("toolGateClknUsd"), p: null,
+  // The Seeker app's second door (owner, 2026-09-19; lib/tool-pass-qualify.js): SKR, priced the
+  // same way, cached the same way, and read only when a session asked for that door.
+  skrUsd: loadedPrice("toolGateSkrUsd"), skrP: null };
+// One SKR refresh at a time; both the config route (fire-and-forget) and a session that asked for
+// the door with no price loaded (awaited) share it. acceptPrice() is the one rule for what may be
+// persisted: finite, positive, and inside the 10× band of a RECENT last-good.
+function refreshSkrPrice(now) {
+  if (toolGatePrice.skrP) return toolGatePrice.skrP;
+  toolGatePrice.skrP = (async () => {
+    try {
+      const j = await jupPriceV3([SKR_MINT]);
+      const a = TOOL_PASS_QUALIFY.acceptPrice({ fresh: j && j[SKR_MINT] && j[SKR_MINT].usdPrice, last: toolGatePrice.skrUsd, lastAt: kv.get("toolGateSkrUsdAt", 0), now });
+      if (!a.ok) { console.warn("[tool-gate] SKR price refresh rejected: " + a.reason); return; }
+      toolGatePrice.skrUsd = a.price;
+      kv.set("toolGateSkrUsd", a.price); kv.set("toolGateSkrUsdAt", now);
+    } catch (e) { console.warn("[tool-gate] SKR price refresh failed:", e.message); }
+    finally { toolGatePrice.skrP = null; }
+  })();
+  return toolGatePrice.skrP;
+}
 
 // SERVER-SIDE enforcement of the tools pass (2026-09-10, reworked the same night after a
 // second-reviewer pass found two bypasses). Until now the pass lived only in localStorage and
@@ -8453,24 +9965,52 @@ let toolGatePrice = { at: 0, usd: Number(kv.get("toolGateClknUsd", 0)) || 0, p: 
 // timestamp nonce let the same signed message mint more than one session). One nonce per signing,
 // bound to the wallet and to this purpose, consumed on first use whether or not it verifies.
 const TOOL_PASS_MSG_RE = /^Cluck Norris — unlock the tools pass\nwallet: ([1-9A-HJ-NP-Za-km-z]{32,44})\nnonce: ([0-9a-f]{32})\n/;
-const toolPassChallenges = new Map();   // nonce -> { wallet, exp }
+// The RECEIPT session (Codex round 18 on #395, 2026-09-22): the Airdropper is free for everyone,
+// but writing a drop's PUBLIC RECEIPT is not anonymous — a stranger who knew an operator's
+// unrecorded public transfer could claim it on a receipt of their own first, and the operator's
+// own recording then got "already recorded on another receipt". So /api/airdrop/record takes a
+// signed session too — its OWN message and purpose, with NO holdings check and NO payment: the
+// wallet signs a nonce, the server hands back a token that says only "this wallet proved
+// itself", and every row is then held to that wallet (lib/airdrop-receipt.js `operator`). A
+// receipt token is never a tools pass (toolPassGate refuses via "receipt"), and a receipt
+// challenge can never mint a tools pass (the purpose travels with the nonce and the message).
+const RECEIPT_MSG_RE = /^Cluck Norris — sign in to the Airdropper\nwallet: ([1-9A-HJ-NP-Za-km-z]{32,44})\nnonce: ([0-9a-f]{32})\n/;
+const RECEIPT_SESSION_TTL = 24 * 3600e3;
+const toolPassChallenges = new Map();   // nonce -> { wallet, exp, purpose }
 const TOOL_PASS_CHALLENGE_TTL = 10 * 60e3;
 function toolPassMessage(wallet, nonce) {
   return `Cluck Norris — unlock the tools pass\nwallet: ${wallet}\nnonce: ${nonce}\nThis only proves you own this wallet. It is NOT a transaction and grants no spending approval.`;
 }
-function issueToolPassChallenge(wallet) {
+function receiptMessage(wallet, nonce) {
+  return `Cluck Norris — sign in to the Airdropper\nwallet: ${wallet}\nnonce: ${nonce}\nThis only proves you own this wallet, so the public receipt of your drop is yours to write. It is NOT a transaction and grants no spending approval.`;
+}
+function issueToolPassChallenge(wallet, purpose) {
+  purpose = purpose === "receipt" ? "receipt" : "tools";
   const now = Date.now();
   for (const [n, c] of toolPassChallenges) if (c.exp < now) toolPassChallenges.delete(n);
   if (toolPassChallenges.size > 5000) throw new Error("too many open challenges — try again in a minute");
   const nonce = randomBytes(16).toString("hex");
-  toolPassChallenges.set(nonce, { wallet, exp: now + TOOL_PASS_CHALLENGE_TTL });
-  return { nonce, message: toolPassMessage(wallet, nonce), expiresAt: now + TOOL_PASS_CHALLENGE_TTL };
+  toolPassChallenges.set(nonce, { wallet, exp: now + TOOL_PASS_CHALLENGE_TTL, purpose });
+  return { nonce, purpose, message: purpose === "receipt" ? receiptMessage(wallet, nonce) : toolPassMessage(wallet, nonce), expiresAt: now + TOOL_PASS_CHALLENGE_TTL };
 }
-// Consumes the nonce on ANY attempt; returns true only when it exists, matches the wallet and is unexpired.
-function consumeToolPassChallenge(nonce, wallet) {
+// Consumes the nonce on ANY attempt; returns true only when it exists, matches the wallet AND the
+// purpose it was issued for, and is unexpired.
+function consumeToolPassChallenge(nonce, wallet, purpose) {
   const c = toolPassChallenges.get(nonce);
   if (c) toolPassChallenges.delete(nonce);
-  return !!(c && c.wallet === wallet && c.exp >= Date.now());
+  return !!(c && c.wallet === wallet && (c.purpose || "tools") === (purpose || "tools") && c.exp >= Date.now());
+}
+// The receipt route's gate: any valid session token proves its wallet (every one is issued only
+// after a signature or a payIntent minted from one). Returns the wallet, never a tier. Fails
+// CLOSED without the issuer key — this guards a write, unlike toolPassGate's fail-open reads.
+function receiptSessionGate(req) {
+  if (!process.env.PREMIUM_ACCESS_KEY) return { ok: false, status: 503, error: "receipt_sessions_unavailable", detail: "The receipt service cannot verify sessions right now. The tokens still send; the receipt can be recorded later." };
+  const raw = String(req.get("x-clkn-pass") || "").trim();
+  const m = /^t:([A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]+)$/.exec(raw);
+  if (!m) return { ok: false, status: 401, error: "receipt_session_required", detail: "Recording a public receipt needs the operator wallet to sign in first (a signature, not a transaction; no holdings, no payment)." };
+  const p = verifyToolPass(m[1]);
+  if (!p) return { ok: false, status: 401, error: "receipt_session_expired", detail: "The receipt sign-in has expired or is not valid — sign in again from the page." };
+  return { ok: true, wallet: p.w, via: p.v };
 }
 // A short-lived, wallet-bound credential handed to a wallet that just proved itself but did not
 // qualify, so the PAY path can redeem its payment without a second signature prompt.
@@ -8520,22 +10060,24 @@ function rememberHolder(wallet, entry) {
   let drop = toolPassHolderCache.size - 5000;
   for (const w of toolPassHolderCache.keys()) { if (drop-- <= 0) break; toolPassHolderCache.delete(w); }
 }
-async function toolPassQualify(wallet) {
-  if (isToolComped(wallet)) return { ok: true, via: "comp" };
-  const cached = toolPassHolderCache.get(wallet);
-  if (cached && Date.now() - cached.at < 5 * 60e3) return cached.ok ? { ok: true, via: "holder" } : { ok: false, ...cached.deny };
-  const priceUsd = toolGatePrice.usd || null;
-  if (!priceUsd) return { ok: true, via: "grace-price" };
-  let h;
-  try { h = await checkCLKNHolder(wallet); } catch (e) { h = { unavailable: true, error: e.message }; }
-  if (!h || h.unavailable) { console.warn("[tool-pass] balance read unavailable, failing open:", (h && h.error) || "no result"); return { ok: true, via: "grace-rpc" }; }
-  const needed = Math.ceil(TOOLGATE.usd / priceUsd);
-  const bal = Number(h.balance) || 0;
-  if (bal >= needed) { rememberHolder(wallet, { ok: true, at: Date.now() }); return { ok: true, via: "holder", balance: bal, needed }; }
-  const deny = { error: "insufficient_holdings", balance: bal, needed, holdUsd: TOOLGATE.usd, priceUsd,
-    detail: `The free tier needs about $${TOOLGATE.usd} of CLKN (~${needed.toLocaleString()} at the current price); that wallet holds ${Math.round(bal).toLocaleString()}. ${TOOLGATE.lamports / 1e9} SOL unlocks every heavy tool for ${TOOLGATE.days} days.` };
-  rememberHolder(wallet, { ok: false, at: Date.now(), deny });
-  return { ok: false, ...deny };
+async function toolPassQualify(wallet, doors) {
+  // The decision itself is lib/tool-pass-qualify.js (pure, unit-tested); this wires the reads.
+  // `doors` is what the client asked for — the Seeker app sends ["skr"]; nothing else does.
+  // The comp list is consulted INSIDE the lib before its cache (Codex, round 13 P2: a cached
+  // denial used to outrank a comp granted a minute later), and the lib caches only real answers
+  // — holders and verified denials — keyed by wallet + doors. rememberHolder keeps it bounded.
+  const d = TOOL_PASS_QUALIFY.normalizeDoors(doors);
+  if (d.includes("skr") && !toolGatePrice.skrUsd) { try { await refreshSkrPrice(Date.now()); } catch (_) {} }   // "missing" must mean unavailable, not still loading
+  return TOOL_PASS_QUALIFY.qualify({
+    wallet, doors: d, usd: TOOLGATE.usd, skrUsd: TOOLGATE.skrUsd,
+    prices: { clkn: toolGatePrice.usd || null, skr: toolGatePrice.skrUsd || null },
+    comped: isToolComped(wallet),
+    cache: { get: (k) => toolPassHolderCache.get(k), set: (k, v) => rememberHolder(k, v) },
+    readClkn: () => checkCLKNHolder(wallet),
+    readSkr: () => checkMintHolder(wallet, SKR_MINT),
+    terms: { lamports: TOOLGATE.lamports, days: TOOLGATE.days },
+    log: (m) => console.warn("[tool-pass] " + m),
+  });
 }
 async function toolPassGate(req) {
   if (/^(1|true|yes)$/i.test(process.env.TOOLGATE_OFF || "")) return { ok: true, via: "gate-off" };
@@ -8549,9 +10091,11 @@ async function toolPassGate(req) {
   if (!m) return { ok: false, status: 403, error: "bad_pass", detail: "Unrecognised pass proof — unlock again from the page." };
   const p = verifyToolPass(m[1]);
   if (!p) return { ok: false, status: 403, error: "pass_expired", detail: "That tools pass has expired or is not valid — unlock again from the page." };
+  if (p.v === "receipt") return { ok: false, status: 403, error: "bad_pass", detail: "That is an Airdropper receipt sign-in, not a tools pass — unlock the tools pass from the page." };
   if (p.v === "paid" || p.v === "gate-off" || p.v === "grace-price" || p.v === "grace-rpc") return { ok: true, via: p.v, wallet: p.w };
-  // Holder and comped tokens stay honest: the free tier is "while you hold", re-read live.
-  const q = await toolPassQualify(p.w);
+  // Holder and comped tokens stay honest: the free tier is "while you hold", re-read live —
+  // through the same door the token came from (a website session never grows an SKR door).
+  const q = await toolPassQualify(p.w, TOOL_PASS_QUALIFY.doorsForVia(p.v));
   if (q.ok) return { ok: true, via: q.via, wallet: p.w };
   const { ok, ...deny } = q;
   return { ok: false, status: 403, ...deny };
@@ -8578,7 +10122,7 @@ app.get("/api/tool-gate/challenge", rateLimit("pay", { windowMs: 60000, max: 30 
   res.setHeader("Cache-Control", "no-store");
   const wallet = String(req.query.wallet || "").trim();
   if (!SOL_ADDR_RE.test(wallet)) return res.status(400).json({ success: false, error: "need wallet" });
-  try { return res.status(200).json({ success: true, ...issueToolPassChallenge(wallet) }); }
+  try { return res.status(200).json({ success: true, ...issueToolPassChallenge(wallet, String(req.query.purpose || "")) }); }
   catch (e) { return res.status(503).json({ success: false, error: e.message }); }
 });
 // POST /api/tool-gate/session — the only issuer of tools-pass tokens (see the block above).
@@ -8596,11 +10140,22 @@ app.post("/api/tool-gate/session", rateLimit("pay", { windowMs: 60000, max: 30 }
     if (!String(b.paySig || "").trim()) return res.status(400).json({ success: false, error: "pay intent needs a payment signature" });
   } else {
     if (!message || !signature) return res.status(400).json({ success: false, error: "need wallet, message, signature" });
+    // The RECEIPT sign-in (see RECEIPT_MSG_RE): its own message, its own challenge purpose, and
+    // it ends here — a "receipt" token, never a tools pass, no holdings read, no payment leg.
+    const rm = RECEIPT_MSG_RE.exec(message);
+    if (rm) {
+      if (rm[1] !== wallet) return res.status(400).json({ success: false, error: "message does not match wallet" });
+      if (!consumeToolPassChallenge(rm[2], wallet, "receipt")) return res.status(400).json({ success: false, error: "challenge missing, expired or already used — request a new one" });
+      if (message !== receiptMessage(wallet, rm[2])) return res.status(400).json({ success: false, error: "message does not match the issued challenge" });
+      if (!verifySolanaSignature(message, signature, wallet)) return res.status(401).json({ success: false, error: "Signature did not verify" });
+      try { traction.recordWalletConnect(kv, { source: "receipt", wallet }); } catch (_) { /* counter only */ }
+      return res.status(200).json({ success: true, via: "receipt", pass: "t:" + issueToolPass(wallet, "receipt", RECEIPT_SESSION_TTL), days: 1 });
+    }
     const mm = TOOL_PASS_MSG_RE.exec(message);
     if (!mm || mm[1] !== wallet) return res.status(400).json({ success: false, error: "message does not match wallet" });
     // The challenge is consumed on this attempt no matter what follows: a signed message is
     // good for exactly one session request.
-    if (!consumeToolPassChallenge(mm[2], wallet)) return res.status(400).json({ success: false, error: "challenge missing, expired or already used — request a new one" });
+    if (!consumeToolPassChallenge(mm[2], wallet, "tools")) return res.status(400).json({ success: false, error: "challenge missing, expired or already used — request a new one" });
     if (message !== toolPassMessage(wallet, mm[2])) return res.status(400).json({ success: false, error: "message does not match the issued challenge" });
     if (!verifySolanaSignature(message, signature, wallet)) return res.status(401).json({ success: false, error: "Signature did not verify" });
   }
@@ -8633,9 +10188,12 @@ app.post("/api/tool-gate/session", rateLimit("pay", { windowMs: 60000, max: 30 }
     if (!r.ok) return res.status(r.status || 200).json({ success: false, error: r.error, retry: !!r.retry, lamports: r.lamports, needed: r.needed });
     return res.status(200).json({ success: true, via: "paid", recovered: r.recovered, lamports: r.lamports, termDays: r.termDays, pass: "t:" + issueToolPass(wallet, "paid", r.ttlMs), days: r.days });
   }
-  const q = await toolPassQualify(wallet);
+  // `doors`: the extra free-tier doors this client offers. The Seeker app sends ["skr"]
+  // (docs/SEEKER_APP_PLAN.md §7); the website and the store editions send nothing. A product
+  // boundary, not a security one — see lib/tool-pass-qualify.js.
+  const q = await toolPassQualify(wallet, b.doors);
   if (!q.ok) { const { ok, ...deny } = q; return res.status(200).json({ success: false, ...deny, payIntent: issuePayIntent(wallet) }); }
-  const ttl = q.via === "comp" ? 30 * dayMs : q.via === "holder" ? TOOLGATE.days * dayMs : 1 * dayMs;   // grace = 1 day, like the client's old grace grant
+  const ttl = q.via === "comp" ? 30 * dayMs : (q.via === "holder" || q.via === "holder-skr") ? TOOLGATE.days * dayMs : 1 * dayMs;   // grace = 1 day, like the client's old grace grant
   return res.status(200).json({ success: true, via: q.via, balance: q.balance, needed: q.needed, pass: "t:" + issueToolPass(wallet, q.via, ttl), days: Math.round(ttl / dayMs) });
 });
 // One line per gated route: answers the JSON the page renders, or null to continue.
@@ -8916,30 +10474,33 @@ app.get("/api/tool-gate/config", async (req, res) => {
     toolGatePrice.p = (async () => {
       try {
         const ov = await tokenOverviewData(CLKN_MINT_ADDR);
-        const fresh = ov && Number(ov.priceUsd) > 0 ? Number(ov.priceUsd) : 0;
-        if (!fresh) { console.warn("[tool-gate] price refresh returned no usable CLKN price"); return; }
         // Sanity band: a single thin-pool tick 10x off must not repin the paywall threshold.
         // The band only applies against a RECENT good price (<6h) so a genuinely moved market
-        // can still re-anchor once the last-good value ages out.
-        const lastAt = Number(kv.get("toolGateClknUsdAt", 0)) || 0;
-        if (toolGatePrice.usd && now - lastAt < 6 * 3600e3
-            && (fresh > toolGatePrice.usd * 10 || fresh < toolGatePrice.usd / 10)) {
-          console.warn(`[tool-gate] rejected implausible CLKN price ${fresh} (last good ${toolGatePrice.usd})`);
-          return;
-        }
-        toolGatePrice.usd = fresh;
-        kv.set("toolGateClknUsd", fresh); kv.set("toolGateClknUsdAt", now);
+        // can still re-anchor once the last-good value ages out. One rule for both mints:
+        // lib/tool-pass-qualify.js acceptPrice() (finite and positive first, then the band).
+        const a = TOOL_PASS_QUALIFY.acceptPrice({ fresh: ov && ov.priceUsd, last: toolGatePrice.usd, lastAt: kv.get("toolGateClknUsdAt", 0), now });
+        if (!a.ok) { console.warn("[tool-gate] CLKN price refresh rejected: " + a.reason); return; }
+        toolGatePrice.usd = a.price;
+        kv.set("toolGateClknUsd", a.price); kv.set("toolGateClknUsdAt", now);
       } catch (e) { console.warn("[tool-gate] price refresh failed:", e.message); }
       finally { toolGatePrice.p = null; }
     })();
+    // SKR, for the Seeker app's door, refreshed beside CLKN but independently: a Jupiter
+    // hiccup on one mint never costs the other its price. Same sanity band, same kv last-known-good.
+    refreshSkrPrice(now);
   }
   if (toolGatePrice.p && !toolGatePrice.usd) { try { await toolGatePrice.p; } catch (_) {} }
   const priceUsd = toolGatePrice.usd || null;
+  const skrUsd = toolGatePrice.skrUsd || null;
   return res.json({
     success: true, enabled: true, holdUsd: TOOLGATE.usd, priceUsd,
     clknNeeded: priceUsd ? Math.ceil(TOOLGATE.usd / priceUsd) : null,
     lamports: TOOLGATE.lamports, days: TOOLGATE.days,
     receiver: SOL_UNLOCK_WALLET, mint: CLKN_MINT_ADDR,
+    // The Seeker app's door: its OWN $ figure (holdUsd here, TOOLGATE.skrUsd) in SKR, live-priced.
+    // A client that does not offer the door ignores this block; a null skrNeeded means "no price
+    // right now" (the app says so).
+    skr: { mint: SKR_MINT, holdUsd: TOOLGATE.skrUsd, priceUsd: skrUsd, skrNeeded: skrUsd ? Math.ceil(TOOLGATE.skrUsd / skrUsd) : null, door: "skr" },
   });
 });
 // ── /host-image: owner's permanent image host (Arweave via the funded Turbo key) ─────────────
@@ -9919,7 +11480,23 @@ const ENGINE_ARM_TABLE = [
     }),
     catchShape: (e) => ({ ok: false, error: "server_error", detail: e.message }),
   },
+  {
+    id: "bullen", route: "/api/bullen-engine", armed: bullenEngineArmed, setArmed: bullenEngineSetArmed, hardKilled: bullenHardKilled,
+    offEnv: "BULLEN_ENGINE_OFF", beforeArm: bullenEngineConfigRatchet, walletShared: true,
+    noOperatorError: "no_operator", noOperatorDetail: "the CUNA engine wallet key (MM_OPERATOR_SECRET_CUNA) is not loaded — nothing can sign.",
+    cfgFallbackEmpty: true,
+    fields: (cfg) => ({
+      pair: cfg.pair, widthPct: cfg.widthPct, solWidthPct: cfg.solWidthPct, jupEnabled: cfg.jupEnabled,
+      feeTierPct: cfg.feeTierPct, maxUsd: cfg.maxUsd, solMaxSol: cfg.solMaxSol, buybackEnabled: cfg.buybackEnabled,
+    }),
+    catchShape: (e) => ({ ok: false, error: e.message }),
+  },
 ];
+// walletShared entries (cuna/dnc/rose/bullen — see walletConflictFor above) refuse to arm while
+// a SIBLING on the same operator wallet is armed or unpaused. Set on all four so the guard is
+// symmetric: arming bullen refuses while cuna/dnc/rose are live on that wallet, and arming any
+// of THEM refuses while bullen is live — added retroactively to the pre-existing three entries.
+for (const e of ENGINE_ARM_TABLE) if (["cuna", "dnc", "rose"].includes(e.id)) e.walletShared = true;
 function registerEngineArmRoute(entry) {
   app.all(entry.route, adminGuarded(ADMIN_404, { noStore: true }), (req, res) => {
     if (mutatingGetRefused(req, res, ["on", "off"])) return;   // arming a liquidity engine is never a link unfurl away
@@ -9927,7 +11504,14 @@ function registerEngineArmRoute(entry) {
       if (req.query.on === "1") {
         if (entry.hardKilled()) return res.json({ ok: false, error: "hard_killed", detail: `${entry.offEnv}=1 is set in Railway — clear it first.` });
         if (entry.beforeArm) entry.beforeArm();   // ROSE's ratchet: shape asserted BEFORE the first armed tick can deploy
+        // No-operator is the more fundamental blocker (a Railway config gap, unrelated to any
+        // other engine) — check it before the wallet-conflict check so that error surfaces first
+        // when both are true; a wallet conflict alone (operator present) is checked after.
         if (!whirlpoolMM.vault.operatorPubkey(entry.id)) return res.json({ ok: false, error: entry.noOperatorError, detail: entry.noOperatorDetail });
+        if (entry.walletShared) {
+          const conflict = walletConflictFor(entry.id);
+          if (conflict) return res.json({ ok: false, error: "wallet_conflict", detail: conflict.reason });
+        }
         entry.setArmed(true);
       } else if (req.query.off === "1") {
         entry.setArmed(false);
@@ -9944,6 +11528,21 @@ function registerEngineArmRoute(entry) {
 }
 for (const entry of ENGINE_ARM_TABLE) registerEngineArmRoute(entry);
 
+// GET /api/bullen-bootstrap?key=…[&maxImpact=1.5][&maxSlices=6]  → dry-run plan (live quotes,
+// no signing). POST the same + &run=1 to execute. "The client sends one token and we take care
+// of the rest" (owner, 2026-09-25): converts whatever USDC (+ SOL gas) the shared operator
+// wallet holds into the four legs bullen's two pools need — see vault.bootstrap() for the math.
+// Idempotent: safe to call again after a partial run, or just to re-check the plan.
+app.all("/api/bullen-bootstrap", adminGuarded(ADMIN_404, { noStore: true }), async (req, res) => {
+  if (mutatingGetRefused(req, res, ["run"])) return;
+  try {
+    const maxImpactPct = req.query.maxImpact != null ? Math.max(0.1, Math.min(10, Number(req.query.maxImpact) || 1.5)) : 1.5;
+    const maxSlices = req.query.maxSlices != null ? Math.max(1, Math.min(12, parseInt(req.query.maxSlices, 10) || 6)) : 6;
+    const out = await whirlpoolMM.vault.bootstrap({ projectId: "bullen", dryRun: req.query.run !== "1", maxImpactPct, maxSlices });
+    res.json(out);
+  } catch (e) { res.status(500).json({ ok: false, error: e.message || "bootstrap failed" }); }
+});
+
 app.all("/api/cuna-giveaway/admin", adminGuarded(ADMIN_404, { noStore: true }), async (req, res) => {
   // Deep dive 2026-09-17 P0-002: this was the one CUNA admin route the 2026-09-05 mutating-GET
   // audit missed — &draw=1 spun the wheel and &payout=1&run=1 SENT PRIZE TOKENS on a pasted link.
@@ -9952,12 +11551,21 @@ app.all("/api/cuna-giveaway/admin", adminGuarded(ADMIN_404, { noStore: true }), 
   // stay reads.
   if (mutatingGetRefused(req, res, ["reset", "mint", "pool", "symbol", "chat", "min", "display", "exclude", "start", "end", "holdend",
     "mode", "bonus", "entrymode", "dq", "undq", "scan", "every", "replaceon", "replaceoff", "pinon", "pinoff", "board", "boardoff", "boardon",
-    "draw", "run", "sweep", "unpay"])) return;
+    "draw", "run", "sweep", "unpay", "rewind"])) return;
   const q = req.query;
   const deps = { heliusKey: process.env.HELIUS_API_KEY, heliusEnhancedBatched };
   const ms = (v) => { if (v == null || v === "") return undefined; const n = Number(v); return Number.isFinite(n) && n > 1e11 ? n : Date.parse(String(v)) || undefined; };
   try {
-    if (q.reset === "1") return res.json(cunaGiveaway.resetLedger());
+    if (q.reset === "1") {
+      const reset = cunaGiveaway.resetLedger();
+      // CATCH UP BEFORE ANSWERING (owner, 2026-09-24: "nothing should take 100 minutes ever") — a
+      // reset reopens the whole promo's tape, and the scheduler's own 8-slices/5-min pace would
+      // otherwise take ~100 minutes to re-scan a 14h window. Budgeted under Cloudflare's ~100s edge
+      // timeout; if it doesn't reach upToDate, the scheduler's self-heal finishes it within the next
+      // tick or two (see the 5-minute setInterval below).
+      const catchUp = await cunaGiveaway.catchUp(deps, { budgetMs: 75000 });
+      return res.json({ ...reset, catchUp });
+    }
     const patch = {};
     if (q.mint) patch.mint = String(q.mint);
     if (q.pool) patch.pool = String(q.pool);
@@ -9991,6 +11599,19 @@ app.all("/api/cuna-giveaway/admin", adminGuarded(ADMIN_404, { noStore: true }), 
       rpcUrl: process.env.HELIUS_API_KEY ? `https://mainnet.helius-rpc.com/?api-key=${process.env.HELIUS_API_KEY}` : undefined,
     });
     if (q.scan === "1") out.scan = await cunaGiveaway.scanOnce(deps);
+    // &rewind=<ISO|unix ms|unix s> moves the scan cursor BACK so the next &scan=1 (or the 5-minute
+    // tick) re-walks a stretch of tape it already retired. 2026-09-24: a wallet's buys landed
+    // seconds before a scan tick and Helius's enhanced parse had not caught up yet — the tape
+    // reported the slice as fully covered (no missing signature) with no usable trade in it, so
+    // the incremental scanner retired the slice and the buys were gone for good. Safe to repeat:
+    // it only moves cursorMs, and a re-scan cannot double-credit a signature already recorded.
+    if (q.rewind !== undefined) {
+      out.rewind = cunaGiveaway.rewindCursor(String(q.rewind));
+      // Same reasoning as &reset=1 above: catch up immediately rather than leaving the reopened
+      // stretch to the scheduler's own pace. Only worth running if the rewind actually moved the
+      // cursor back — a bad_time refusal has nothing to catch up on.
+      if (out.rewind && out.rewind.ok) out.catchUp = await cunaGiveaway.catchUp(deps, { budgetMs: 75000 });
+    }
     if (q.trace === "1") out.trace = await cunaGiveaway.traceOutbound(deps, { hops: 2 });
     if (q.every !== undefined) { cunaGiveaway.configure({ boardEveryMin: Math.max(5, Number(q.every) || 5) }); out.config = cunaGiveaway.config(); }
     if (q.replaceon === "1") { cunaGiveaway.configure({ boardReplace: true }); out.config = cunaGiveaway.config(); }
@@ -10111,11 +11732,25 @@ setInterval(() => {
     const now = Date.now();
     if (now < c.startMs) return;
     if (c.endMs && now > c.endMs + 15 * 60 * 1000) return;   // grace period, then stop
-    const r = await cunaGiveaway.scanOnce({ heliusKey: process.env.HELIUS_API_KEY, heliusEnhancedBatched });
+    const deps = { heliusKey: process.env.HELIUS_API_KEY, heliusEnhancedBatched };
+    let r = await cunaGiveaway.scanOnce(deps);
     if (r && r.ok && (r.newEntries || r.newDq)) {
       console.log(`[cuna-giveaway] +${r.newEntries} entries, +${r.newDq} dq (behind ${Math.round((r.behindMs || 0) / 60000)}m)`);
     } else if (r && !r.ok) {
       console.warn("[cuna-giveaway] scan:", r.error, r.detail || "");
+    }
+    // SELF-HEAL (owner, 2026-09-24: "nothing should take 100 minutes ever"). At 8 slices per call
+    // and a 5-minute cadence, a backlog left by a &rewind= or &reset=1 would otherwise take the
+    // scheduler's own ~100 minutes to re-scan. Once behind by more than 2 slice-widths (20 min),
+    // drive it down immediately instead of waiting tick after tick — budgeted so one tick never
+    // runs long, and the next tick (or this same self-heal) finishes whatever is left.
+    if (r && r.ok && (r.behindMs || 0) > 2 * cunaGiveaway.SLICE_MS) {
+      const beforeMin = Math.round(r.behindMs / 60000);
+      const cu = await cunaGiveaway.catchUp(deps, { budgetMs: 120000 });
+      const afterMin = Math.round((cu.behindMs != null ? cu.behindMs : r.behindMs) / 60000);
+      console.log(`[cuna-giveaway] catching up: behind ${beforeMin}min → ${afterMin}min in ${cu.calls} calls`);
+      if (!cu.ok) console.warn("[cuna-giveaway] catchUp:", cu.error, cu.detail || "");
+      r = { ...r, behindMs: cu.behindMs != null ? cu.behindMs : r.behindMs, upToDate: cu.upToDate };
     }
     // Owner's ask: refresh the room's board every 5 minutes, each refresh a NEW message with the
     // previous one deleted (tg-test &replaceMsg) so it stays at the bottom of the chat instead of
@@ -11677,6 +13312,11 @@ app.get("/api/cuna-stake/wallet", async (req, res) => {
       if (!b || b.state !== "pending" || !b.amounts || !b.amounts[addr] || (b.sent && b.sent[addr])) continue;
       try { pendingRaw += BigInt(b.amounts[addr]); } catch (_) {}
     }
+    // No `journal`/`projectId` here on purpose: this is the dedicated CUNA desk (crash P1-4 /
+    // CLAUDE.md "CUNA on the Hub — HELD, owner 2026-09-17: do not duplicate cuna yet"). It reads
+    // the raw cunaStake* keys directly rather than going through a registry project, and its own
+    // payout route (below) never writes a settlement journal entry — passing one here would just
+    // consult an empty set. Leave this desk exactly as it is until CUNA is registered.
     const owedRaw = pay.owedNow({ days, paid: paidMap, pending: batchMap })[addr] || 0n;
     const claim = s.claimableFor({ accruedRaw: owedRaw.toString(), locks: mine, nowUnix });
     let earningRaw = 0n, readyRaw = 0n, totalRaw = 0n;
@@ -12455,6 +14095,9 @@ async function cunaPayoutChecks(batch, { days, paid, batches }) {
 
   // 1. Conservation: everything ever credited == owed + held in pending batches + paid. This is
   //    the check the old verifier script compared to itself; here it compares to the ledger.
+  //    No `journal`/`projectId`: this is the dedicated, pre-registry CUNA payout desk (CLAUDE.md
+  //    "CUNA on the Hub — HELD, owner 2026-09-17") — it never writes a settlement journal entry,
+  //    so consulting one here would compare against an empty set for no benefit.
   const owed = pay.owedNow({ days, paid, pending: batches });
   let held = 0n;
   for (const b of Object.values(batches)) if (b && b.state === "pending") held += sum(pay.remainingOf(b));
@@ -12660,6 +14303,8 @@ app.all("/api/cuna-stake/payout", async (req, res) => {
       }
     }
 
+    // No `journal`/`projectId`: the dedicated CUNA payout desk (CLAUDE.md "CUNA on the Hub —
+    // HELD") never writes a settlement journal entry — see the comment on cunaPayoutChecks above.
     const owed = pay.owedNow({ days, paid, pending: batches });
 
     let created = null, note = null;
@@ -12903,6 +14548,21 @@ async function getSheetRows() {
   return data.values || [];
 }
 
+// Any mint, same read and the same outage contract as checkCLKNHolder below: an RPC error is
+// `unavailable`, never a zero. No comp short-circuit here — comp is decided before any read
+// (lib/tool-pass-qualify.js), so this is a plain balance.
+async function checkMintHolder(wallet, mint) {
+  try {
+    const url = `https://mainnet.helius-rpc.com/?api-key=${process.env.HELIUS_API_KEY}`;
+    const response = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ jsonrpc: "2.0", id: "holder-check", method: "getTokenAccountsByOwner", params: [wallet, { mint }, { encoding: "jsonParsed" }] }) });
+    const data = await response.json();
+    if (!data || !data.result || !Array.isArray(data.result.value)) return { balance: 0, unavailable: true, error: (data && data.error && data.error.message) || "no result" };
+    let balance = 0;
+    for (const a of data.result.value) balance += Number(a && a.account && a.account.data && a.account.data.parsed && a.account.data.parsed.info && a.account.data.parsed.info.tokenAmount && a.account.data.parsed.info.tokenAmount.uiAmount) || 0;
+    return { balance };
+  } catch (e) { return { balance: 0, unavailable: true, error: e.message }; }
+}
 async function checkCLKNHolder(wallet) {
   // Operator comp: a wallet on the all-tools free-access list (toolCompWallets, managed via
   // /api/tool-comp) is treated as a full holder on EVERY balance-gated tool — premium forensics,
@@ -13519,6 +15179,42 @@ app.get("/api/wallet-checkup", async (req, res) => {
 // can show, and make the user confirm, the USD VALUE being destroyed before any burn.
 // READ-ONLY: it never builds or signs anything — the client builds the burn+close tx and
 // the user's own wallet signs it. Frozen accounts are flagged (can't be burned/closed).
+//
+// ── surplus rent (WithdrawExcessLamports), added 2026-09-25 ─────────────────────────────
+// A rent PARAMETER cut (most recently the p-token/SIMD-0266 rollout) lowers the network's
+// rent-exempt MINIMUM without touching what an EXISTING account already deposited — so an
+// account opened before the cut can sit on more lamports than today's rule requires, on top
+// of (not instead of) its ordinary "close it, get everything back" reclaim above. The token
+// program's WithdrawExcessLamports instruction (opcode 38, both programs) lets the owner pull
+// that surplus WITHOUT closing the account or touching its token balance. This never hardcodes
+// a rent figure (CLAUDE.md: "more rent cuts are coming") — the minimum is read live per account
+// from its own on-chain byte length, cached briefly by length since the minimum only moves on a
+// protocol change, not per request.
+const rentExemptMinCache = new Map(); // space(bytes) -> { lamports, at }
+const RENT_EXEMPT_CACHE_MS = 60 * 60 * 1000; // an hour — this is a network PARAMETER, not per-account state
+// Its OWN short timeout (3s, not the 15s the account-read calls in this route use) and its OWN
+// fetch — this lookup is cached and near-static, so it must never hold up the ordinary burn/
+// reclaim scan as long as a real account read is allowed to (adversarial review on PR #443, P3-8).
+// lib/rent-surplus.js's computeSurplusForAccounts calls several of these concurrently.
+const RENT_EXEMPT_LOOKUP_TIMEOUT_MS = 3000;
+async function rentExemptMinimumFor(rpcUrl, space) {
+  const now = Date.now();
+  const cached = rentExemptMinCache.get(space);
+  if (cached && (now - cached.at) < RENT_EXEMPT_CACHE_MS) return cached.lamports;
+  const r = await fetch(rpcUrl, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ jsonrpc: "2.0", id: "getMinimumBalanceForRentExemption", method: "getMinimumBalanceForRentExemption", params: [space] }),
+    signal: AbortSignal.timeout(RENT_EXEMPT_LOOKUP_TIMEOUT_MS),
+  });
+  const d = await r.json();
+  const lamports = Number(d && d.result);
+  if (!Number.isFinite(lamports) || lamports <= 0) {
+    if (cached) return cached.lamports;   // stale-but-real beats nothing
+    throw new Error("bad getMinimumBalanceForRentExemption response");
+  }
+  rentExemptMinCache.set(space, { lamports, at: now });
+  return lamports;
+}
 app.get("/api/burn-scan", async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Cache-Control", "no-store");
@@ -13551,6 +15247,16 @@ app.get("/api/burn-scan", async (req, res) => {
           rentLamports: Number(acc.account?.lamports) || 0,   // exact reclaimable rent for THIS account
           frozen: info.state === "frozen",                    // frozen accounts can't be burned/closed
           delegated: !!info.delegate,                          // a delegate has approval on this account
+          // Both fields the surplus job needs. `space` is the account's own byte length, straight off
+          // the RPC's account envelope (present alongside `data` even under jsonParsed encoding) — NEVER
+          // assumed as 165, because a Token-2022 account with extensions (immutableOwner, etc.) is a
+          // different length and a wrong length would misprice its rent-exempt minimum. `isNative` is
+          // the token program's OWN flag for a wrapped-SOL account (info.isNative) — WithdrawExcessLamports
+          // refuses those (NativeNotSupported); trust the program's flag rather than re-deriving it from
+          // a hardcoded wSOL mint string here.
+          space: Number(acc.account?.space ?? acc.account?.data?.space) || 0,
+          isNative: !!info.isNative,
+          owner: info.owner || null,   // should always equal `wallet` (the RPC filter) — carried for lib/rent-surplus's defense-in-depth check
         });
       }
     }
@@ -13558,8 +15264,22 @@ app.get("/api/burn-scan", async (req, res) => {
     const list = accounts.slice(0, 200);
     const mints = [...new Set(list.map((a) => a.mint))];
     const priced = mints.length ? await priceTokensBatch(mints) : {};
+
+    // The surplus job's whole read side lives in lib/rent-surplus.js (pure, unit-tested with an
+    // injected lookup — no network in the test). `surplusAvailable` is false — never a silent
+    // "everything's fine" a client could read as "nothing to reclaim" — when any non-native
+    // account's byte length is missing/unreadable, when a length's live rent-exempt lookup
+    // failed, or when more distinct lengths exist than the cap allows (adversarial review on PR
+    // #443, findings 3/8). `rentExemptMinimumFor` has its own short (3s) timeout and every
+    // distinct length is looked up CONCURRENTLY, so this never holds up the ordinary burn/reclaim
+    // scan the way the old 15s-per-length serial loop could.
+    const surplusResult = await computeSurplusForAccounts(list, wallet, (sp) => rentExemptMinimumFor(rpcUrl, sp));
+    const surplusAvailable = surplusResult.surplusAvailable;
+    const surplusLamportsTotal = surplusResult.surplusLamportsTotal;
+    const surplusBySpaceOrder = surplusResult.accounts; // same order/length as `list` — zip by index below
+
     let rentLamportsTotal = 0, valueUsdTotal = 0;
-    const out = list.map((a) => {
+    const out = list.map((a, idx) => {
       const p = priced[a.mint] || {};
       const priceUsd = Number(p.priceUsd) || 0;
       const valueUsd = Number((a.uiAmount * priceUsd).toFixed(4));
@@ -13571,12 +15291,29 @@ app.get("/api/burn-scan", async (req, res) => {
       // token unless we say so. The client uses this to warn "value UNKNOWN, not zero" instead of
       // flashing a false "nothing of value is destroyed" all-clear over a bag that may be worth money.
       const priceKnown = Object.prototype.hasOwnProperty.call(priced, a.mint);
+      // Surplus fields (rentExemptLamports/surplusLamports/surplusEligible) — null/false, never a
+      // fabricated 0, when the minimum couldn't be read for this account's space. Wrapped SOL is
+      // excluded outright: WithdrawExcessLamports refuses it (NativeNotSupported).
+      const { rentExemptLamports, surplusLamports, surplusEligible } = surplusBySpaceOrder[idx];
       return {
         ...a,
         symbol: p.symbol || null, name: p.name || null, logo: p.logo || null,
         priceUsd, valueUsd, priceKnown,
-        empty: a.uiAmount === 0,
-        isNft: a.decimals === 0 && a.uiAmount === 1,   // rough; NFT phase refines with mint supply
+        rentExemptLamports, surplusLamports, surplusEligible,
+        // ⚠️ "empty" comes from the BASE-UNIT STRING, never from uiAmount (adversarial review
+        // P1-6, 2026-09-21). `uiAmount` is `f64 | null` in the RPC schema, and `Number(null) || 0`
+        // above is 0 — so any account the node declines to ui-scale (the Token-2022
+        // withheld-transfer-fee case public/rent-reclaim-plan.js already documents by name, and
+        // fixed on that side) was classified EMPTY here. Firepit pre-selects every empty row —
+        // the only place in the app that pre-selects anything — and then tells the person "these
+        // accounts are empty, nothing of value is destroyed" over a bag that may hold a balance.
+        // The token program refuses to close a non-native account with a balance, so nothing was
+        // ever destroyed; what was wrong was the one sentence that is supposed to be
+        // load-bearing. The same rule was applied to the other half of this job and not to this
+        // one. An unreadable amount is NOT empty.
+        empty: /^[0-9]+$/.test(String(a.amountRaw)) && String(a.amountRaw) === "0",
+        // Same reason, same source: with decimals 0 a base-unit amount of "1" IS a uiAmount of 1.
+        isNft: a.decimals === 0 && String(a.amountRaw) === "1",   // rough; NFT phase refines with mint supply
       };
     });
     // Order: empty rent-only accounts first (always safe), then KNOWN values ascending. Non-empty
@@ -13593,11 +15330,41 @@ app.get("/api/burn-scan", async (req, res) => {
       count: out.length, capped,
       rentSolTotal: Number((rentLamportsTotal / 1e9).toFixed(6)),
       valueUsdTotal: Number(valueUsdTotal.toFixed(2)),
+      // surplusAvailable is false whenever ANY part of the surplus read couldn't be trusted (see
+      // computeSurplusForAccounts's header) — the client must show "couldn't check" rather than a
+      // false "0 to reclaim" (same rule as /api/seeker/reclaimable's RPC-failure posture).
+      surplusAvailable,
+      surplusLamportsTotal,
+      surplusSolTotal: Number((surplusLamportsTotal / 1e9).toFixed(6)),
       accounts: out,
     });
   } catch (e) {
     console.error("[burn-scan]", e.message);
     return res.status(500).json({ success: false, error: publicErrMsg(e) });
+  }
+});
+
+// ── Rent Reclaim — Seeker app increment 2, READ SIDE ONLY ───────────────────────────────────
+// Powers the Rent Reclaim pane in src/seeker. FREE and ungated — never put behind the tools pass
+// (this is safety/education-adjacent, same posture as Wallet Checkup, not a heavy forensic tool).
+// No auth, no wallet signature: it reads public chain state, so a connected signature buys
+// nothing a plain GET doesn't already have. lib/rent-reclaim.js has the full classification and
+// RPC-failure posture; this route only validates input and maps its result/errors onto HTTP.
+//
+// ⛔ Nothing here builds or signs a transaction. Signing is increment 3.
+app.get("/api/seeker/reclaimable", async (req, res) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Cache-Control", "no-store");
+  const wallet = String(req.query.wallet || "").trim();
+  if (!SOL_ADDR_RE.test(wallet)) return res.status(400).json({ success: false, status: "error", error: "Invalid wallet address" });
+  try {
+    const result = await scanReclaimable(wallet);
+    return res.status(200).json({ success: true, status: "ok", ...result });
+  } catch (e) {
+    // An RPC failure must read as "unavailable", never as "nothing reclaimable" — CLAUDE.md's
+    // rule for the tool gate applies just as hard to money-adjacent reads. Never a 200 here.
+    console.error("[seeker-reclaimable]", e.message);
+    return res.status(503).json({ success: false, status: "unavailable", wallet, error: "Could not read the chain right now — try again shortly." });
   }
 });
 
@@ -14086,7 +15853,7 @@ YOUR SCHOOL -- KNOW THIS COLD:
 - Built on Bags.fm, powered by the CLKN token on Solana
 - CLKN contract: DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS
 - Trade CLKN at: bags.fm or Jupiter
-- The school has 5 areas: The Incubator (beginner), School of Hard Knocks (14 lessons), the LP Lab, The Library, and Token Data
+- The school has 5 areas: The Incubator (beginner), School of Hard Knocks (16 lessons), the LP Lab, The Library, and Token Data
 
 THE CLKN INCUBATOR:
 - For complete beginners. 7 lessons covering wallets, tokens, on-ramps and off-ramps, DEXs, liquidity, market cap, and staying safe.
@@ -14096,7 +15863,7 @@ SCHOOL OF HARD KNOCKS:
 - 12 progressive lessons with a belt ranking system from Freshman to Emeritus
 - Topics: liquidity pools, tokenomics, MEV, on-chain research, rugs and scams, DeFi strategies and more
 - Each lesson ends in a quiz. Progress saves automatically.
-- Complete all 14 lessons to graduate, then submit your wallet for a permanent shareable transcript and an on-chain graduation NFT
+- Complete all 16 lessons to graduate, then submit your wallet for a permanent shareable transcript and an on-chain graduation NFT
 
 THE LP LAB (its own tab, not inside the Library):
 - 14 lessons on liquidity providing, from the fundamentals to building a real strategy
@@ -14105,12 +15872,26 @@ THE LP LAB (its own tab, not inside the Library):
 - Interactive calculators throughout: impermanent loss, AMM price impact, fee-vs-IL breakeven, capital efficiency, bin visualizer, DCA accumulation, LP-vs-HODL, strategy matcher
 - Shareable directly at clucknorris.app/lp-lab
 
-FREE TOOLS (all read-only, no wallet connect):
-- Wallet X-Ray -- any wallet's funding origin, every trade, and behavior signals
-- Holders -- who really holds a token: real wallets separated from LP pools, locks and program accounts, plus an airdrop-ready CSV
-- Trace -- one wallet's full history with one token
+FREE FOR EVERYONE -- no wallet, no signup:
 - Wallet Checkup -- scan any address for risky approvals, honeypot holdings and live mint/freeze authority, and revoke your own approvals right there (Security Coop merged into it)
 - The Jup Locker Room -- free non-custodial token locking for any Solana project
+- Ask Cluck (this conversation), the whole school, and the Library
+
+HEAVY TOOLS -- these need a CONNECTED WALLET and the unified tools pass (see CLKN TOKEN UTILITY
+below for the terms). Do NOT tell anyone these are free with no wallet; that was true before
+2026-08-18 and is not true now:
+- Wallet X-Ray -- a wallet's funding origin and the activity the scan can find
+- Holders -- who really holds a token: real wallets separated from LP pools, locks and program accounts, plus an airdrop-ready CSV
+- Trace -- one wallet's history with one token
+- The airdropper and Buy Special
+
+HONESTY ABOUT WHAT THESE TOOLS SEE -- this matters more than sounding impressive:
+- X-Ray and Trace are ACTIVITY SCANNERS. They can miss holdings and they do not see everything.
+  Never claim X-Ray sees all of a wallet's trades, or a complete balance -- it does not, and
+  people have been given wrong numbers by assuming it does.
+- The chain shows WHAT happened, never WHY. Report authorities, balances, approvals and lock
+  terms as facts. Never label a token safe, verified, a scam or a rug, and only call a wallet
+  "creator" or "team" when a launchpad API confirms it.
 
 NAVIGATION HELP -- HOW TO DIRECT PEOPLE:
 - Complete beginner? -> Start in the INCUBATOR tab
@@ -14138,7 +15919,7 @@ CLKN TOKEN UTILITY:
   SOL price buys a 7-day pass to all of them. Premium forensics is separate: 2,000,000 CLKN,
   re-checked live. You connect a wallet and the gate resolves itself -- nothing is sent by hand.
 - Hold CLKN to be eligible for airdrops and exclusive rewards
-- Graduate all 14 lessons and submit your wallet for a transcript and an on-chain graduation NFT
+- Graduate all 16 lessons and submit your wallet for a transcript and an on-chain graduation NFT
 
 FIRECHICKEN CONNECTION:
 - FireChicken (FCKN) was the original token that built the community on Bags.fm
@@ -15568,11 +17349,11 @@ HOW YOU ANSWER:
     const r = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-api-key": KEY, "anthropic-version": "2023-06-01" },
-      body: JSON.stringify({ model: "claude-sonnet-5", max_tokens: 950, thinking: { type: "disabled" }, system, messages }),
+      body: JSON.stringify({ model: "claude-sonnet-5-5", max_tokens: 950, thinking: { type: "between_tools" }, output_config: { effort: "high" }, system, messages }),
     });
     const data = await r.json();
-    if (data && data.content && data.content[0]) {
-      const reply = data.content[0].text.replace(/\*\*([^*]+)\*\*/g, "$1").replace(/\*([^*]+)\*/g, "$1").replace(/^#{1,3}\s/gm, "").trim();
+    if (claudeText(data)) {
+      const reply = claudeText(data).replace(/\*\*([^*]+)\*\*/g, "$1").replace(/\*([^*]+)\*/g, "$1").replace(/^#{1,3}\s/gm, "").trim();
       return res.status(200).json({ success: true, reply });
     }
     return res.status(500).json({ success: false, error: (data && data.error && data.error.message) || "Cluck went quiet — try again." });
@@ -15615,10 +17396,12 @@ async function renderLpCard(scan) {
   const pools = (scan.pools || []).filter((p) => p.feeTier != null);
   const best = pools[0];
   if (best) {
-    // Headline: best fee yield
+    // Headline: the best fees ÷ TVL ratio, labelled with its period (a 7-day average when the
+    // scanner has one, else 24h) — never "yield", which is a claim about what an LP earns.
     const yld = best.feeYield7dPctDay != null ? best.feeYield7dPctDay : best.feeYieldPctDay;
+    const yPeriod = best.feeYield7dPctDay != null ? "7D AVG" : "24H";
     ctx.fillStyle = "#6B7280"; ctx.font = "900 18px Oswald, sans-serif";
-    ctx.fillText("TOP FEE YIELD — " + String(best.dex || "").toUpperCase() + " · " + best.feeTier + "% FEE", 60, 248);
+    ctx.fillText("FEES ÷ TVL PER DAY (" + yPeriod + ") — " + String(best.dex || "").toUpperCase() + " · " + best.feeTier + "% FEE", 60, 248);
     ctx.font = "900 130px Oswald, sans-serif";
     const g = ctx.createLinearGradient(60, 280, 520, 420);
     g.addColorStop(0, "#6EE7B7"); g.addColorStop(1, "#10B981");
@@ -15646,7 +17429,7 @@ async function renderLpCard(scan) {
     // Mini ranking of the next pools
     let ry = 452;
     ctx.font = "900 15px Oswald, sans-serif"; ctx.fillStyle = "#6B7280";
-    ctx.fillText(pools.length + " POOLS WITH READ FEES · RANKED BY YIELD", 60, ry); ry += 26;
+    ctx.fillText(pools.length + " POOLS WITH READ FEES · RANKED BY FEES ÷ TVL", 60, ry); ry += 26;
     ctx.font = "18px Oswald, sans-serif";
     for (const p of pools.slice(0, 3)) {
       const py = p.feeYield7dPctDay != null ? p.feeYield7dPctDay : p.feeYieldPctDay;
@@ -16055,6 +17838,55 @@ app.get("/token-lock", (req, res) => {
 // /api/burn-scan data endpoint are served separately.
 app.get("/firepit", (req, res) => {
   res.sendFile(join(__dirname, "public", "firepit.html"));
+});
+
+// ── The Solana Room — a browsable, public, no-wallet reference room on how Solana actually
+// works (school section, not a tool). Explicit routes because public/ is only served through
+// the vite build's copy in dist/ — without these both 404 on a no-build boot. Static/free like
+// the rest of the school: no tools-pass gate, no wallet, no signup. Registered here (not under
+// /hub) because this room teaches Solana mechanics generally, independent of the Project Hub.
+app.get("/solana", (req, res) => {
+  res.sendFile(join(__dirname, "public", "solana-room.html"));
+});
+app.get("/solana/rent", (req, res) => {
+  res.sendFile(join(__dirname, "public", "solana-rent.html"));
+});
+app.get("/solana/wallet", (req, res) => {
+  res.sendFile(join(__dirname, "public", "solana-wallet.html"));
+});
+app.get("/solana/mint", (req, res) => {
+  res.sendFile(join(__dirname, "public", "solana-mint.html"));
+});
+app.get("/solana/buying", (req, res) => {
+  res.sendFile(join(__dirname, "public", "solana-buying.html"));
+});
+app.get("/solana/transfers", (req, res) => {
+  res.sendFile(join(__dirname, "public", "solana-transfers.html"));
+});
+app.get("/solana/fees", (req, res) => {
+  res.sendFile(join(__dirname, "public", "solana-fees.html"));
+});
+// Tier 2 — the bigger picture: what the chain is used for, what you actually own when you hold
+// it three different ways, where the ecosystem meets, and the safe copy of the domains people
+// get phished on. Each of these four pages carries its own "last checked" date because, unlike
+// the mechanics above, what they describe can go stale.
+app.get("/solana/uses", (req, res) => {
+  res.sendFile(join(__dirname, "public", "solana-uses.html"));
+});
+app.get("/solana/markets", (req, res) => {
+  res.sendFile(join(__dirname, "public", "solana-markets.html"));
+});
+app.get("/solana/events", (req, res) => {
+  res.sendFile(join(__dirname, "public", "solana-events.html"));
+});
+app.get("/solana/links", (req, res) => {
+  res.sendFile(join(__dirname, "public", "solana-links.html"));
+});
+// The Solana phone (owner ask, 2026-09-20). Dated like the rest of tier 2 — hardware specs, app
+// store terms and a token's supply schedule all go stale, and the impersonator section names two
+// live mint addresses that a reader is expected to check for themselves.
+app.get("/solana/phone", (req, res) => {
+  res.sendFile(join(__dirname, "public", "solana-phone.html"));
 });
 
 // ── Project Burn — burn PART of your own supply, on purpose, with a public receipt ──
@@ -16582,6 +18414,23 @@ app.get("/api/jupverify/admin/scorecard", adminGuarded(ADMIN_404_CAP), async (re
   res.json(out);
 });
 
+// Short receipt link for X — /b/<first 10 chars of the signature> → 301 /burn/<sig>.
+// X refused every burn celebration with a 403 (owner, 2026-09-28): the post carried the full
+// 88-character base58 transaction signature in its receipt URL, and X's crypto-address filter
+// (the same one that 403'd bare CAs in lesson posts, see CLKN_DEXSCREENER) reads a long base58
+// run as an address. Ten characters can't look like one. Resolves only a UNIQUE prefix of a
+// stored receipt; anything else is a 404, never a guess.
+const BURN_SHORT_LEN = 10;
+function burnShortUrl(sig) { return `https://clucknorris.app/b/${String(sig).slice(0, BURN_SHORT_LEN)}`; }
+app.get("/b/:code", (req, res) => {
+  const code = String(req.params.code || "");
+  if (!new RegExp(`^[1-9A-HJ-NP-Za-km-z]{${BURN_SHORT_LEN}}$`).test(code)) return res.status(404).type("text").send("not found");
+  const store = kv.get("burnReceipts", {}) || {};
+  const hits = Object.keys(store).filter((s) => s.startsWith(code));
+  if (hits.length !== 1) return res.status(404).type("text").send("not found");
+  res.redirect(301, `/burn/${hits[0]}`);
+});
+
 // Public burn receipt — server-rendered so it carries OG tags for a rich social share.
 app.get("/burn/:sig", (req, res) => {
   const sig = String(req.params.sig || "");
@@ -16748,6 +18597,61 @@ app.get("/cluck-wallet.js", (req, res) => {
   res.sendFile(join(__dirname, "public", "cluck-wallet.js"));
 });
 
+// public/rent-math.js — pure rent-math constants + formatting, shared by /solana/rent
+// (public/solana-rent.html) and the Seeker app's Rent Reclaim pane (src/seeker) as a single
+// source of truth (see that file's header for why it also gets require()'d server-side,
+// lib/rent-reclaim.js). Same no-cache posture as the other shared browser modules above so a fix
+// reaches every page on its next load, not up to 4h later.
+app.get("/rent-math.js", (req, res) => {
+  res.setHeader("Cache-Control", "no-cache, must-revalidate");
+  res.type("application/javascript");
+  res.sendFile(join(__dirname, "public", "rent-math.js"));
+});
+
+// public/rent-reclaim-plan.js — Rent Reclaim SIGNING decisions (Seeker app increment 3, see that
+// file's own header and docs/SEEKER_RECLAIM_SIGNING_SPEC.md). Same no-build-boot trap and same
+// no-cache posture as rent-math.js above: with no explicit route this 404s when seeker.html is
+// served without a prior `npm run build` (the public/-is-not-mounted-directly trap CLAUDE.md
+// documents), and a safety-rule fix must reach every load, not sit behind up to 4h of caching.
+app.get("/rent-reclaim-plan.js", (req, res) => {
+  res.setHeader("Cache-Control", "no-cache, must-revalidate");
+  res.type("application/javascript");
+  res.sendFile(join(__dirname, "public", "rent-reclaim-plan.js"));
+});
+
+// The sitewide browser runtime every page loads (the floating nav + its i18n and read-aloud
+// loaders, and the theme sheet) had NO explicit route: they were reachable only through the vite
+// build's copy in dist/, so a no-build boot (the CI a11y gate, `node server.js` on a fresh clone)
+// served every page without its nav landmark, language toggle or Listen button — exactly the
+// public/-is-not-mounted trap CLAUDE.md describes. Found by scripts/hub-a11y-test.cjs on
+// 2026-09-18: green with dist/, 24 failures without it. Same no-cache posture as the modules above.
+// clkn-dock-float.js joined on 2026-09-23: cluck-nav.js injects it as a separate file now (the
+// store editions ship it directly), so it needs the same no-build-boot route and cache posture.
+for (const f of ["cluck-nav.js", "i18n.js", "read-aloud.js", "clkn-dock-float.js"]) {
+  app.get("/" + f, (req, res) => {
+    res.setHeader("Cache-Control", "no-cache, must-revalidate");
+    res.type("application/javascript");
+    res.sendFile(join(__dirname, "public", f));
+  });
+}
+app.get("/theme.css", (req, res) => {
+  res.setHeader("Cache-Control", "no-cache, must-revalidate");
+  res.type("text/css");
+  res.sendFile(join(__dirname, "public", "theme.css"));
+});
+// The translation dictionaries (public/i18n/<lang>[.school|.locker].json) are fetched by i18n.js at
+// runtime on every page; with no explicit route they exist only through the vite build's copy in
+// dist/, so a no-build boot (the CI render job, `node server.js` on a fresh clone) served 404 and
+// every Hub page silently fell back to English — CC2's es/zh browser test caught it in CI on
+// 2026-09-18. Same trap and same fix as the nav/i18n/read-aloud/theme files above. The name is
+// allowlisted by regex, never taken from the request as a path.
+app.get(/^\/i18n\/([a-z]{2})(\.school|\.locker)?\.json$/, (req, res) => {
+  const name = req.params[0] + (req.params[1] || "") + ".json";
+  res.setHeader("Cache-Control", "public, max-age=300");
+  res.type("application/json");
+  res.sendFile(join(__dirname, "public", "i18n", name), (err) => { if (err && !res.headersSent) res.status(404).json({ ok: false, error: "not_found" }); });
+});
+
 // Unified tools pass (owner, 2026-08-18, for the app-store transition): hold $50 worth of
 // CLKN → every heavy tool free; else 0.05 SOL buys a 7-day ALL-TOOLS pass. One client module
 // drives the gate on X-Ray / Holders / Trace / Airdrop / Buy Special; quick safety tools and
@@ -16756,6 +18660,26 @@ app.get("/cluck-gate.js", (req, res) => {
   res.setHeader("Cache-Control", "no-cache, must-revalidate");
   res.type("application/javascript");
   res.sendFile(join(__dirname, "public", "cluck-gate.js"));
+});
+
+// Hub reproducibility sparkline (Colosseum roadmap §13 CC4) — shared by hub-status.html and
+// hub.html; the same public/-is-not-mounted-directly trap as the modules above (a no-build boot
+// served this file's 404 page as text/plain, which the browser then refused to execute as a
+// script — found the same way scripts/hub-a11y-test.cjs found the nav bundle's gap, this time by
+// scripts/reproducibility-history-test.cjs's own rendered-page check).
+app.get("/hub-sparkline.js", (req, res) => {
+  res.setHeader("Cache-Control", "no-cache, must-revalidate");
+  res.type("application/javascript");
+  res.sendFile(join(__dirname, "public", "hub-sparkline.js"));
+});
+
+// The Hub print sheet's QR encoder (Colosseum roadmap DD4) — a pure, no-network, no-library QR
+// generator (public/hub-qr.js) used by hub.html's ?print=1 mode. Same no-build-boot trap as the
+// modules above — an explicit route is required or a fresh clone 404s it before `npm run build`.
+app.get("/hub-qr.js", (req, res) => {
+  res.setHeader("Cache-Control", "no-cache, must-revalidate");
+  res.type("application/javascript");
+  res.sendFile(join(__dirname, "public", "hub-qr.js"));
 });
 
 // Shared airdrop machinery. Explicit routes (rather than relying on the vite
@@ -17396,6 +19320,57 @@ app.get("/api/owners-snapshot/admin", adminGuarded(ADMIN_404, { noStore: true })
   res.json({ ok: true, running: ownersSnapshot.running, queueLength: ownersSnapshot.queueLength, recent: ownersSnapshot.listRecent(30) });
 });
 
+// ── Holder snapshot history (Colosseum roadmap §8 X7) ────────────────────────────────────────
+// A dated, hashed record of each finished owners-snapshot run (lib/holders-snapshot.js), so a
+// project can show holder-count history and a reader can recompute the hash from the published
+// list. Read-only history of a public on-chain fact — NO tools-pass gate here (the crawl that
+// produced it is already holder-gated; this just serves what was recorded). Never wallets on
+// the series endpoint; the single-snapshot endpoint carries the capped top list only.
+const holdersSnapshot = require("./lib/holders-snapshot");
+// Rate-limited (Z3): the series read walks every retained snapshot for a mint (up to KEEP=90
+// rows each), heavier than the single-snapshot lookup below which is a direct match on one id.
+app.get("/api/holders/snapshots", rateLimit("hubheavy", { windowMs: 60000, max: 60 }), (req, res) => {
+  res.setHeader("Cache-Control", "public, max-age=60");
+  const mint = String(req.query.mint || "").trim();
+  if (!SOL_ADDR_RE.test(mint)) return res.status(400).json({ ok: false, error: "bad mint" });
+  try { return res.json({ ok: true, mint, snapshots: holdersSnapshot.series(kv, mint) }); }
+  catch (e) { return res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
+});
+// Diff between two recorded snapshots (Colosseum roadmap §11 AA3) — registered BEFORE the
+// single-id route above so a 3-segment path is never captured by the 1-segment one; verified
+// this actually matters (it doesn't in Express — a route with more path segments than
+// "/api/holders/snapshots/:id" simply never matches it either way) by
+// scripts/holders-snapshot-diff-test.cjs's route test, but the order is kept defensive regardless.
+// Exact same shape/gate as its siblings: SOL_ADDR_RE mint check, 404 for an unknown id, no pass
+// or wallet gate (read-only history of a public on-chain fact). Wallets are full in the JSON;
+// the page shortens them for display.
+app.get("/api/holders/snapshots/:a/diff/:b", (req, res) => {
+  res.setHeader("Cache-Control", "public, max-age=60");
+  const mint = String(req.query.mint || "").trim();
+  const idA = String(req.params.a || "").trim();
+  const idB = String(req.params.b || "").trim();
+  if (!SOL_ADDR_RE.test(mint)) return res.status(400).json({ ok: false, error: "bad mint" });
+  try {
+    const snapA = holdersSnapshot.getSnapshot(kv, mint, idA);
+    if (!snapA) return res.status(404).json({ ok: false, error: "no_such_snapshot" });
+    const snapB = holdersSnapshot.getSnapshot(kv, mint, idB);
+    if (!snapB) return res.status(404).json({ ok: false, error: "no_such_snapshot" });
+    const diff = holdersSnapshot.diffSnapshots(snapA, snapB);
+    return res.json({ ok: true, mint, diff });
+  } catch (e) { return res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
+});
+app.get("/api/holders/snapshots/:id", (req, res) => {
+  res.setHeader("Cache-Control", "public, max-age=60");
+  const mint = String(req.query.mint || "").trim();
+  const id = String(req.params.id || "").trim();
+  if (!SOL_ADDR_RE.test(mint)) return res.status(400).json({ ok: false, error: "bad mint" });
+  try {
+    const snap = holdersSnapshot.getSnapshot(kv, mint, id);
+    if (!snap) return res.status(404).json({ ok: false, error: "no_such_snapshot" });
+    return res.json({ ok: true, snapshot: snap });
+  } catch (e) { return res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
+});
+
 app.get("/trace", (req, res) => {
   res.sendFile(join(__dirname, "public", "trace.html"));
 });
@@ -17445,15 +19420,29 @@ app.post("/api/track", (req, res) => {
     const m = /^lesson_complete:([a-z0-9-]{1,48})$/.exec(String(b.event || "").toLowerCase());
     if (m && b.sid) schoolProgress.mark(b.sid, m[1], { backfill: b.bf === 1 || b.bf === "1" });
     // E6: the school → Hub bridge. The client only sends this after a learner who arrived via a
-    // Hub project's lessonHref (lib/hub/teach.js, public/hub.html) FINISHES one of the six
+    // Hub project's lessonHref (lib/hub/teach.js, public/hub.html) FINISHES one of the seven
     // locking lessons — see LOCK_LESSON_IDS in src/App.jsx. Anonymous sid only, never a wallet.
+    // BB5: an optional `lesson` field breaks the total down per lesson (e.g. "receipt") —
+    // lib/traction.js drops anything outside its own known-id set, so passing it through
+    // unvalidated here is safe; nothing untrusted ever becomes a stored key.
     const hlrM = /^hub_lesson_read:([a-z0-9-]{1,48})$/.exec(String(b.event || "").toLowerCase());
-    if (hlrM && b.sid) { try { traction.recordHubLessonRead(kv, { project: hlrM[1], sid: b.sid }); } catch (_) { /* counter only */ } }
+    if (hlrM && b.sid) {
+      const lesson = typeof b.lesson === "string" ? b.lesson.toLowerCase().slice(0, 48) : undefined;
+      try { traction.recordHubLessonRead(kv, { project: hlrM[1], sid: b.sid, lesson }); } catch (_) { /* counter only */ }
+    }
     // W9 part 2: the two "existing traffic → Hub" doors (COLOSSEUM_ROADMAP.md §W9 part 2).
     // "school" fires from the school landing/lesson-finish HubDemoDoor (src/App.jsx); "home"
     // fires from the homepage's project-operator tile (public/home.html). Anonymous sid only.
     const hdcM = /^hub_door_click:(school|home)$/.exec(String(b.event || "").toLowerCase());
     if (hdcM && b.sid) { try { traction.recordHubDoorClick(kv, { source: hdcM[1], sid: b.sid }); } catch (_) { /* counter only */ } }
+    // BB5: the receipt lesson's OWN finish-screen bridge (ReceiptLessonBridge, src/App.jsx) —
+    // `from`/`to` are checked against a fixed allowlist inside lib/traction.js, so an
+    // unrecognized value is dropped, not stored. Anonymous sid only, never a wallet.
+    if (String(b.event || "").toLowerCase() === "hub_bridge_click" && b.sid) {
+      const from = typeof b.from === "string" ? b.from.toLowerCase().slice(0, 48) : "";
+      const to = typeof b.to === "string" ? b.to.toLowerCase().slice(0, 48) : "";
+      try { traction.recordHubBridgeClick(kv, { from, to, sid: b.sid }); } catch (_) { /* counter only */ }
+    }
   } catch (_) {}
   return res.status(204).end();
 });
@@ -19839,7 +21828,9 @@ app.listen(PORT, () => {
     setInterval(marketCheckTick, 60 * 1000);
     // Daily Flow Recap — checked each minute, fires once per day at 00:00 UTC.
     if (RECAP_ENABLED) setInterval(recapTick, 60 * 1000);
-    setInterval(lockReportTick, 60 * 1000);
+    // Daily locked-supply report — RETIRED (owner, 2026-09-20); the scheduler only registers
+    // if LOCK_REPORT_ON=1 is set in the env. The new-lock watcher below is unaffected.
+    if (LOCK_REPORT_ENABLED) setInterval(lockReportTick, 60 * 1000);
     // Lock-change watcher — every 30 min (Helius plan upgraded 2026-07-01; was 2h),
     // auto-post when the locked total increases. First check 90s after boot — with the
     // durable kv baseline this ALSO announces any lock that landed during the deploy gap.
@@ -20457,6 +22448,9 @@ app.listen(PORT, () => {
     rose: roseEngineArmed,
     cuna: cunaArmed,
     dnc: dncArmed,
+    bullen: bullenEngineArmed,   // Codex review on #444 — bullen has its own 90s loop; without
+                                  // this entry the generic 10-min loop would ALSO tick it while
+                                  // armed, the exact two-scheduler race that minted the $355 orphan.
     poke: () => process.env.POKE_ENGINE_ON === "1" && process.env.POKE_ENGINE_OFF !== "1" && !IS_STAGING, // OFF by default (owner, 2026-09-05), never on staging
   };
   const vaultEnabledIds = () => Object.keys(whirlpoolMM.vault.listProjects()).filter((id) => {

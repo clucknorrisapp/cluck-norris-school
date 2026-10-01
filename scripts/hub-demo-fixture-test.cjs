@@ -106,7 +106,7 @@ t("approveProject refuses \"demo\" / \"demo-b\" as real project ids (server.js r
   for (const id of ["demo", "demo-b"]) {
     const p = proj.validateProject({ id, label: "Real project trying to squat the id", symbol: "SQUAT",
       mint: "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM", fundingWallet: "9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM" }, mintInfo);
-    assert.throws(() => proj.approveProject({}, p, { nowUnix: NOW, reserved: { demo: null, "demo-b": null } }), /built-in programme id/,
+    assert.throws(() => proj.approveProject({}, p, { nowUnix: NOW, reserved: { demo: null, "demo-b": null } }), /built-in programme id|reserved id/,
       `"${id}" must be reserved the same way clkn/cuna/rose are`);
   }
 });

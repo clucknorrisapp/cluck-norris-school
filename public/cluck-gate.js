@@ -1,7 +1,9 @@
 /* Cluck Norris — unified tools pass (owner's call, 2026-08-18, for the app-store era).
-   ONE rule across every heavy tool: hold $50 worth of CLKN and everything unlocks free,
+   ONE rule across every heavy tool: hold CLKN worth the live dollar figure (owner, 2026-09-22:
+   $10 — served by /api/tool-gate/config, never typed into a page) and everything unlocks free,
    or pay 0.05 SOL once for a 7-day ALL-TOOLS pass. Quick safety tools (Wallet Checkup,
-   Firepit, Locker Room) and the school stay free — guardrails before power.
+   Firepit, Locker Room), the Airdropper (free for everyone since 2026-09-22) and the school
+   stay free — guardrails before power.
 
    Usage on a gated page (after cluck-util.js + cluck-wallet.js):
      run = CluckGate.guard(run, { tool: 'Wallet X-Ray', anchor: '#runBtn' });
@@ -132,7 +134,7 @@
       + '<div class="ckg-wallets" style="display:none"></div>'
       + '<div class="ckg-status"></div>'
       + '<div class="ckg-note">Connecting is a <b>read-only balance check</b> — no approvals, no delegates. The only transaction is the optional SOL payment, which you read and sign in your own wallet.</div>'
-      + '<div class="ckg-free">Always free, no pass needed: Wallet Checkup · Firepit · Locker Room · the whole school.</div>';
+      + '<div class="ckg-free">Always free, no pass needed: the Airdropper · Wallet Checkup · Firepit · Locker Room · the whole school.</div>';
     card.addEventListener('click', function (e) {
       var b = e.target.closest('[data-ckg]');
       if (!b) return;
