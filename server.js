@@ -14298,7 +14298,9 @@ app.all("/api/cuna-stake/payout", async (req, res) => {
       const bp = require("./lib/buycomp-payout");
       const hubPublic = require("./lib/hub/public");
       const recipients = Object.entries(b.amounts || {})
-        .filter(([w]) => b.sent && b.sent[w] && !done[w] && !excludedNow.has(w))
+        // Only rows whose original transfer is CONFIRMED with a signature: a pending or manual
+        // (sig-less) row may not have landed, so it is not "a payout that settled".
+        .filter(([w]) => b.sent && b.sent[w] && b.sent[w].sig && !b.sent[w].pending && !done[w] && !excludedNow.has(w))
         .map(([wallet, raw]) => ({ wallet, amountUi: Number(hubPublic.rawToUi(raw, 9)), amountRaw: String(raw) }));
       if (!recipients.length) {
         bonusReport = { action: "none", reason: "every row of this batch already has its bonus", batch: id };
@@ -14310,6 +14312,10 @@ app.all("/api/cuna-stake/payout", async (req, res) => {
           const all = kv.get(CUNA_BONUS_KV, {}) || {};
           const cur = all[id] || { batch: id, kind: "double", at: Math.floor(Date.now() / 1000), sent: {} };
           const amt = (b.amounts || {})[row.wallet];
+          // Never overwrite a recorded bonus with a different signature — that would be a second
+          // transfer to the same wallet, and overwriting would also erase the evidence of it.
+          const prev = cur.sent && cur.sent[row.wallet];
+          if (prev && prev.sig && prev.sig !== row.sig) throw new Error(`bonus for ${row.wallet} already recorded with ${prev.sig} — refusing a second transfer`);
           cur.sent = { ...cur.sent, [row.wallet]: { sig: row.sig, amountRaw: String(amt), pending: !!row.pending, at: Math.floor(Date.now() / 1000) } };
           if (!kv.setVerified(CUNA_BONUS_KV, { ...all, [id]: cur })) {
             throw new Error("bonus journal did not reach the volume (" + (kv.lastPersistError() || "read-back mismatch") + ") — STOP; do not re-run until it is reconciled");
