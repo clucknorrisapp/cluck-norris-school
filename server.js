@@ -11169,7 +11169,11 @@ function buyCaptionGeneric(b, cfg, tokUsd, mkt) {
   // market cap by multiples. mkt.mc (price × CIRCULATING supply, from Jupiter's live
   // supply feed) is the correct field — matches what roseBuyCaption and the main CLKN
   // alert already use. Never swap this back to fdv without relabeling it FDV.
-  if (fill > 0) info.push(`📈 <b>Price $${fill.toPrecision(3)}</b>` + (mkt && mkt.mc ? `\n🏦 MC $${roseFmtNum(mkt.mc)}` : ""));
+  // FDV (owner, 2026-10-01: "add FDV to the buy bot") sits beside MC, labelled as FDV — it is
+  // price × TOTAL supply from Jupiter's same feed, so for a heavily locked token it reads well
+  // above MC. Either one missing just drops that half of the line.
+  const capLine = [mkt && mkt.mc ? `🏦 MC $${roseFmtNum(mkt.mc)}` : "", mkt && mkt.fdv ? `💎 FDV $${roseFmtNum(mkt.fdv)}` : ""].filter(Boolean).join("  ·  ");
+  if (fill > 0) info.push(`📈 <b>Price $${fill.toPrecision(3)}</b>` + (capLine ? `\n${capLine}` : ""));
   info.push((isDev ? `🛠️ <b>project wallet</b> ` : `👤 `) + `<code>${(b.wallet || "").slice(0, 4)}…${(b.wallet || "").slice(-4)}</code>` + (b.sig ? `  ·  <a href="https://solscan.io/tx/${b.sig}">tx</a>` : ""));
   info.push(`📈 <a href="https://dexscreener.com/solana/${cfg.mint}">Chart</a>  ·  🛒 <a href="https://jup.ag/tokens/${cfg.mint}">Buy ${tgEsc(sym)}</a>`);
   return [head, bar, ...info].join("\n");
