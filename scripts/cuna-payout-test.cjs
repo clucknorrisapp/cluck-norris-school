@@ -88,6 +88,20 @@ t("THERE IS NO MINIMUM PAYOUT — the smallest earner is paid", () => {
   assert.deepStrictEqual(b.skippedBelowFloor, {});
 });
 
+t("an excluded wallet is never offered, even with credit it earned before it was excluded", () => {
+  // Owner, 2026-10-01: the dumper was excluded after it had accrued. Its row must not reach a
+  // batch (the "exclude" hard check would hold the whole send), and its credit stays owed in the
+  // ledger rather than vanishing, so conservation still reconciles.
+  const owed = { A: CUNA(5000), DUMP: CUNA(400), C: CUNA(3) };
+  const b = p.buildBatch({ owed, batchId: "b1", nowUnix: 1, excludeWallets: ["DUMP"] });
+  assert.deepStrictEqual(Object.keys(b.amounts).sort(), ["A", "C"]);
+  assert.strictEqual(b.totalRaw, (BigInt(CUNA(5000)) + BigInt(CUNA(3))).toString());
+  assert.deepStrictEqual(b.skippedExcluded, { DUMP: CUNA(400) });
+  assert.strictEqual(owed.DUMP, CUNA(400), "the owed map is not mutated");
+  const none = p.buildBatch({ owed, batchId: "b2", nowUnix: 1 });
+  assert.ok(none.amounts.DUMP, "no list = the old behavior, every owed wallet offered");
+});
+
 t("the floor still works if it is ever switched back on", () => {
   // Kept as a knob because a floor is the right tool if fees ever change.
   const b = p.buildBatch({ owed: { A: CUNA(5000), B: CUNA(3) }, minPayoutRaw: CUNA(1000),
