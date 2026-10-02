@@ -6,7 +6,11 @@
     "ios"
   ],
   "apiBase": "https://clucknorris.app",
-  "excludeLangs": ["ko", "tr", "id"],
+  "excludeLangs": [
+    "ko",
+    "tr",
+    "id"
+  ],
   "pages": [],
   "files": [
     "theme.css",
@@ -581,6 +585,7 @@
     "These accounts hold a balance. Burning it is permanent — read the confirm step carefully before anything is destroyed.",
     "These accounts hold a zero balance but still lock a small SOL deposit. Closing them is risk-free — nothing of value is destroyed, only the deposit comes back to you.",
     "These were submitted but had no on-chain status after 30 seconds. They may still have landed. Check each signature on Solscan BEFORE resending — resending one that landed pays that wallet twice.",
+    "These were submitted but had no on-chain status after 30 seconds. They may still have landed. Hit Rescan to check before signing them again.",
     "These were submitted but had no on-chain status after 30 seconds. They may still have landed. Hit Rescan to check — do not sign them again until you've confirmed they didn't land, or you risk trying to burn the same tokens twice.",
     "Third-party risk check (DD.xyz)",
     "This account is not controlled by the connected wallet, so this was refused.",

@@ -3043,5 +3043,6 @@
   "This transaction would move a token balance the quote never mentioned.": "이 트랜잭션은 견적에 언급되지 않은 토큰 잔액을 움직여요.",
   "This transaction would move more SOL (native and wrapped combined) than the quote showed.": "이 트랜잭션은 견적이 보여 준 것보다 더 많은 SOL(네이티브와 래핑 합산)을 움직여요.",
   "This transaction would move more of the token you're paying with than the quote showed.": "이 트랜잭션은 견적이 보여 준 것보다 더 많은 결제 토큰을 움직여요.",
-  "This transaction would spend more SOL than the quote and fee shown.": "이 트랜잭션은 견적과 수수료로 보여 드린 것보다 더 많은 SOL을 써요."
+  "This transaction would spend more SOL than the quote and fee shown.": "이 트랜잭션은 견적과 수수료로 보여 드린 것보다 더 많은 SOL을 써요.",
+  "These were submitted but had no on-chain status after 30 seconds. They may still have landed. Hit Rescan to check before signing them again.": "제출은 되었지만 30초가 지나도 온체인 상태가 확인되지 않았습니다. 그래도 처리되었을 수 있습니다. 다시 서명하기 전에 Rescan을 눌러 확인하세요."
 }

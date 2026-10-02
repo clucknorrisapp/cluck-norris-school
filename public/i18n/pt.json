@@ -3043,5 +3043,6 @@
   "This transaction would move a token balance the quote never mentioned.": "Esta transação moveria o saldo de um token que a cotação nunca mencionou.",
   "This transaction would move more SOL (native and wrapped combined) than the quote showed.": "Esta transação moveria mais SOL (nativo e embrulhado combinados) do que a cotação mostrou.",
   "This transaction would move more of the token you're paying with than the quote showed.": "Esta transação moveria mais do token com o qual você paga do que a cotação mostrou.",
-  "This transaction would spend more SOL than the quote and fee shown.": "Esta transação gastaria mais SOL do que a cotação e a taxa mostradas."
+  "This transaction would spend more SOL than the quote and fee shown.": "Esta transação gastaria mais SOL do que a cotação e a taxa mostradas.",
+  "These were submitted but had no on-chain status after 30 seconds. They may still have landed. Hit Rescan to check before signing them again.": "Estas foram enviadas mas não tiveram status on-chain depois de 30 segundos. Ainda podem ter sido confirmadas. Toque em Reescanear para verificar antes de assiná-las de novo."
 }
