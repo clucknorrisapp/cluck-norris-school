@@ -3043,5 +3043,6 @@
   "This transaction would move a token balance the quote never mentioned.": "Giao dịch này sẽ chuyển số dư của một token mà báo giá chưa từng nhắc đến.",
   "This transaction would move more SOL (native and wrapped combined) than the quote showed.": "Giao dịch này sẽ chuyển nhiều SOL hơn (gộp cả gốc và bọc) so với báo giá đã hiển thị.",
   "This transaction would move more of the token you're paying with than the quote showed.": "Giao dịch này sẽ chuyển nhiều token bạn dùng để trả hơn so với báo giá đã hiển thị.",
-  "This transaction would spend more SOL than the quote and fee shown.": "Giao dịch này sẽ tiêu nhiều SOL hơn báo giá và phí đã hiển thị."
+  "This transaction would spend more SOL than the quote and fee shown.": "Giao dịch này sẽ tiêu nhiều SOL hơn báo giá và phí đã hiển thị.",
+  "These were submitted but had no on-chain status after 30 seconds. They may still have landed. Hit Rescan to check before signing them again.": "Những giao dịch này đã được gửi nhưng không có trạng thái on-chain sau 30 giây. Chúng có thể vẫn đã hoàn tất. Nhấn Rescan để kiểm tra trước khi ký lại."
 }

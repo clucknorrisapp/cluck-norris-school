@@ -3043,5 +3043,6 @@
   "This transaction would move a token balance the quote never mentioned.": "Questa transazione sposterebbe il saldo di un token che il preventivo non ha mai menzionato.",
   "This transaction would move more SOL (native and wrapped combined) than the quote showed.": "Questa transazione sposterebbe più SOL (nativo e wrapped insieme) di quanto mostrato dal preventivo.",
   "This transaction would move more of the token you're paying with than the quote showed.": "Questa transazione sposterebbe più token di quelli con cui paghi rispetto a quanto mostrato dal preventivo.",
-  "This transaction would spend more SOL than the quote and fee shown.": "Questa transazione spenderebbe più SOL del preventivo e della commissione mostrati."
+  "This transaction would spend more SOL than the quote and fee shown.": "Questa transazione spenderebbe più SOL del preventivo e della commissione mostrati.",
+  "These were submitted but had no on-chain status after 30 seconds. They may still have landed. Hit Rescan to check before signing them again.": "Questi sono stati inviati ma non avevano alcuno stato on-chain dopo 30 secondi. Potrebbero comunque essere andati a buon fine. Premi Rescan per controllare prima di firmarli di nuovo."
 }

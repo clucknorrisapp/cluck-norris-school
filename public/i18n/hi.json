@@ -3043,5 +3043,6 @@
   "This transaction would move a token balance the quote never mentioned.": "यह लेन-देन ऐसे टोकन का बैलेंस हिलाएगा जिसका कोटेशन में कभी ज़िक्र नहीं था।",
   "This transaction would move more SOL (native and wrapped combined) than the quote showed.": "यह लेन-देन कोटेशन में दिखाए गए से ज़्यादा SOL (नेटिव और रैप्ड मिलाकर) हिलाएगा।",
   "This transaction would move more of the token you're paying with than the quote showed.": "यह लेन-देन कोटेशन में दिखाए गए से ज़्यादा उस टोकन को हिलाएगा जिससे आप भुगतान कर रहे हैं।",
-  "This transaction would spend more SOL than the quote and fee shown.": "यह लेन-देन दिखाए गए कोटेशन और शुल्क से ज़्यादा SOL खर्च करेगा।"
+  "This transaction would spend more SOL than the quote and fee shown.": "यह लेन-देन दिखाए गए कोटेशन और शुल्क से ज़्यादा SOL खर्च करेगा।",
+  "These were submitted but had no on-chain status after 30 seconds. They may still have landed. Hit Rescan to check before signing them again.": "ये सबमिट हो गए थे लेकिन 30 सेकंड बाद भी कोई ऑन-चेन स्टेटस नहीं था। हो सकता है ये फिर भी लैंड हो गए हों। दोबारा साइन करने से पहले चेक करने के लिए Rescan दबाएं।"
 }

@@ -3043,5 +3043,6 @@
   "This transaction would move a token balance the quote never mentioned.": "Bu işlem, teklifin hiç bahsetmediği bir token bakiyesini taşırdı.",
   "This transaction would move more SOL (native and wrapped combined) than the quote showed.": "Bu işlem teklifin gösterdiğinden daha fazla SOL (yerel ve sarılmış birlikte) taşırdı.",
   "This transaction would move more of the token you're paying with than the quote showed.": "Bu işlem teklifin gösterdiğinden daha fazla ödediğin tokenı taşırdı.",
-  "This transaction would spend more SOL than the quote and fee shown.": "Bu işlem teklifte ve gösterilen ücrette olandan daha fazla SOL harcardı."
+  "This transaction would spend more SOL than the quote and fee shown.": "Bu işlem teklifte ve gösterilen ücrette olandan daha fazla SOL harcardı.",
+  "These were submitted but had no on-chain status after 30 seconds. They may still have landed. Hit Rescan to check before signing them again.": "Bunlar gönderildi ancak 30 saniye sonra zincir üstü bir durumları yoktu. Yine de gerçekleşmiş olabilirler. Tekrar imzalamadan önce kontrol etmek için Rescan'e dokunun."
 }

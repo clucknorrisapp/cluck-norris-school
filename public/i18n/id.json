@@ -3043,5 +3043,6 @@
   "This transaction would move a token balance the quote never mentioned.": "Transaksi ini akan memindahkan saldo token yang tidak pernah disebut dalam kutipan.",
   "This transaction would move more SOL (native and wrapped combined) than the quote showed.": "Transaksi ini akan memindahkan lebih banyak SOL (native dan wrapped digabung) daripada yang ditunjukkan kutipan.",
   "This transaction would move more of the token you're paying with than the quote showed.": "Transaksi ini akan memindahkan lebih banyak token yang kamu pakai untuk membayar daripada yang ditunjukkan kutipan.",
-  "This transaction would spend more SOL than the quote and fee shown.": "Transaksi ini akan membelanjakan lebih banyak SOL daripada kutipan dan biaya yang ditampilkan."
+  "This transaction would spend more SOL than the quote and fee shown.": "Transaksi ini akan membelanjakan lebih banyak SOL daripada kutipan dan biaya yang ditampilkan.",
+  "These were submitted but had no on-chain status after 30 seconds. They may still have landed. Hit Rescan to check before signing them again.": "Transaksi ini sudah dikirim tetapi belum ada status on-chain setelah 30 detik. Mungkin saja sudah berhasil. Tekan Rescan untuk memeriksa sebelum menandatanganinya lagi."
 }

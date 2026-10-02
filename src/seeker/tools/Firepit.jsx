@@ -207,6 +207,22 @@ function SurplusRow({ a, checked, onToggle }) {
   );
 }
 
+// Accounts this session WATCHED close (and surpluses it watched withdraw). An RPC node can lag a
+// few seconds behind the confirmation we saw, so a Rescan in that window must not bring a closed
+// account back or re-offer a surplus already taken (owner report 2026-10-02: "after you burn a
+// token, Rescan doesn't actually rescan — you have to disconnect and reconnect"). The server also
+// reads at "confirmed" now; this covers the node-to-node lag that remains.
+const RECENT_MS = 120000;
+function applyRecent(list, recent) {
+  const now = Date.now();
+  return (list || []).filter((a) => { const t = recent.closed[a.tokenAccount]; return !(t && now - t < RECENT_MS); })
+    .map((a) => {
+      const w = recent.withdrawn[a.tokenAccount];
+      if (w && now - w.at < RECENT_MS && (Number(a.rentLamports) || 0) >= w.prior) return { ...a, surplusLamports: 0, surplusEligible: false };
+      return a;
+    });
+}
+
 function useToggleSet(initial) {
   const [set, setSet] = React.useState(initial || (() => new Set()));
   const toggle = React.useCallback((id) => {
@@ -283,6 +299,7 @@ export default function FirepitPane({ wallet }) {
   const [runNotAttempted, setRunNotAttempted] = React.useState(0);
   const abortRef = React.useRef(null);
   const confirmAbortRef = React.useRef(null);
+  const recentRef = React.useRef({ closed: {}, withdrawn: {} });
 
   const scan = React.useCallback((address) => {
     if (!address) return;
@@ -308,8 +325,8 @@ export default function FirepitPane({ wallet }) {
         setPhase("unavailable");
         return;
       }
-      const accounts = res.data.accounts || [];
-      setData(res.data);
+      const accounts = applyRecent(res.data.accounts, recentRef.current);
+      setData({ ...res.data, accounts });
       // Pre-select the empty (rent-only) accounts, same as the desktop tool: reclaiming them is
       // risk-free, so the total is meaningful the moment the scan lands. Nothing that could
       // destroy value is ever pre-selected.
@@ -387,10 +404,10 @@ export default function FirepitPane({ wallet }) {
     const res = await toolFetch(`/api/burn-scan?wallet=${encodeURIComponent(wallet.address)}`, { signal: ctrl.signal });
     if (res.kind === "aborted") return;
     if (!res.ok) { setConfirmPhase("error"); return; }
-    const freshAccounts = res.data.accounts || [];
+    const freshAccounts = applyRecent(res.data.accounts, recentRef.current);
     // Keep the underlying page in step with the same fresh read — never leave it showing an
     // older scan next to a sheet built from a newer one.
-    setData(res.data);
+    setData({ ...res.data, accounts: freshAccounts });
     setSelEmpty((s) => { const ok = new Set(freshAccounts.filter((a) => isEmpty(a) && actionable(a)).map((a) => a.tokenAccount)); const n = new Set(); s.forEach((id) => { if (ok.has(id)) n.add(id); }); return n; });
     setSelBurn((s) => { const ok = new Set(freshAccounts.filter((a) => !isEmpty(a) && actionable(a)).map((a) => a.tokenAccount)); const n = new Set(); s.forEach((id) => { if (ok.has(id)) n.add(id); }); return n; });
     setSelSurplus((s) => { const ok = new Set(freshAccounts.filter(surplusEligible).map((a) => a.tokenAccount)); const n = new Set(); s.forEach((id) => { if (ok.has(id)) n.add(id); }); return n; });
@@ -526,6 +543,12 @@ export default function FirepitPane({ wallet }) {
     // untouched on-chain and must stay in the list so Rescan can re-check it truthfully.
     const sentIds = new Set();
     collected.forEach(({ chunk, status }) => { if (status === "sent") chunk.forEach((a) => sentIds.add(a.tokenAccount)); });
+    const nowMs = Date.now();
+    sel.forEach((a) => {
+      if (!sentIds.has(a.tokenAccount)) return;
+      if (kind === "surplus") recentRef.current.withdrawn[a.tokenAccount] = { at: nowMs, prior: Number(a.rentLamports) || 0 };
+      else recentRef.current.closed[a.tokenAccount] = nowMs;
+    });
     if (sentIds.size) {
       if (kind === "surplus") {
         // Unlike reclaim/burn, the account is NOT removed — it is still open and still holds its
@@ -687,7 +710,9 @@ export default function FirepitPane({ wallet }) {
           {counts.unconfirmed ? (
             <div className="seeker-drop-unconfirmed" role="alert">
               <p className="seeker-tool-notyet-title">⏳ {counts.unconfirmed} {t("unconfirmed")}</p>
-              <p>{t("These were submitted but had no on-chain status after 30 seconds. They may still have landed. Hit Rescan to check — do not sign them again until you've confirmed they didn't land, or you risk trying to burn the same tokens twice.")}</p>
+              <p>{runResults.some((r) => r.kind === "burn")
+                ? t("These were submitted but had no on-chain status after 30 seconds. They may still have landed. Hit Rescan to check — do not sign them again until you've confirmed they didn't land, or you risk trying to burn the same tokens twice.")
+                : t("These were submitted but had no on-chain status after 30 seconds. They may still have landed. Hit Rescan to check before signing them again.")}</p>
             </div>
           ) : null}
           {counts.declined ? <p className="seeker-tool-note">{t("You declined a transaction, so nothing in it was sent.")}</p> : null}

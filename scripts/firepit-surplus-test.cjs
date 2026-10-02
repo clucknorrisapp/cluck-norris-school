@@ -82,12 +82,20 @@ const UNKNOWN_MIN_ACCT = { // minimum couldn't be read for this account — must
   rentExemptLamports: null, surplusLamports: null, surplusEligible: false,
   empty: true, isNft: false,
 };
+const junkAcctPk = web3.Keypair.generate().publicKey.toBase58();
+const junkMintPk = web3.Keypair.generate().publicKey.toBase58();
+const JUNK_ACCT = { // a priced token with a balance — the one row here that a burn really destroys
+  tokenAccount: junkAcctPk, mint: junkMintPk, program: TOKEN_CLASSIC, amountRaw: "1000000", decimals: 6, uiAmount: 1,
+  rentLamports: 2039280, frozen: false, delegated: false, space: 165, isNative: false, owner: WALLET,
+  symbol: "JUNK", name: "Junk", logo: null, priceUsd: 0.5, valueUsd: 0.5, priceKnown: true,
+  rentExemptLamports: MIN_165, surplusLamports: 0, surplusEligible: false, empty: false, isNft: false,
+};
 function scanFixture(overrides) {
   return Object.assign({
     success: true, wallet: WALLET, count: 3, capped: false,
     rentSolTotal: 0, valueUsdTotal: 0,
     surplusAvailable: true, surplusLamportsTotal: REAL_ACCT.surplusLamports, surplusSolTotal: REAL_ACCT.surplusLamports / 1e9,
-    accounts: [REAL_ACCT, WSOL_ACCT, UNKNOWN_MIN_ACCT],
+    accounts: [REAL_ACCT, WSOL_ACCT, UNKNOWN_MIN_ACCT, JUNK_ACCT],
   }, overrides || {});
 }
 
@@ -135,13 +143,15 @@ let stop = () => {};
   let scanCalls = 0;
   let capturedSendTxB64 = null;
   let sentTransaction = false;
+  let laggingNode = false;   // when true, the scan answers as an RPC node that has not seen the withdrawal yet
   await page.route("**/api/burn-scan**", async (route) => {
     scanCalls++;
     // After a "confirmed" send, the account the test reclaims from must read back with its
     // surplus gone — this is what proves the page re-reads reality rather than trusting the ask.
+    if (laggingNode) return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(scanFixture()) });
     if (sentTransaction) {
       const closed = Object.assign({}, REAL_ACCT, { rentLamports: MIN_165, surplusLamports: 0, surplusEligible: false });
-      return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(scanFixture({ accounts: [closed, WSOL_ACCT, UNKNOWN_MIN_ACCT] })) });
+      return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(scanFixture({ accounts: [closed, WSOL_ACCT, UNKNOWN_MIN_ACCT, JUNK_ACCT] })) });
     }
     return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(scanFixture()) });
   });
@@ -178,6 +188,31 @@ let stop = () => {};
   await page.waitForFunction(() => !document.getElementById("results-card").classList.contains("hidden"), null, { timeout: 15000 });
   ok("burn-scan was called on connect", scanCalls >= 1, scanCalls);
 
+  // ── the sheet's main button names the job (owner, 2026-10-02: reclaims said "🔥 Burn now") ──
+  const goState = () => page.evaluate(() => ({ text: document.getElementById("m-go").textContent, danger: document.getElementById("m-go").classList.contains("danger"), destroyShown: !document.getElementById("m-valrow").classList.contains("hidden") }));
+  await page.click("#reclaim-btn");
+  await page.waitForSelector("#modal.show", { timeout: 5000 });
+  const reclaimGo = await goState();
+  ok("empty-account reclaim: the sheet's button says Reclaim, not Burn, and isn't styled as danger", /reclaim/i.test(reclaimGo.text) && !/burn/i.test(reclaimGo.text) && !reclaimGo.danger, reclaimGo);
+  ok("empty-account reclaim: no 'Destroy:' line on the sheet", !reclaimGo.destroyShown, reclaimGo);
+  await page.click("#m-cancel");
+  // Tick ONLY the wrapped-SOL row in the burn group: it unwraps, nothing burns.
+  const tickRow = (sym) => page.evaluate((sy) => { [...document.querySelectorAll("#rows-burn tr")].forEach((tr) => { if (tr.textContent.includes(sy)) { const cb = tr.querySelector("input[type=checkbox]"); if (cb && !cb.checked) cb.click(); } }); }, sym);
+  await tickRow("SOL");
+  await page.click("#burn-btn");
+  await page.waitForSelector("#modal.show", { timeout: 5000 });
+  const wsolGo = await goState();
+  ok("a burn-group selection that only unwraps wrapped SOL is labelled a reclaim, not a burn", /reclaim/i.test(wsolGo.text) && !/burn/i.test(wsolGo.text), wsolGo);
+  await page.click("#m-cancel");
+  await page.click("#sel-burn-none");
+  await tickRow("JUNK");
+  await page.click("#burn-btn");
+  await page.waitForSelector("#modal.show", { timeout: 5000 });
+  const burnGo = await goState();
+  ok("a real burn still says Burn, in danger red, with its Destroy line", /burn/i.test(burnGo.text) && burnGo.danger && burnGo.destroyShown, burnGo);
+  await page.click("#m-cancel");
+  await page.click("#sel-burn-none");
+
   // ── the view + totals ──────────────────────────────────────────────────────────────────────
   const rowsText = await page.$eval("#rows-surplus", (el) => el.textContent);
   ok("the surplus section lists the real surplus-eligible account", /USD1/.test(rowsText), rowsText.slice(0, 200));
@@ -196,6 +231,9 @@ let stop = () => {};
   const modalTitle = await page.$eval("#m-title", (el) => el.textContent);
   ok("the confirm sheet uses the surplus job's own honest copy (never burn language)", /surplus/i.test(modalTitle) && !/burn/i.test(modalTitle), modalTitle);
   ok("no typed confirmation is required — nothing here destroys value", await page.$eval("#m-go", (el) => !el.disabled));
+  const surplusGo = await goState();
+  ok("surplus reclaim: the sheet's button says Reclaim surplus, never Burn, and isn't styled as danger", /reclaim surplus/i.test(surplusGo.text) && !/burn/i.test(surplusGo.text) && !surplusGo.danger, surplusGo);
+  ok("surplus reclaim: no 'Destroy:' line on the sheet", !surplusGo.destroyShown, surplusGo);
 
   await page.click("#m-go");
   await page.waitForFunction(() => window.__sentTxs && window.__sentTxs.length > 0, null, { timeout: 15000 });
@@ -258,6 +296,17 @@ let stop = () => {};
   ok("the finished-run status reports SUCCESS, not an error class", await page.$eval("#status", (el) => el.className.includes("ok") && !el.className.includes("err")), finalStatus);
   ok("the finished-run status names the ACTUAL amount that arrived (0.000367 SOL, re-derived from a fresh scan), not just a bare success flag",
     /arrived in your wallet/i.test(finalStatus) && /0\.000367/.test(finalStatus), finalStatus);
+
+  // ── Rescan right after: an RPC node that hasn't caught up must not re-offer the surplus ────
+  // (owner report 2026-10-02: after a burn, Rescan "doesn't actually rescan" until a reconnect).
+  laggingNode = true;
+  const callsBefore = scanCalls;
+  await page.click("#rescan");
+  for (let i = 0; i < 50 && scanCalls === callsBefore; i++) await new Promise((r) => setTimeout(r, 100));
+  await new Promise((r) => setTimeout(r, 400));
+  ok("Rescan really re-reads the chain (a new scan request went out)", scanCalls > callsBefore, { callsBefore, scanCalls });
+  const rowsAfterRescan = await page.$eval("#rows-surplus", (el) => el.textContent);
+  ok("a lagging node's stale answer does not bring back the surplus that was just withdrawn", !/USD1/.test(rowsAfterRescan), rowsAfterRescan.slice(0, 200));
 
   await ctx.close();
   await browser.close();

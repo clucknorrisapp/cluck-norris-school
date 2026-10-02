@@ -3043,5 +3043,6 @@
   "This transaction would move a token balance the quote never mentioned.": "这笔交易会移动一个报价从未提到的代币余额。",
   "This transaction would move more SOL (native and wrapped combined) than the quote showed.": "这笔交易移动的 SOL（原生与包装合计）会多于报价所示。",
   "This transaction would move more of the token you're paying with than the quote showed.": "这笔交易移动的你用来支付的代币会多于报价所示。",
-  "This transaction would spend more SOL than the quote and fee shown.": "这笔交易花费的 SOL 会多于所示的报价和手续费。"
+  "This transaction would spend more SOL than the quote and fee shown.": "这笔交易花费的 SOL 会多于所示的报价和手续费。",
+  "These were submitted but had no on-chain status after 30 seconds. They may still have landed. Hit Rescan to check before signing them again.": "这些交易已提交，但 30 秒后仍没有链上状态。它们可能仍然已经上链。再次签名之前，请先点击「重新扫描」进行核查。"
 }
