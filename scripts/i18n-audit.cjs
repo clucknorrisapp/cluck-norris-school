@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /**
  * i18n audit — catches missing keys, stale keys, untranslated copy, and placeholder
- * drift across all seven languages. Pure Node, no deps. Read-only: it never edits a
- * dictionary. See CLAUDE.md — the school ships in seven languages; this is the guard
+ * drift across all ten languages. Pure Node, no deps. Read-only: it never edits a
+ * dictionary. See CLAUDE.md — the school ships in ten languages; this is the guard
  * for that promise.
  *
  * HOW THE THREE DICTIONARY FAMILIES ARE ACTUALLY LOADED AND KEYED (public/i18n.js)
@@ -35,7 +35,7 @@
  *             src/sections/*.jsx).
  *   - locker: /i18n/<lang>.locker.json  — loaded only under /locker-room
  *             (public/locker-room.html, a single vanilla page).
- * Seven languages are promised (en/es/hi/it/pt/vi/zh); en needs no file, so six
+ * Ten languages are promised (en/es/hi/it/pt/vi/zh/ko/tr/id); en needs no file, so nine
  * dictionary files exist per family.
  *
  * WHAT "MISSING VS EN" MEANS WITHOUT AN en.json
@@ -124,7 +124,7 @@ const path = require('path');
 
 const ROOT = path.join(__dirname, '..');
 const I18N_DIR = path.join(ROOT, 'public', 'i18n');
-const LANGS = ['es', 'hi', 'it', 'pt', 'vi', 'zh'];
+const LANGS = ['es', 'hi', 'it', 'pt', 'vi', 'zh', 'ko', 'tr', 'id'];
 const FAMILIES = [
   { name: 'base', suffix: '' },
   { name: 'school', suffix: '.school' },

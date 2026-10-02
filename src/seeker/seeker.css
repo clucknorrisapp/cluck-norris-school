@@ -874,3 +874,48 @@ html, body {
   .seeker-shell .seeker-checkup,
   .seeker-shell .seeker-reclaim { max-width: 720px; }
 }
+
+/* ── Checkup: revoke control + outcome (src/seeker/CheckupRevoke.jsx, full edition only) ── */
+.seeker-revoke { margin-top: 10px; }
+.seeker-revoke-btn { display: block; width: 100%; min-height: 44px; }
+.seeker-revoke-outcome {
+  border-radius: 14px;
+  padding: 14px;
+  margin: 10px 0 4px;
+  line-height: 1.5;
+  background: var(--card);
+  border: 1px solid var(--border);
+}
+.seeker-revoke-outcome p { margin: 0 0 8px; font-size: 13.5px; color: var(--subtext); }
+.seeker-revoke-outcome-title { font-family: var(--disp); font-weight: 400; font-size: 15px; color: var(--text); }
+.seeker-revoke-outcome-sent { border-color: rgba(110, 231, 183, .45); }
+.seeker-revoke-outcome-failed { border-color: rgba(239, 68, 68, .5); }
+.seeker-revoke-outcome-unconfirmed { border-color: rgba(252, 211, 77, .5); }
+.seeker-revoke-warn { color: var(--gold); }
+
+/* ── Checkup: "Disconnect & clean up" card (src/seeker/Disconnect.jsx, full edition only) ── */
+.seeker-disconnect {
+  margin-top: 18px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 14px;
+}
+.seeker-disconnect-who { font-size: 13px; color: var(--text); margin: 0 0 8px; }
+.seeker-disconnect-explain, .seeker-disconnect-done, .seeker-disconnect-steps p {
+  font-size: 12.5px;
+  color: var(--subtext);
+  line-height: 1.6;
+  margin: 0 0 10px;
+}
+.seeker-disconnect-done { color: var(--green); }
+.seeker-disconnect-btn { display: block; width: 100%; min-height: 44px; margin-bottom: 12px; }
+.seeker-disconnect-steps { border-top: 1px solid var(--border); padding-top: 10px; }
+.seeker-disconnect-steps-title {
+  font-family: var(--disp);
+  font-size: 10.5px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--sub);
+}
+.seeker-disconnect-limit { color: var(--sub); margin-bottom: 0; }

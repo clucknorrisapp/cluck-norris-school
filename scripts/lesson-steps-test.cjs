@@ -74,7 +74,7 @@ function memStorage() {
   ok(`the liquidity library (${lib.length}) reads opening → the lesson, prose never cut into parts`, lib.length > 0 && shape(lib, "open,content").length === 0, shape(lib, "open,content"));
 
   const withSections = all.filter((x) => (x.l.sections || []).length);
-  console.log("\nthe shape of a sectioned lesson (LP Lab 1–14, Deep Dive):");
+  console.log("\nthe shape of a sectioned lesson (LP Lab 1–15, Deep Dive):");
   const shapeBad = [];
   for (const s of withSections) {
     const { steps } = s.plan;

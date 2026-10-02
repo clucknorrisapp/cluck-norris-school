@@ -350,7 +350,7 @@ function rpcOk(list) {
     JSON.stringify(extractedList) === JSON.stringify(expectedList),
     { extractedOnly: extractedList.filter((k) => !expectedList.includes(k)), listOnly: expectedList.filter((k) => !extracted.has(k)) });
 
-  for (const lang of ["es", "zh", "hi", "it", "pt", "vi"]) {
+  for (const lang of ["es", "zh", "hi", "it", "pt", "vi", "ko", "tr", "id"]) {
     const dict = JSON.parse(fs.readFileSync(path.join(ROOT, "public", "i18n", `${lang}.json`), "utf8"));
     const missing = NEW_KEYS.filter((k) => !Object.prototype.hasOwnProperty.call(dict, k));
     ok(`${lang}.json carries all 15 increment-2 keys`, missing.length === 0, missing);

@@ -31,9 +31,12 @@
 // right next to it, so a partial scan never reads as a full pass.
 //
 // Guardrail before power: approvals are a real thing a first-timer could act on, but revoking
-// needs a wallet signature and that is OUT OF SCOPE tonight (CLAUDE.md: "PLAN != EXECUTE for
-// money" / no signing path here). This pane shows the finding and points to the website's own
-// /wallet-checkup, which already has the revoke flow — it never builds or signs a transaction.
+// needs a wallet signature and THIS FILE never builds or signs one — it is shared with the
+// education-only Play/iOS edition, whose build refuses the wallet layer's global by name. Since
+// 2026-09-29 the FULL edition passes two render props: `revoke({approvals, address, rescan})`,
+// rendered in place of the "Revoke on the website" note (src/seeker/CheckupRevoke.jsx, the
+// signing control), and `footer`, rendered after the results (src/seeker/Disconnect.jsx, the
+// "Disconnect & clean up" card). The education edition passes neither and keeps the note.
 //
 // Offline is first-class, same posture as Ask Cluck: `navigator.onLine` is checked before every
 // scan (skips the fetch entirely) and the pane listens for the browser's `online` event to
@@ -123,7 +126,7 @@ function RiskyRow({ r }) {
   );
 }
 
-export default function WalletCheckupPane({ address, gate }) {
+export default function WalletCheckupPane({ address, gate, revoke, footer }) {
   useI18nReady();
   // phase: idle | loading | ok | error. kind (error only): offline | rate | refused | unavailable.
   const [state, setState] = React.useState({ phase: "idle", kind: null, data: null, retrySec: 0, errMsg: null });
@@ -322,10 +325,12 @@ export default function WalletCheckupPane({ address, gate }) {
           <div data-clkn-avoid-kids="1">
             {approvals.map((a) => <ApprovalRow key={a.tokenAccount} a={a} />)}
           </div>
-          <p className="seeker-checkup-revokenote">
-            {t("Revoking needs a wallet signature — not available in this app yet.")}{" "}
-            <a href={WEBSITE_CHECKUP_URL} target="_blank" rel="noreferrer">{t("Revoke on the website")}</a>
-          </p>
+          {typeof revoke === "function" ? revoke({ approvals, address, rescan: () => scan(address) }) : (
+            <p className="seeker-checkup-revokenote">
+              {t("Revoking needs a wallet signature — not available in this app yet.")}{" "}
+              <a href={WEBSITE_CHECKUP_URL} target="_blank" rel="noreferrer">{t("Revoke on the website")}</a>
+            </p>
+          )}
         </div>
       ) : null}
 
@@ -344,6 +349,7 @@ export default function WalletCheckupPane({ address, gate }) {
       <button type="button" className="seeker-checkup-rescanbtn" onClick={() => scan(address)}>
         {t("Rescan")}
       </button>
+      {footer || null}
     </div>
   );
 }
