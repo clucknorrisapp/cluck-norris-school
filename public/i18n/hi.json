@@ -2938,5 +2938,6 @@
   "stays open": "खुला रहता है",
   "{cur} now, {min} required": "अभी {cur}, ज़रूरी {min}",
   "The estimated network fee is likely to eat all or more of this surplus — you may end up with less SOL than you started with, or barely break even.": "अनुमानित नेटवर्क फ़ीस इस अतिरिक्त हिस्से को पूरी तरह या उससे ज़्यादा खा सकती है — हो सकता है आपके पास पहले से कम SOL रह जाए, या बस बराबरी हो।",
-  "requested — couldn't confirm the actual amount": "अनुरोधित — वास्तविक राशि की पुष्टि नहीं हो सकी"
+  "requested — couldn't confirm the actual amount": "अनुरोधित — वास्तविक राशि की पुष्टि नहीं हो सकी",
+  "These were submitted but had no on-chain status after 30 seconds. They may still have landed. Hit Rescan to check before signing them again.": "ये सबमिट हो गए थे लेकिन 30 सेकंड बाद भी कोई ऑन-चेन स्टेटस नहीं था। हो सकता है ये फिर भी लैंड हो गए हों। दोबारा साइन करने से पहले चेक करने के लिए Rescan दबाएं।"
 }

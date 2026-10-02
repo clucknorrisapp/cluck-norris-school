@@ -2938,5 +2938,6 @@
   "stays open": "vẫn mở",
   "{cur} now, {min} required": "{cur} hiện tại, cần {min}",
   "The estimated network fee is likely to eat all or more of this surplus — you may end up with less SOL than you started with, or barely break even.": "Phí mạng ước tính có khả năng ăn hết hoặc hơn cả khoản dư này — bạn có thể nhận về ít SOL hơn số ban đầu, hoặc chỉ vừa hòa vốn.",
-  "requested — couldn't confirm the actual amount": "đã yêu cầu — không thể xác nhận số tiền thực tế"
+  "requested — couldn't confirm the actual amount": "đã yêu cầu — không thể xác nhận số tiền thực tế",
+  "These were submitted but had no on-chain status after 30 seconds. They may still have landed. Hit Rescan to check before signing them again.": "Những giao dịch này đã được gửi nhưng không có trạng thái on-chain sau 30 giây. Chúng có thể vẫn đã hoàn tất. Nhấn Rescan để kiểm tra trước khi ký lại."
 }
