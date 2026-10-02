@@ -150,7 +150,10 @@ const pk = () => web3.Keypair.generate().publicKey.toBase58();
     try { esbuild = require("esbuild"); } catch (_) { esbuild = null; }
     try { ({ chromium } = require("playwright")); } catch (_) { try { ({ chromium } = require("playwright-core")); } catch (_2) { chromium = null; } }
     if (!esbuild || !chromium) {
-      ok("esbuild + playwright are available for the rendered checks", false, "missing " + (!esbuild ? "esbuild " : "") + (!chromium ? "playwright" : ""));
+      // node-check installs no Chromium, so these skip there; the smoke-test job re-runs this
+      // script with REVOKE_RENDER_REQUIRED=1, where a missing browser is a failure, not a skip.
+      if (process.env.REVOKE_RENDER_REQUIRED === "1") ok("esbuild + playwright are available for the rendered checks", false, "missing " + (!esbuild ? "esbuild " : "") + (!chromium ? "playwright" : ""));
+      else console.log("  · " + (!esbuild ? "esbuild " : "") + (!chromium ? "playwright " : "") + "not resolvable — skipping the rendered checks (everything above still ran)");
     } else {
       const SEEKER = path.join(ROOT, "src", "seeker");
       const shim = {

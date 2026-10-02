@@ -969,6 +969,14 @@ jobs:
       - name: Firepit — surplus rent, rendered (stubbed RPC, real signature, byte-checked tx)
         if: steps.gate.outputs.run == 'true'
         run: node scripts/firepit-surplus-test.cjs
+      # Seeker Revoke, rendered (Codex on #458): an unresolved send offers no second revoke, and
+      # the post-revoke refresh keeps the chain re-read on screen. node-check runs the same script
+      # without Chromium, where this section skips; here the browser is required.
+      - name: Seeker app — Revoke, rendered (no second revoke while unresolved; re-read stays on screen)
+        if: steps.gate.outputs.run == 'true'
+        env:
+          REVOKE_RENDER_REQUIRED: "1"
+        run: node scripts/seeker-revoke-test.cjs
       # The Seeker app, actually booted. seeker-build-test.cjs (node-check) proves the TARBALL is
       # well formed but never opens it, so an app that builds clean and renders a blank screen
       # would ship green — the same class of break the Normie Quest visual gate exists for. This
