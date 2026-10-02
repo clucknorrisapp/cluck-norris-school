@@ -7,7 +7,7 @@
 //      island completes (and that treasure islands hand off to the Dig, and the Kraken fight starts),
 //   4. checks every island's layout builds with a reachable exit and no unknown chunks.
 // Exit code non-zero on any failure. Screenshots land in --shots <dir> when given.
-// Usage: node pirates/test/ahoy-smoke.cjs [--shots dir] [--only island-id]
+// Usage: node pirates/test/ahoy-smoke.cjs [--shots dir] [--only island-id] [--base url]
 const path = require("path");
 const fs = require("fs");
 const express = require("express");
@@ -23,16 +23,23 @@ function chromiumPath() {
 }
 
 (async () => {
-  const app = express();
-  app.use("/vendor", express.static(VENDOR));
-  app.use("/", express.static(ROOT));
-  const server = await new Promise((r) => { const s = app.listen(0, () => r(s)); });
-  const base = `http://127.0.0.1:${server.address().port}/`;
+  // --base <url> plays a deployed copy (e.g. staging's /ahoy-quest/) instead of a local static server.
+  const remote = args.includes("--base") ? args[args.indexOf("--base") + 1] : null;
+  let server = null, base = remote;
+  if (!remote) {
+    const app = express();
+    app.use("/vendor", express.static(VENDOR));
+    app.use("/", express.static(ROOT));
+    server = await new Promise((r) => { const s = app.listen(0, () => r(s)); });
+    base = `http://127.0.0.1:${server.address().port}/`;
+  }
   const { chromium } = require("playwright");
   let browser;
-  try { browser = await chromium.launch({ args: ["--autoplay-policy=no-user-gesture-required"] }); }
-  catch (_) { browser = await chromium.launch({ executablePath: "/opt/pw-browsers/chromium", args: ["--autoplay-policy=no-user-gesture-required"] }); }
-  const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
+  const proxyUrl = remote && (process.env.HTTPS_PROXY || process.env.https_proxy);
+  const launch = { args: ["--autoplay-policy=no-user-gesture-required"], ...(proxyUrl ? { proxy: { server: proxyUrl } } : {}) };
+  try { browser = await chromium.launch(launch); }
+  catch (_) { browser = await chromium.launch({ ...launch, executablePath: "/opt/pw-browsers/chromium" }); }
+  const page = await browser.newPage({ viewport: { width: 1280, height: 720 }, ignoreHTTPSErrors: !!remote }); // remote runs go through the container's TLS proxy
   const errors = [];
   page.on("pageerror", (e) => errors.push("pageerror: " + e.message));
   page.on("response", (r) => { if (r.status() >= 400 && !/fonts\.g/.test(r.url())) if (!/\/api\/ahoy\//.test(r.url())) errors.push("http " + r.status() + " " + r.url()); });
@@ -104,7 +111,7 @@ function chromiumPath() {
   check(await page.evaluate(() => AHOY.Save.treasure("bay")), "dig completes and records the treasure");
 
   check(errors.length === 0, "no console errors" + (errors.length ? ":\n    " + errors.slice(0, 12).join("\n    ") : ""));
-  await browser.close(); server.close();
+  await browser.close(); if (server) server.close();
   console.log(fails.length ? `\n${fails.length} FAILED` : "\nall passed");
   process.exit(fails.length ? 1 : 0);
 })().catch((e) => { console.error(e); process.exit(1); });
