@@ -134,7 +134,7 @@ class TitleScene extends Phaser.Scene {
     const links = [["Website", AHOY.LINKS.site], ["X", AHOY.LINKS.x], ["Telegram", AHOY.LINKS.tg], ["NFTs", AHOY.LINKS.nfts]];
     links.forEach(([l, href], i) => {
       const t = UI.text(this, 70 + i * 110, 700, l, 26, "#ffffff", { stroke: "#2b1b12", strokeThickness: 4 }).setInteractive({ useHandCursor: true });
-      t.on("pointerup", () => window.open(href, "_blank", "noopener"));
+      t.on("pointerup", () => AHOY.openLink(href));
     });
     UI.text(this, 1150, 700, "Crafted by Cluck Norris Productions", 22, "#ffefc9", { stroke: "#2b1b12", strokeThickness: 4 });
     if (AHOY.Gate.mode() === "demo") UI.text(this, 1120, 36, "PREVIEW BUILD", 26, "#ffffff", { stroke: "#fa0d0d", strokeThickness: 5 });

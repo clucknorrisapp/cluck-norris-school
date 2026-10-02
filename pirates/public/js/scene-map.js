@@ -66,7 +66,7 @@
       this.tweens.add({ targets: this.ship, y: this.ship.y - 8, angle: 3, duration: 1100, yoyo: true, repeat: -1, ease: "Sine.inOut" });
 
       this.drawHud();
-      UI.muteButton(this);
+      UI.muteButton(this, 1238, 92);
 
       if (this.data0.arrived != null) this.time.delayedCall(350, () => this.landPrompt(this.data0.arrived));
       else if (this.data0.first) this.toast("Click an island to sail there. Each island hides a piece of the map!");

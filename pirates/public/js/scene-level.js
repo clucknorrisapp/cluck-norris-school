@@ -189,6 +189,15 @@
 
       this.makeHud();
       this.banner(this.isl.name, this.pirate.powerName + ": press C / ★ to use · X / ⚔ to attack");
+      if (!AHOY.Save.get().seenControls) { // first landing: a controls card
+        AHOY.Save.set({ seenControls: true });
+        const c = this.add.container(640, 470).setScrollFactor(0).setDepth(960);
+        c.add(UI.panel(this, 0, 0, 760, 150));
+        c.add(UI.text(this, 0, -40, UI.isTouch() ? "◀ ▶ move · ⤒ jump · ⚔ cutlass · ★ power" : "← → / A D move · SPACE jump · X cutlass · C power · P pause", 34, "#2b1b12"));
+        c.add(UI.text(this, 0, 6, "Stomp crabs and gulls · grab the torn MAP PIECE · reach the dock", 30, "#7a1f12"));
+        c.add(UI.text(this, 0, 46, "Fall in the sea and you're back at the last flag", 26, "#3d2a1f"));
+        this.tweens.add({ targets: c, alpha: 0, delay: 6500, duration: 600, onComplete: () => c.destroy() });
+      }
       this.state.startedAt = this.time.now;
       AHOY.Audio.music(true);
       if (spec.boss) this.bossSpec = spec.boss;
@@ -279,7 +288,7 @@
         this.player.body.setAllowGravity(false); this.player.body.setVelocity(s.facing * 920, 0);
         this.time.delayedCall(320, () => { if (!s.grappling) this.player.body.setAllowGravity(true); });
       } else if (p === "grapple") {
-        const ring = this.rings.filter((r) => r.active && r.y < this.player.y && Phaser.Math.Distance.Between(r.x, r.y, this.player.x, this.player.y) < 380)
+        const ring = this.rings.filter((r) => r.active && r.y < this.player.y && Phaser.Math.Distance.Between(r.x, r.y, this.player.x, this.player.y) < 480)
           .sort((a, b) => Phaser.Math.Distance.Between(a.x, a.y, this.player.x, this.player.y) - Phaser.Math.Distance.Between(b.x, b.y, this.player.x, this.player.y))[0];
         if (!ring) { this.popText(this.player.x, this.player.y - 90, "No ring in reach"); s.powerCd = this.time.now + 400; return; }
         s.powerCd = this.time.now + 900; s.grappling = true; AHOY.Audio.play("power");

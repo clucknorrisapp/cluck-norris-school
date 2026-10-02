@@ -74,8 +74,7 @@
 
     // ── Rug Kraken: tentacles pop up around the ship — whack them before they slap. ──
     kraken() {
-      this.add.image(640, 470, "ship").setScale(0.34).setDepth(5);
-      let whacked = 0, slapped = 0;
+      let whacked = 0, slapped = 0; // the card art already has the ship in the kraken's grip
       const slots = [[300, 420], [460, 300], [820, 300], [980, 420], [380, 600], [900, 600]];
       this.hud.setText("Whacked: 0");
       const pop = () => {

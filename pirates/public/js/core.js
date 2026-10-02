@@ -155,8 +155,8 @@ AHOY.UI = {
     return img.setScale(s);
   },
   isTouch: () => ("ontouchstart" in window) || navigator.maxTouchPoints > 0,
-  muteButton(scene) {
-    const b = AHOY.UI.text(scene, 1240, 36, AHOY.Audio.muted() ? "🔇" : "🔊", 34).setDepth(1000).setScrollFactor(0).setInteractive({ useHandCursor: true });
+  muteButton(scene, x = 1240, y = 36) {
+    const b = AHOY.UI.text(scene, x, y, AHOY.Audio.muted() ? "🔇" : "🔊", 34).setDepth(1000).setScrollFactor(0).setInteractive({ useHandCursor: true });
     b.on("pointerup", () => { const m = !AHOY.Audio.muted(); AHOY.Audio.setMuted(m); b.setText(m ? "🔇" : "🔊"); });
     return b;
   },
@@ -164,6 +164,13 @@ AHOY.UI = {
     scene.cameras.main.fadeOut(260, 0, 0, 0);
     scene.cameras.main.once("camerafadeoutcomplete", () => scene.scene.start(key, data));
   },
+};
+
+// Open an outside link. A real <a> click works in more embeds than window.open (which some
+// sandboxed frames refuse and return null for).
+AHOY.openLink = function (href) {
+  try { const a = document.createElement("a"); a.href = href; a.target = "_blank"; a.rel = "noopener"; document.body.appendChild(a); a.click(); a.remove(); }
+  catch (_) { try { window.open(href, "_blank", "noopener"); } catch (__) {} }
 };
 
 // The pirate a player sails as: a starter, or (holders) their own NFT mapped onto a starter + powers.
