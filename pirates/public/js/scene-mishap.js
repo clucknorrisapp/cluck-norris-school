@@ -26,6 +26,9 @@
     }
     start() {
       this.started = true;
+      // Steering and whack games use the arrows themselves; menus take them back at the summary.
+      if (["storm", "kraken", "seagulls"].includes(this.key)) this.navOff = true;
+      if (["kraken", "seagulls"].includes(this.key)) this.cursorStep = AHOY.Nav.cursor(this); // keys / pad aim a crosshair
       this.hud = UI.text(this, 640, 40, "", 40, "#ffffff", { stroke: "#2b1b12", strokeThickness: 7 }).setDepth(50);
       this.timerText = UI.text(this, 1180, 40, "", 40, "#ffcd77", { stroke: "#2b1b12", strokeThickness: 7 }).setDepth(50);
       ({ storm: this.storm, kraken: this.kraken, seagulls: this.gulls, sirens: this.sirens, bottle: this.bottle, rival: this.rival, whirlpool: this.whirl })[this.key].call(this);
@@ -220,10 +223,14 @@
       this.clock(11, () => this.finish(0, "Dragged around the pool — you lost some booty to the depths."));
     }
 
-    update(_, dms) { if (this.started && !this.over && this.stepFn) this.stepFn(dms / 1000); }
+    update(_, dms) {
+      if (!this.started || this.over) return;
+      if (this.stepFn) this.stepFn(dms / 1000);
+      if (this.cursorStep) this.cursorStep(dms / 1000);
+    }
 
     finish(reward, msg) {
-      if (this.over) return; this.over = true;
+      if (this.over) return; this.over = true; this.navOff = false;
       this.spawnEv && this.spawnEv.remove(); this.clockEv && this.clockEv.remove();
       const net = reward + this.delta;
       AHOY.Save.addBooty(net);

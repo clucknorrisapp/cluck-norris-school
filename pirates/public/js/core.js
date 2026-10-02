@@ -134,7 +134,9 @@ AHOY.UI = {
     if (!disabled) {
       c.on("pointerover", () => draw(true));
       c.on("pointerout", () => draw(false));
-      c.on("pointerup", () => { AHOY.Audio.unlock(); AHOY.Audio.play("click"); onClick && onClick(); });
+      const press = () => { AHOY.Audio.unlock(); AHOY.Audio.play("click"); onClick && onClick(); };
+      c.on("pointerup", press);
+      if (AHOY.Nav) AHOY.Nav.add(scene, c, press); // arrows / d-pad can reach it, Enter / A presses it
     }
     c.label = t;
     return c;

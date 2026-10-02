@@ -92,7 +92,7 @@
       this.pirate = AHOY.currentPirate();
       this.state = { hp: 3, coins: 0, secretsFound: 0, piece: false, done: false, invulnUntil: 0, dashUntil: 0, attackCd: 0, powerCd: 0,
         ghostUntil: 0, xrayUntil: 0, grappling: false, facing: 1, coyote: 0, jumpBuf: 0, startedAt: 0, respawn: { x: 2 * U, y: GY - 80 }, paused: false,
-        airJumps: 1, ducking: false, swingUntil: 0, spinUntil: 0 };
+        airJumps: 1, swingUntil: 0, spinUntil: 0 };
     }
 
     create() {
@@ -152,7 +152,6 @@
       // The pirate: an invisible physics body + the sprite drawn on top of it.
       this.player = this.physics.add.sprite(this.state.respawn.x, this.state.respawn.y, "px").setDepth(20);
       this.player.body.setSize(44, 92, true).setMaxVelocity(900, 1100);
-      this.bodyOffset = { x: this.player.body.offset.x, y: this.player.body.offset.y };
       this.pv = this.add.image(0, 0, this.pirate.sprite).setOrigin(0.5, 1).setDepth(21);
       this.pvPose = null; this.setPose("idle");
       if (this.pirate.portrait) { // NFT holders: a crest with their NFT over the pirate
@@ -184,7 +183,7 @@
 
       // Input.
       this.keys = this.input.keyboard.addKeys("LEFT,RIGHT,UP,DOWN,SPACE,A,D,W,S,X,J,C,K,Z,ESC,P,SHIFT");
-      this.touch = { left: false, right: false, jump: false, attack: false, power: false, duck: false };
+      this.touch = { left: false, right: false, jump: false, attack: false, power: false };
       if (UI.isTouch()) this.makeTouch();
       this.input.keyboard.on("keydown-ESC", () => this.togglePause());
       this.input.keyboard.on("keydown-P", () => this.togglePause());
@@ -195,7 +194,7 @@
         AHOY.Save.set({ seenControls: true });
         const c = this.add.container(640, 330).setScrollFactor(0).setDepth(960);
         c.add(UI.panel(this, 0, 0, 1060, 150));
-        c.add(UI.text(this, 0, -40, UI.isTouch() ? "◀ ▶ move · ⤒ jump (tap again to double jump) · ▼ duck · ⚔ cutlass · ★ power" : "← → move · SPACE jump, again for double jump · ↓ duck · X cutlass · C power", 27, "#2b1b12"));
+        c.add(UI.text(this, 0, -40, UI.isTouch() ? "◀ ▶ move · ⬆ jump (tap again in the air to double jump) · swords = cutlass · ★ power" : "← → move · SPACE jump (again in the air = double jump) · X cutlass · C power · ESC pause", 27, "#2b1b12"));
         c.add(UI.text(this, 0, 6, "Stomp crabs and gulls · grab the torn MAP PIECE · reach the dock", 30, "#7a1f12"));
         c.add(UI.text(this, 0, 46, "Fall in the sea and you're back at the last flag", 26, "#3d2a1f"));
         this.tweens.add({ targets: c, alpha: 0, delay: 6500, duration: 600, onComplete: () => c.destroy() });
@@ -203,6 +202,7 @@
       this.state.startedAt = this.time.now;
       AHOY.Audio.music(true);
       if (spec.boss) this.bossSpec = spec.boss;
+      this.navOff = () => !(this.state.paused || this.state.done); // the arrows steer the pirate while playing
       window.__AHOY_LEVEL = this; // test hook (headless playthrough)
     }
 
@@ -245,15 +245,8 @@
       if (!this.textures.exists(key)) { if (this.pvPose === "idle") return; pose = "idle"; }
       this.pvPose = pose;
       this.pv.setTexture(pose === "idle" ? this.pirate.sprite : key);
-      const h = { idle: 112, run1: 110, run2: 112, jump: 108, duck: 74, swing: 110 }[pose] || 112;
+      const h = { idle: 112, run1: 110, run2: 112, jump: 108, swing: 110 }[pose] || 112;
       this.pvScale = h / this.pv.height;
-    }
-    setDuck(on) {
-      const s = this.state, b = this.player.body;
-      if (on === s.ducking) return;
-      s.ducking = on;
-      if (on) { b.setSize(44, 60, false); b.setOffset(this.bodyOffset.x, this.bodyOffset.y + 32); }
-      else { b.setSize(44, 92, false); b.setOffset(this.bodyOffset.x, this.bodyOffset.y); }
     }
     doubleJump() {
       const s = this.state, b = this.player.body;
@@ -449,7 +442,6 @@
         if (kind === "left") g.fillTriangle(x - s * 0.5, y, x + s * 0.35, y - s * 0.5, x + s * 0.35, y + s * 0.5);
         else if (kind === "right") g.fillTriangle(x + s * 0.5, y, x - s * 0.35, y - s * 0.5, x - s * 0.35, y + s * 0.5);
         else if (kind === "jump") { g.fillTriangle(x, y - s * 0.55, x - s * 0.5, y, x + s * 0.5, y); g.fillRect(x - s * 0.17, y - 2, s * 0.34, s * 0.5); }
-        else if (kind === "duck") g.fillTriangle(x, y + s * 0.4, x - s * 0.5, y - s * 0.3, x + s * 0.5, y - s * 0.3);
         else if (kind === "attack") { // two crossed cutlasses, hilts at the bottom
           const k = Math.SQRT1_2;
           [-1, 1].forEach((d) => {
@@ -474,7 +466,7 @@
         c.on("pointerdown", down); c.on("pointerup", up); c.on("pointerout", up); c.on("pointerupoutside", up);
       };
       // Every button sits on the ground strip (below GY), so none of them cover the play space.
-      btn(80, 660, 46, "left"); btn(190, 660, 46, "right"); btn(296, 668, 34, "duck");
+      btn(80, 660, 46, "left"); btn(190, 660, 46, "right");
       btn(1206, 654, 50, "jump"); btn(1096, 672, 38, "attack"); btn(990, 676, 34, "power");
     }
 
@@ -495,6 +487,13 @@
       const pause = UI.text(this, 1170, 40, "❚❚", 36, "#ffffff", { stroke: "#2b1b12", strokeThickness: 6 }).setScrollFactor(0).setDepth(d + 1).setInteractive({ useHandCursor: true });
       pause.on("pointerup", () => this.togglePause());
       UI.muteButton(this);
+      // Always-on controls reminder along the ground strip (keyboard, or the controller's buttons once one is used).
+      const KEY_HINT = "SPACE jump · again in the air = double jump · X cutlass · C power · ESC pause";
+      const PAD_HINT = "A jump · again in the air = double jump · X/B cutlass · Y power · START pause";
+      this.hint = UI.text(this, 640, 702, AHOY.Input.pad().active ? PAD_HINT : KEY_HINT, 24, "#fff7e0", { stroke: "#2b1b12", strokeThickness: 5 }).setScrollFactor(0).setDepth(d + 1).setAlpha(0.9);
+      if (UI.isTouch() && !AHOY.Input.pad().active) this.hint.setVisible(false);
+      const onPad = (ev) => { if (!this.hint.active) return; this.hint.setText(ev === "connect" ? PAD_HINT : KEY_HINT).setVisible(ev === "connect" || !UI.isTouch()); };
+      AHOY.Input.onPad(onPad); this.events.once("shutdown", () => AHOY.Input.offPad(onPad));
     }
     hudCoins() { this.coinText && this.coinText.setText(String(this.state.coins)); this.secretText && this.secretText.setText(`Secrets ${this.state.secretsFound}/${this.spec.secrets}`); }
     hudHearts() { this.hearts.forEach((h, i) => h.setAlpha(i < this.state.hp ? 1 : 0.2)); }
@@ -518,12 +517,13 @@
       this.physics.pause(); this.tweens.pauseAll(); this.state.paused = true;
       const L = this.pauseLayer = this.add.container(0, 0).setScrollFactor(0).setDepth(3000);
       L.add(this.add.rectangle(640, 360, 1280, 720, 0x000000, 0.55).setScrollFactor(0));
-      L.add(UI.panel(this, 640, 360, 520, 400).setScrollFactor(0));
-      L.add(UI.title(this, 640, 220, "PAUSED", 60).setScrollFactor(0));
-      const b1 = UI.button(this, 640, 310, "RESUME", () => this.togglePause(), { w: 280, h: 62, size: 34 });
-      const b2 = UI.button(this, 640, 390, "RESTART ISLAND", () => { this.tweens.resumeAll(); this.scene.restart({ sea: this.seaIdx, island: this.islIdx }); }, { w: 280, h: 62, size: 30 });
-      const b3 = UI.button(this, 640, 470, "BACK TO MAP", () => { this.tweens.resumeAll(); this.scene.start("Map", { sea: this.seaIdx }); }, { w: 280, h: 62, size: 30 });
-      [b1, b2, b3].forEach((b) => { b.setScrollFactor(0); L.add(b); });
+      L.add(UI.panel(this, 640, 370, 520, 470).setScrollFactor(0));
+      L.add(UI.title(this, 640, 190, "PAUSED", 60).setScrollFactor(0));
+      const b1 = UI.button(this, 640, 275, "RESUME", () => this.togglePause(), { w: 280, h: 62, size: 34 });
+      const b2 = UI.button(this, 640, 350, "CONTROLS", () => AHOY.ControlsPanel.open(this), { w: 280, h: 62, size: 30 });
+      const b3 = UI.button(this, 640, 425, "RESTART ISLAND", () => { this.tweens.resumeAll(); this.scene.restart({ sea: this.seaIdx, island: this.islIdx }); }, { w: 280, h: 62, size: 30 });
+      const b4 = UI.button(this, 640, 500, "BACK TO MAP", () => { this.tweens.resumeAll(); this.scene.start("Map", { sea: this.seaIdx }); }, { w: 280, h: 62, size: 30 });
+      [b1, b2, b3, b4].forEach((b) => { b.setScrollFactor(0); L.add(b); });
     }
 
     // ── Finish ──
@@ -562,10 +562,7 @@
         const left = k.LEFT.isDown || k.A.isDown || this.touch.left, right = k.RIGHT.isDown || k.D.isDown || this.touch.right;
         const onGround = b.blocked.down || b.touching.down;
         if (onGround) { s.coyote = t + 110; s.airJumps = 1; }
-        const down = k.DOWN.isDown || k.S.isDown || this.touch.duck;
-        this.setDuck(down && onGround && t >= s.dashUntil);
-        const target = s.ducking ? 0 : (right ? 1 : 0) - (left ? 1 : 0);
-        if (s.ducking && (right || left)) s.facing = right ? 1 : -1;
+        const target = (right ? 1 : 0) - (left ? 1 : 0);
         if (t >= s.dashUntil) {
           const accel = onGround ? 2600 : 1700, max = 330;
           if (target) { b.setVelocityX(Phaser.Math.Clamp(b.velocity.x + target * accel * dt, -max, max)); s.facing = target; }
@@ -573,7 +570,7 @@
           const ice = this.isl.ground === "ice" && onGround; if (ice && !target) b.setVelocityX(b.velocity.x / 0.72 * 0.93);
         }
         if (Phaser.Input.Keyboard.JustDown(k.SPACE) || Phaser.Input.Keyboard.JustDown(k.UP) || Phaser.Input.Keyboard.JustDown(k.W) || Phaser.Input.Keyboard.JustDown(k.Z)) s.jumpBuf = t + 140;
-        if (s.jumpBuf > t && s.coyote > t) { this.setDuck(false); b.setVelocityY(-720); s.jumpBuf = 0; s.coyote = 0; AHOY.Audio.play("jump"); }
+        if (s.jumpBuf > t && s.coyote > t) { b.setVelocityY(-720); s.jumpBuf = 0; s.coyote = 0; AHOY.Audio.play("jump"); }
         else if (s.jumpBuf > t && s.airJumps > 0 && !onGround) { s.jumpBuf = 0; this.doubleJump(); }
         const jumpHeld = k.SPACE.isDown || k.UP.isDown || k.W.isDown || k.Z.isDown || this.touch.jump;
         if (!jumpHeld && b.velocity.y < -260) b.setVelocityY(b.velocity.y * 0.85); // short hop
@@ -584,7 +581,7 @@
       const grounded = b.blocked.down || b.touching.down;
       const running = Math.abs(b.velocity.x) > 40 && grounded;
       const air = !grounded && !s.grappling;
-      this.setPose(s.swingUntil > t ? "swing" : air || s.grappling ? "jump" : s.ducking ? "duck" : running ? (Math.floor(t / 120) % 2 ? "run2" : "run1") : "idle");
+      this.setPose(s.swingUntil > t ? "swing" : air || s.grappling ? "jump" : running ? (Math.floor(t / 120) % 2 ? "run2" : "run1") : "idle");
       const bob = running ? Math.abs(Math.sin(t / 60)) * 4 : 0;
       this.pv.setPosition(b.center.x, b.bottom + 2 - bob).setFlipX(s.facing < 0);
       this.pv.setScale(this.pvScale * (air ? 0.96 : 1), this.pvScale * (air ? 1.04 : 1));

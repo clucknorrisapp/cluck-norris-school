@@ -56,7 +56,7 @@
           }
         }
         const zone = this.add.zone(isl.x, isl.y + 20, 190, 170).setInteractive({ useHandCursor: open });
-        zone.on("pointerup", () => this.pick(i));
+        zone.on("pointerup", () => this.pick(i)); AHOY.Nav.add(this, zone, () => this.pick(i));
         this.islandObjs.push({ img, label });
       });
 
@@ -67,6 +67,7 @@
 
       this.drawHud();
       UI.muteButton(this, 52, 104); // top-left: the chart's compass rose sits top-right
+      UI.button(this, 112, 162, "CONTROLS", () => AHOY.ControlsPanel.open(this), { w: 170, h: 46, size: 26 });
 
       if (this.data0.arrived != null) this.time.delayedCall(350, () => this.landPrompt(this.data0.arrived));
       else if (this.data0.first) this.toast("Click an island to sail there. Each island hides a piece of the map!");
@@ -93,6 +94,7 @@
         const done = AHOY.Save.treasure(s.id);
         UI.text(this, x, y + 1, (open ? "" : "🔒 ") + (done ? "★ " : "") + s.name.replace("Rug Kraken's Deep", "Kraken's Deep").replace("Cold Storage Glacier", "Glacier"), 22, "#fff7e0");
         const z = this.add.zone(x, y, 172, 48).setInteractive({ useHandCursor: true });
+        AHOY.Nav.add(this, z, () => z.emit("pointerup"));
         z.on("pointerup", () => {
           AHOY.Audio.play("click");
           if (open) this.scene.restart({ sea: i });
