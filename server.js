@@ -3769,8 +3769,9 @@ const CSP_NQ = CSP.replace(
 // as the normiequest.app root (isGameHost/rawHost are declared further down and read the raw Host
 // header, not req.hostname, for the same anti-spoof reason documented there).
 const NQ_EVAL_PATH = /^\/normie-quest-x7(-lab)?$/;
+const AHOY_EVAL_PATH = /^\/ahoy-quest\/?$/;   // AHOY: PumpFunPirates also ships Phaser
 const needsEvalCSP = (req) =>
-  NQ_EVAL_PATH.test(req.path) || (isGameHost(req) && (req.path === "/" || req.path === ""));
+  NQ_EVAL_PATH.test(req.path) || AHOY_EVAL_PATH.test(req.path) || (isGameHost(req) && (req.path === "/" || req.path === ""));
 
 // PERMISSIONS-POLICY. Denies powerful browser features we never use, so an injected script
 // can't prompt for them under our origin. Only four are listed, and the omissions matter:
@@ -19748,6 +19749,10 @@ app.get("/curriculum", (req, res) => {
 const nqRouter = require("./normie-quest/routes");
 if (typeof nqRouter.setHelpers === "function") nqRouter.setHelpers({ mutatingGetRefused });
 app.use(nqRouter);
+// AHOY: PumpFunPirates — a game built for the Pump Fun Pirates community (2026-10-02). Unlisted
+// at /ahoy-quest/, noindex; static game + a read-only holder API (pirates/routes.js). Mounted
+// before the React catch-all and the /api 404 so its routes win.
+app.use(require("./pirates/routes")({ getUsdPrice: (m) => orderbook.getUsdPrice(m) }));
 
 // Gated dry-run / manual-fire of the Normie Quest playtest digest (the twice-daily auto-DM).
 // Dry by default (returns the preview it WOULD send); &send=1 actually DMs the operator chat;

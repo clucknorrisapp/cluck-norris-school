@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+<meta name="robots" content="noindex, nofollow" />
+<meta name="theme-color" content="#fa0d0d" />
+<title>AHOY: PumpFunPirates</title>
+<meta name="description" content="Sail the Solana seas with the Pump Fun Pirates: island platforming, sea mishaps and a treasure map to complete." />
+<link rel="icon" type="image/png" href="assets/sprite/item-coin.png" />
+<style>
+  /* Self-hosted (SIL Open Font License): Pirata One for titles, Just Another Hand for UI — the latter is the font on pumpfunpirates.com. */
+  @font-face { font-family: 'Pirata One'; src: url(assets/fonts/pirata-one.woff2) format('woff2'); font-display: swap; }
+  @font-face { font-family: 'Just Another Hand'; src: url(assets/fonts/just-another-hand.woff2) format('woff2'); font-display: swap; }
+  html, body { margin: 0; height: 100%; background: #12303d; overflow: hidden; touch-action: none; -webkit-user-select: none; user-select: none; }
+  #game { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+  #loading { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; color: #ffcd77; font: 42px 'Pirata One', Georgia, serif; text-align: center; }
+  #rotate { display: none; position: fixed; inset: 0; z-index: 10; background: #12303d; color: #ffcd77; font: 34px 'Pirata One', Georgia, serif; align-items: center; justify-content: center; text-align: center; padding: 24px; }
+  @media (orientation: portrait) and (max-width: 820px) { #rotate { display: flex; } }
+</style>
+</head>
+<body>
+<div id="loading">⚓ AHOY: PumpFunPirates</div>
+<div id="rotate">🏴‍☠️ Turn your phone sideways, matey — the seas are wide!</div>
+<div id="game"></div>
+<script src="vendor/phaser-3.60.0.min.js"></script>
+<script src="js/data.js"></script>
+<script src="js/core.js"></script>
+<script src="js/gate.js"></script>
+<script src="js/scenes-menu.js"></script>
+<script src="js/scene-map.js"></script>
+<script src="js/scene-mishap.js"></script>
+<script src="js/scene-level.js"></script>
+<script src="js/scene-dig.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>
