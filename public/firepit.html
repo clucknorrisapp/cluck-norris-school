@@ -260,7 +260,7 @@
     <div class="list" id="m-list"></div>
     <div class="totals" style="margin:4px 0 0;">
       <div class="t rec">Reclaim: <b id="m-rec">0 SOL</b></div>
-      <div class="t val">Destroy: <b id="m-val">$0</b></div>
+      <div class="t val" id="m-valrow">Destroy: <b id="m-val">$0</b></div>
     </div>
     <div class="bigwarn hidden" id="m-warn"></div>
     <div class="confirmrow hidden" id="m-typebox">
@@ -404,11 +404,30 @@ function scanErrMsg(e){
     return "Your wallet’s in-app browser blocked the scan (it got a web page, not data — usually a security checkpoint). Try again, or open clucknorris.app/firepit in Chrome/Safari or in Phantom or Solflare’s browser, then reconnect.";
   return "Scan failed: " + ((e && e.message) || e);
 }
+// Accounts we watched close (and surpluses we watched withdraw) in this tab, with when. An RPC node
+// can lag a few seconds behind the confirmation we saw, so a Rescan in that window must not bring
+// a closed account back (owner report 2026-10-02: "rescan doesn't actually rescan" after a burn).
+var RECENT_MS = 120000;
+var recentlyClosed = {};      // tokenAccount -> ms
+var recentlyWithdrawn = {};   // tokenAccount -> { at: ms, priorLamports }
+function applyRecent(list){
+  var now = Date.now();
+  return (list || []).filter(function(a){
+    var t = recentlyClosed[a.tokenAccount];
+    return !(t && now - t < RECENT_MS);
+  }).map(function(a){
+    var w = recentlyWithdrawn[a.tokenAccount];
+    if (w && now - w.at < RECENT_MS && a.rentLamports >= w.priorLamports) {
+      return Object.assign({}, a, { surplusLamports: 0, surplusEligible: false });   // the withdrawal we saw land hasn't reached this node yet
+    }
+    return a;
+  });
+}
 async function scan(){
   setStatus($("status"), "Scanning your wallet on-chain…");
   try {
     var r = await fetchScan(wPubkey, 3);
-    accounts = r.accounts || [];
+    accounts = applyRecent(r.accounts || []);
     // Strict: a MISSING field (older server) must read the same as an explicit false (P2-3).
     surplusAvailable = r.surplusAvailable === true;
     selected = {};
@@ -441,8 +460,8 @@ async function rescanUntilClean(burnedSet){
     try {
       var r2 = await fetchScan(wPubkey, 1);   // one try per loop; the loop itself is the retry
       if (!r2 || !r2.success) continue;
-      var fresh = r2.accounts || [];
-      var lingering = fresh.some(function(a){ return burnedSet[a.tokenAccount]; });
+      var fresh = applyRecent(r2.accounts || []);
+      var lingering = (r2.accounts || []).some(function(a){ return burnedSet[a.tokenAccount]; });
       if (!lingering){
         accounts = fresh; selected = {};
         render(); applyScanFoot(fresh.length, r2.capped);
@@ -622,6 +641,14 @@ function clearSurplus(){ selectedSurplus = {}; render(); }
 function isNativeSol(a){ return a.mint === SOL_MINT; }   // closing wSOL UNWRAPS it back to the owner — not destroyed
 var confirmSel = [];   // the exact list the modal showed — doBurn/doSurplusReclaim sign THIS, never a freshly-recomputed selection
 var confirmKind = null;   // "reclaim" | "burn" | "surplus" — routes m-go to the right sender
+// The sheet's main button says what this job actually does — only a real burn says "Burn"
+// (owner, 2026-10-02: the surplus and empty-account reclaims were showing "🔥 Burn now").
+function setGoButton(kind){
+  var b = $("m-go");
+  if (kind === "burn"){ b.textContent = "🔥 Burn now"; b.classList.add("danger"); }
+  else if (kind === "surplus"){ b.textContent = "💧 Reclaim surplus"; b.classList.remove("danger"); }
+  else { b.textContent = "♻️ Reclaim rent"; b.classList.remove("danger"); }
+}
 function openConfirm(list, kind){
   // Never start a new job while a previous one is still signing/sending — that would overwrite
   // confirmSel/confirmKind out from under the run already in flight (adversarial review, finding 1).
@@ -651,7 +678,9 @@ function openConfirm(list, kind){
       return '<div class="li"><span>'+(a.symbol?esc(a.symbol):esc(shortAddr(a.mint)))+'</span><span class="r">'+right+'</span></div>';
     }).join("");
     $("m-rec").textContent = fmtSol(surplusTotal);
-    $("m-val").textContent = "kept open — nothing destroyed";
+    $("m-val").textContent = "";
+    $("m-valrow").classList.add("hidden");   // nothing is destroyed — no "Destroy:" line at all
+    setGoButton("surplus");
     $("m-title").textContent = "💧 Reclaim surplus rent";
     $("m-intro").textContent = "These accounts hold more SOL than today's rent-exempt minimum requires. This withdraws only that surplus — the account and every token balance stay exactly as they are. Net after the estimated network fee: " + fmtSol(netLamportsC/LAMPORTS) + ".";
     if (netLamportsC <= 0){
@@ -689,6 +718,11 @@ function openConfirm(list, kind){
 
   $("m-rec").textContent = fmtSol(rent);
   $("m-val").textContent = unpriced.length ? (val>0?fmtUsd(val)+' + unknown':'unknown') : fmtUsd(val);
+  // A sheet where nothing is burned (every row empty, or wrapped SOL that only unwraps) is a
+  // reclaim, and says so on its button — "Burn" only when a burn instruction is really built.
+  var burnsSomething = sel.some(function(a){ return !a.empty && !isNativeSol(a); });
+  setGoButton(kind === "burn" && burnsSomething ? "burn" : "reclaim");
+  $("m-valrow").classList.toggle("hidden", !burnsSomething);
 
   var needType = val > TYPE_THRESHOLD || unpriced.length > 0;   // known value OR unknown value → type BURN
   if (val > 0 || unpriced.length > 0){
@@ -738,7 +772,7 @@ async function doBurn(){
     var freshScan = await fetchScan(wPubkey, 1);
     if (freshScan && freshScan.success){
       var freshById = {};
-      (freshScan.accounts || []).forEach(function(a){ freshById[a.tokenAccount] = a; });
+      applyRecent(freshScan.accounts || []).forEach(function(a){ freshById[a.tokenAccount] = a; });
       sel = sel.filter(function(a){
         var f = freshById[a.tokenAccount];
         if (!f || !burnable(f)) return false;
@@ -816,7 +850,7 @@ async function doBurn(){
     // retry re-target rows we already watched land (finding 7).
     var failedAtChunk = typeof c !== "undefined" ? c : (chunks.length - 1);
     var notAttempted = chunks.slice(failedAtChunk + 1).reduce(function(n, ch){ return n + ch.length; }, 0);
-    var msg = "Burn failed: " + (e.message || e);
+    var msg = (runKind === "burn" ? "Burn failed: " : "Reclaim failed: ") + (e.message || e);
     if (confirmedAccounts.length) msg += " (" + confirmedAccounts.length + " account" + (confirmedAccounts.length===1?"":"s") + " already closed)";
     if (notAttempted > 0) msg += " " + notAttempted + " account" + (notAttempted===1?"":"s") + " never attempted, unchanged.";
     setStatus($("m-status"), msg, "err");
@@ -838,7 +872,8 @@ async function doBurn(){
 // Drop the accounts we confirmed closed, then re-poll until the RPC view agrees. Only ever called
 // with accounts whose tx we saw confirmed — never with merely-sent ones.
 function pruneConfirmed(confirmedAccounts){
-  var set = {}; confirmedAccounts.forEach(function(a){ set[a.tokenAccount] = true; delete selected[a.tokenAccount]; });
+  var set = {}, now = Date.now();
+  confirmedAccounts.forEach(function(a){ set[a.tokenAccount] = true; recentlyClosed[a.tokenAccount] = now; delete selected[a.tokenAccount]; });
   accounts = accounts.filter(function(a){ return !set[a.tokenAccount]; });
   render(); applyScanFoot(accounts.length, false);
   rescanUntilClean(set);
@@ -847,7 +882,10 @@ function finishBurn(confirmedAccounts, unconfirmedCount){
   var reclaimed = confirmedAccounts.reduce(function(s,a){ return s + a.rentLamports; }, 0) / LAMPORTS;
   var n = confirmedAccounts.length;
   pruneConfirmed(confirmedAccounts);
-  var msg = "🔥 Done — burned/closed " + n + " account" + (n===1?"":"s") + ", reclaimed ~" + fmtSol(reclaimed) + ".";
+  var burned = confirmedAccounts.filter(function(a){ return !a.empty && a.mint !== SOL_MINT; }).length;
+  var msg = burned
+    ? "🔥 Done — burned and closed " + n + " account" + (n===1?"":"s") + ", reclaimed ~" + fmtSol(reclaimed) + "."
+    : "♻️ Done — closed " + n + " account" + (n===1?"":"s") + " and reclaimed ~" + fmtSol(reclaimed) + ". Nothing was burned.";
   // Tell the truth when some didn't land: those accounts are untouched, don't claim their rent.
   if (unconfirmedCount > 0) msg += " " + unconfirmedCount + " transaction" + (unconfirmedCount===1?"":"s") + " didn’t confirm in time — those accounts are unchanged; hit Rescan to re-check.";
   setStatus($("status"), msg, unconfirmedCount > 0 ? "err" : "ok");
@@ -876,7 +914,7 @@ async function doSurplusReclaim(){
     var freshScan = await fetchScan(wPubkey, 1);
     if (freshScan && freshScan.success){
       var freshById = {};
-      (freshScan.accounts || []).forEach(function(a){ freshById[a.tokenAccount] = a; });
+      applyRecent(freshScan.accounts || []).forEach(function(a){ freshById[a.tokenAccount] = a; });
       sel = sel.filter(function(a){ var f = freshById[a.tokenAccount]; return f && f.surplusEligible; })
                .map(function(a){ return freshById[a.tokenAccount]; });
     }
@@ -957,7 +995,8 @@ async function doSurplusReclaim(){
 // remaining surplus (so it drops out of THIS job's table) and unselected, then a real rescan
 // confirms what actually arrived — never trust the request amount as the delivered amount.
 function pruneSurplusConfirmed(confirmedAccounts){
-  var set = {}; confirmedAccounts.forEach(function(a){ set[a.tokenAccount] = true; delete selectedSurplus[a.tokenAccount]; });
+  var set = {}, nowW = Date.now();
+  confirmedAccounts.forEach(function(a){ set[a.tokenAccount] = true; recentlyWithdrawn[a.tokenAccount] = { at: nowW, priorLamports: a.rentLamports }; delete selectedSurplus[a.tokenAccount]; });
   accounts = accounts.map(function(a){
     return set[a.tokenAccount] ? Object.assign({}, a, { surplusLamports: 0, surplusEligible: false }) : a;
   });
@@ -1003,7 +1042,7 @@ async function rescanUntilCleanSurplus(touchedSet, requestedSol){
             actualLamports += Math.max(0, priorLamports[a.tokenAccount] - a.rentLamports);
           }
         });
-        accounts = fresh;
+        accounts = applyRecent(fresh);
         surplusAvailable = r2.surplusAvailable === true;   // strict — see scan()'s comment (P2-3)
         render(); applyScanFoot(fresh.length, r2.capped);
         setStatus($("status"), "💧 Confirmed — " + fmtSol(actualLamports/LAMPORTS) + " actually arrived in your wallet (requested ~" + fmtSol(requestedSol) + ").", "ok");

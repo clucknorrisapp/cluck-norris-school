@@ -2938,5 +2938,6 @@
   "stays open": "sigue abierta",
   "{cur} now, {min} required": "{cur} ahora, {min} requerido",
   "The estimated network fee is likely to eat all or more of this surplus — you may end up with less SOL than you started with, or barely break even.": "La tarifa de red estimada probablemente consuma todo el excedente o más — podrías terminar con menos SOL del que tenías, o apenas cubrir gastos.",
-  "requested — couldn't confirm the actual amount": "solicitado — no se pudo confirmar el monto real"
+  "requested — couldn't confirm the actual amount": "solicitado — no se pudo confirmar el monto real",
+  "These were submitted but had no on-chain status after 30 seconds. They may still have landed. Hit Rescan to check before signing them again.": "Estas se enviaron pero no tuvieron estado on-chain después de 30 segundos. Es posible que se hayan confirmado igual. Presiona Reescanear para verificar antes de volver a firmarlas."
 }

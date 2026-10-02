@@ -15293,7 +15293,9 @@ app.get("/api/burn-scan", async (req, res) => {
   try {
     const accounts = [];
     for (const prog of [TOKEN_2022_PROG, TOKEN_PROG]) {
-      const d = await rpc("getTokenAccountsByOwner", [wallet, { programId: prog }, { encoding: "jsonParsed" }]);
+      // "confirmed", not the RPC default "finalized": finalized trails by ~15-30s, so a Rescan right
+      // after a burn/reclaim showed the closed accounts again until a reconnect (owner report 2026-10-02).
+      const d = await rpc("getTokenAccountsByOwner", [wallet, { programId: prog }, { encoding: "jsonParsed", commitment: "confirmed" }]);
       for (const acc of (d?.result?.value || [])) {
         const info = acc.account?.data?.parsed?.info;
         if (!info?.mint || !acc.pubkey) continue;

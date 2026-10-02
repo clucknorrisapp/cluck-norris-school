@@ -2938,5 +2938,6 @@
   "stays open": "保持开放",
   "{cur} now, {min} required": "现有 {cur}，需要 {min}",
   "The estimated network fee is likely to eat all or more of this surplus — you may end up with less SOL than you started with, or barely break even.": "预估的网络手续费很可能会吃掉这笔盈余的全部甚至更多——你最终得到的 SOL 可能比原来还少，或者刚好打平。",
-  "requested — couldn't confirm the actual amount": "已请求——无法确认实际到账金额"
+  "requested — couldn't confirm the actual amount": "已请求——无法确认实际到账金额",
+  "These were submitted but had no on-chain status after 30 seconds. They may still have landed. Hit Rescan to check before signing them again.": "这些交易已提交，但 30 秒后仍没有链上状态。它们可能仍然已经上链。再次签名之前，请先点击「重新扫描」进行核查。"
 }
