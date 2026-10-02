@@ -179,6 +179,52 @@ t("f2: warn-only and unknown rows are NOT excluded (unknown is neither safe nor 
   assert.ok(row.flags.every((x) => x.level === "warn"));
 });
 
+// (g) the transfer-fee CAP: the SPL library charges min(amount * bps / 10000, maximumFee)
+const feeMint = (newer, older) => ({
+  decimals: 9, isInitialized: true, freezeAuthority: null, mintAuthority: null, supply: "8742505094822",
+  extensions: [{ extension: "transferFeeConfig", state: { newerTransferFee: newer, olderTransferFee: older || newer, transferFeeConfigAuthority: AUTH, withdrawWithheldAuthority: AUTH, withheldAmount: 0 } }],
+});
+const fee = (epoch, bps, max) => ({ epoch, transferFeeBasisPoints: bps, maximumFee: max });
+const feeRun = (info, epoch) => classifyMint(info, TOKEN_2022_PROGRAM, { jupToken: { isVerified: true, tags: [] }, epoch, nowSec: AFTER });
+t("g1: 200 bps with maximumFee 0 -> no block, an info note only", () => {
+  const r = feeRun(feeMint(fee(1000, 200, 0)), 1046);
+  assert.strictEqual(r.transferFeePct, 0);
+  assert.strictEqual(r.transferFeeConfiguredPct, 2);
+  assert.deepStrictEqual(codes(r, "block"), []);
+  assert.deepStrictEqual(codes(r, "info"), ["transfer_fee_zero_cap"]);
+  assert.ok(/no fee is charged today/.test(r.flags[0].text));
+  const risk = { tokenA: r, tokenB: r, pool: { flags: [] } };
+  const part = partitionByRisk([{ address: "Z", risk, flags: mergeFlags(risk, {}) }], false);
+  assert.strictEqual(part.ranked.length, 1, "a zero-cap fee does not drop the pool from the ranking");
+});
+t("g2: 200 bps with a small cap -> capped wording, still blocking", () => {
+  const r = feeRun(feeMint(fee(1000, 200, 1500000000)), 1046); // 1.5 tokens at 9 decimals
+  assert.strictEqual(r.transferFeePct, 2);
+  assert.strictEqual(r.transferFeeCapped, true);
+  assert.strictEqual(r.transferFeeMaxUi, 1.5);
+  assert.deepStrictEqual(codes(r, "block"), ["transfer_fee"]);
+  const text = r.flags.find((f) => f.code === "transfer_fee").text;
+  assert.ok(/^2% per transfer, capped at 1\.5 tokens per transfer/.test(text), text);
+  assert.ok(!/on every move/.test(text), "no unconditional claim when a cap binds");
+});
+t("g3: 200 bps with a huge cap -> today's behaviour (uncapped wording, blocking)", () => {
+  for (const max of [18446744073709552000, 1e18]) {
+    const r = feeRun(feeMint(fee(1000, 200, max)), 1046);
+    assert.strictEqual(r.transferFeePct, 2);
+    assert.strictEqual(r.transferFeeCapped, false);
+    assert.deepStrictEqual(codes(r, "block"), ["transfer_fee"]);
+    assert.ok(/^2% transfer fee on every move/.test(r.flags.find((f) => f.code === "transfer_fee").text));
+  }
+});
+t("g4: older/newer pick uses the cap too, and the higher of the two with no epoch", () => {
+  const info = feeMint(fee(1039, 300, 0), fee(1032, 100, 18446744073709552000));
+  assert.strictEqual(feeRun(info, 1035).transferFeePct, 1, "before the newer epoch the older config applies");
+  assert.strictEqual(feeRun(info, 1046).transferFeePct, 0, "from the newer epoch its zero cap means no fee");
+  assert.strictEqual(feeRun(info, null).transferFeePct, 1, "no epoch: the config that actually charges more");
+  const info2 = feeMint(fee(1039, 300, 18446744073709552000), fee(1032, 100, 18446744073709552000));
+  assert.strictEqual(feeRun(info2, null).transferFeePct, 3);
+});
+
 // The fetcher never throws: an unreadable mint (here, not even base58 — fails before any network)
 // is `unknown` with a warn flag; not safe, not blocked.
 (async () => {
