@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-30T16:38:35.547Z",
+  "generatedAt": "2026-10-02T16:09:55.520Z",
   "courses": [
     {
       "id": "fundamentals",
@@ -1820,11 +1820,11 @@
           "title": "Read Before You Sign",
           "icon": "🔏",
           "belt": "PROVOST",
-          "intro": "Nearly every theft from a connected wallet is a signature the owner gave. Your wallet runs a transaction against the chain before you approve it and shows you what would change — what leaves, what arrives, what permissions move. A drainer's whole job is to get you past that screen without reading it. The preview is not a formality. It's the one moment where the attacker has to tell you the truth.",
+          "intro": "Nearly every theft from a connected wallet is a signature the owner gave. Your wallet runs a transaction against the chain before you approve it and shows you what would change — what leaves, what arrives, what permissions move. A drainer's whole job is to get you past that screen without reading it. The preview is not a formality. It's your best look at what a transaction would do — a prediction, not a promise.",
           "concepts": [
             {
               "term": "The Simulation Preview",
-              "def": "Before you sign, the wallet simulates the transaction and lists the expected balance changes — minus this much SOL, plus this many tokens. Read every line that leaves your wallet and compare it to what you meant to do. If it doesn't match, the answer is no."
+              "def": "Before you sign, the wallet simulates the transaction and lists the expected balance changes — minus this much SOL, plus this many tokens. Read every line that leaves your wallet and compare it to what you meant to do. If it doesn't match, or if anything is hidden or rushed, the answer is no. A match is not a guarantee: the simulation runs against the chain as it is now, which can change before your transaction lands, and attackers try to game previews."
             },
             {
               "term": "Simulation Failed",
@@ -1916,7 +1916,7 @@
             {
               "q": "What is the single habit that stops most of these?",
               "answer": "Read every line that leaves your wallet before you approve, and stop if anything doesn't match what you meant to do",
-              "why": "The preview tells you what will happen. Every drainer technique — broken simulation, approvals, authority changes, rushed double-signing — is a way to get you past it. Read it, match it to your intent, and refuse anything you didn't ask for.",
+              "why": "The preview is your best look at what a transaction would do — a prediction, not a promise. Every drainer technique — broken simulation, approvals, authority changes, rushed double-signing — is a way to get you past it. Read it, match it to your intent, and refuse anything you didn't ask for or can't make sense of.",
               "options": [
                 "Use a different browser",
                 "Read every line that leaves your wallet before you approve, and stop if anything doesn't match what you meant to do",
@@ -1924,7 +1924,7 @@
                 "Keep less than 1 SOL in the wallet"
               ],
               "correct": 1,
-              "explanation": "The preview tells you what will happen. Every drainer technique — broken simulation, approvals, authority changes, rushed double-signing — is a way to get you past it. Read it, match it to your intent, and refuse anything you didn't ask for."
+              "explanation": "The preview is your best look at what a transaction would do — a prediction, not a promise. Every drainer technique — broken simulation, approvals, authority changes, rushed double-signing — is a way to get you past it. Read it, match it to your intent, and refuse anything you didn't ask for or can't make sense of."
             }
           ]
         },
@@ -1933,7 +1933,7 @@
           "title": "Token-2022: Read the Extensions",
           "icon": "🧬",
           "belt": "WARDEN",
-          "intro": "Solana has two token programs. The original SPL program does one thing: move tokens. Token-2022 adds optional extensions set when the mint is created — and some of them give the creator powers over your wallet, not just theirs. A permanent delegate can take tokens out of any holder's account. A transfer hook can refuse your sell. A transfer fee can tax every move. None of this is hidden: every extension is written on the mint, readable on any explorer, before you buy.",
+          "intro": "Solana has two token programs. The original SPL program does one thing: move tokens. Token-2022 adds optional extensions, chosen when the mint is created — and some of them give the creator powers over your wallet, not just theirs. A permanent delegate can take tokens out of any holder's account. A transfer hook can refuse your sell. A transfer fee can tax every move. None of this is hidden: every extension is written on the mint, readable on any explorer, before you buy. Which extensions exist is fixed at the start; who holds their authorities can change, so read both.",
           "concepts": [
             {
               "term": "Two Token Programs",
@@ -1941,7 +1941,7 @@
             },
             {
               "term": "Permanent Delegate",
-              "def": "An address, fixed at creation, that can transfer or burn tokens from ANY holder's account without that holder's signature — forever. Legitimate for a stablecoin that must be able to seize funds under a court order. On a memecoin it means the creator can empty every bag whenever they choose."
+              "def": "An address that can transfer or burn tokens from ANY holder's account without that holder's signature. Whether a mint has this extension is fixed at creation; who holds the role is not — the current delegate can hand it to someone else or give it up entirely. Legitimate for a stablecoin that must be able to seize funds under a court order. On a memecoin it means whoever holds the role can empty every bag whenever they choose."
             },
             {
               "term": "Transfer Hook",
@@ -1949,7 +1949,7 @@
             },
             {
               "term": "Transfer Fee",
-              "def": "A percentage taken on every transfer, set by a fee authority, with a maximum-per-transfer the mint fixes. The authority can change the rate, and the change takes effect after a short delay. Check the rate today and whether anyone can raise it tomorrow."
+              "def": "A percentage taken on every transfer, up to a maximum per transfer, both set by a fee authority. The authority can change the rate and the maximum, and the change takes effect after a delay of about two epochs (a few days). Check the rate and the maximum today, and whether a fee authority exists that could raise them tomorrow."
             },
             {
               "term": "Freeze & Default State",
@@ -1989,16 +1989,16 @@
             },
             {
               "q": "A token's transfer fee is 1% today. Is that the number to plan around?",
-              "answer": "No — check whether a fee authority exists and can raise it; the mint only fixes a maximum per transfer",
-              "why": "The rate is set by an authority and can be changed, taking effect after a short delay. What the mint fixes is a cap per transfer. Read both: the rate now, and who can move it. A fee that can go to 100% is a lock with a delay.",
+              "answer": "No — check whether a fee authority exists; it can change both the rate and the per-transfer maximum",
+              "why": "The rate and the per-transfer maximum are both set by a fee authority and can be changed, taking effect after a delay of about two epochs. Read all three: the rate now, the maximum, and whether anyone holds the authority to move them. A fee that can go to 100% is a lock with a delay.",
               "options": [
                 "Yes — fees are fixed at creation",
-                "No — check whether a fee authority exists and can raise it; the mint only fixes a maximum per transfer",
+                "No — check whether a fee authority exists; it can change both the rate and the per-transfer maximum",
                 "Fees only apply to sells",
                 "Fees are refunded to holders"
               ],
               "correct": 1,
-              "explanation": "The rate is set by an authority and can be changed, taking effect after a short delay. What the mint fixes is a cap per transfer. Read both: the rate now, and who can move it. A fee that can go to 100% is a lock with a delay."
+              "explanation": "The rate and the per-transfer maximum are both set by a fee authority and can be changed, taking effect after a delay of about two epochs. Read all three: the rate now, the maximum, and whether anyone holds the authority to move them. A fee that can go to 100% is a lock with a delay."
             },
             {
               "q": "Where do you find out which extensions a token has?",
