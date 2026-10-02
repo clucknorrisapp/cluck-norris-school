@@ -15301,15 +15301,10 @@ app.get("/api/burn-scan", async (req, res) => {
   const TOKEN_2022_PROG = "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb";
   try {
     const accounts = [];
-    // The OLDEST slot either read was answered at — the client uses it to tell a lagging node's
-    // view from fresh state after its own close/withdraw (Codex review of #471). null if unknown.
-    let scanSlot = null, slotKnown = true;
     for (const prog of [TOKEN_2022_PROG, TOKEN_PROG]) {
       // "confirmed", not the RPC default "finalized": finalized trails by ~15-30s, so a Rescan right
       // after a burn/reclaim showed the closed accounts again until a reconnect (owner report 2026-10-02).
       const d = await rpc("getTokenAccountsByOwner", [wallet, { programId: prog }, { encoding: "jsonParsed", commitment: "confirmed" }]);
-      const ctxSlot = d?.result?.context?.slot;
-      if (Number.isSafeInteger(ctxSlot)) scanSlot = scanSlot === null ? ctxSlot : Math.min(scanSlot, ctxSlot); else slotKnown = false;
       for (const acc of (d?.result?.value || [])) {
         const info = acc.account?.data?.parsed?.info;
         if (!info?.mint || !acc.pubkey) continue;
@@ -15413,7 +15408,6 @@ app.get("/api/burn-scan", async (req, res) => {
       surplusAvailable,
       surplusLamportsTotal,
       surplusSolTotal: Number((surplusLamportsTotal / 1e9).toFixed(6)),
-      slot: slotKnown ? scanSlot : null,
       accounts: out,
     });
   } catch (e) {

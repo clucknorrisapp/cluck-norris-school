@@ -505,3 +505,17 @@ export async function signSendConfirm({ provider, owner, build, coSign, skipPref
     return { status: "failed", sig, error: (e && e.message) || String(e) };
   }
 }
+
+// The slot a signature LANDED in, or null when that can't be read — from the chain's own
+// getSignatureStatuses entry (searching history, since this is asked after confirmation). Firepit
+// uses it as proof of "when" for a Rescan (Codex review of #473); this file stays the one place
+// that calls getSignatureStatuses.
+export async function signatureSlot(rpc, signature) {
+  try {
+    const r = await rpc("getSignatureStatuses", [[signature], { searchTransactionHistory: true }]);
+    const s = r && Array.isArray(r.value) ? r.value[0] : null;
+    return s && !s.err && Number.isSafeInteger(s.slot) ? s.slot : null;
+  } catch (_) {
+    return null;
+  }
+}
