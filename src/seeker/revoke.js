@@ -102,7 +102,7 @@ function toInstruction(web3, d) {
 
 // Build + sign + submit + confirm ONE batch through the shared seam. Returns signSendConfirm's
 // own result ({status: sent|failed|unconfirmed|declined, sig?, error?}) plus the accounts it
-// was built for, so the caller can re-read exactly those.
+// was built for, so the caller can re-read exactly those, and the `recentBlockhash` it carried.
 //
 // `owner` is the address the LIST was scanned for. sign.js re-reads the wallet's live account
 // right before building and hands build() that live address; if it is not the scanned owner the
@@ -112,10 +112,14 @@ function toInstruction(web3, d) {
 export async function runRevoke({ provider, owner, batch }) {
   const accounts = (batch || []).map((r) => revocable(r)).filter(Boolean);
   if (!accounts.length) return { status: "failed", error: "Nothing to revoke.", accounts: [] };
+  // The blockhash the transaction was built against, kept so an UNCONFIRMED send can later be
+  // judged expired (sign.js checkPendingSwap: no status AND a dead blockhash) instead of guessed.
+  let recentBlockhash = null;
   const res = await signSendConfirm({
     provider,
     owner,
     build: (web3, blockhash, live) => {
+      recentBlockhash = blockhash;
       if (live !== owner) throw new Error("Your wallet switched accounts — reconnect and rescan.");
       const { Transaction, PublicKey } = web3;
       const tx = new Transaction();
@@ -125,7 +129,7 @@ export async function runRevoke({ provider, owner, batch }) {
       return tx;
     },
   });
-  return { ...res, accounts };
+  return { ...res, accounts, recentBlockhash };
 }
 
 // The empirical half. Re-reads each token account and reports, per account, what the chain says

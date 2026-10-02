@@ -11,14 +11,40 @@
 // burns elsewhere, and this app teaches one habit); failed → say nothing moved; declined → a
 // normal outcome, not an error.
 //
+// ⚠️ Codex on #458, both P2. (1) While a signature is UNRESOLVED there is no Revoke button at all
+// (the plan is empty, not merely hidden) — the old code brought it back under the Unconfirmed
+// card, and one tap cleared the signature the person needed and charged a second fee. The only
+// way out is Check status, which asks sign.js's checkPendingSwap — the same rule Swap uses:
+// landed → re-read; failed on chain, or no status AND a dead blockhash → known not landed, then
+// the chain is re-read and ONLY the accounts still showing a delegate become revocable again.
+// (2) The result is rendered by a slot WalletCheckup keeps mounted, and the rescan after a
+// revoke refreshes the list in the background, so "cleared / still approved / couldn't read"
+// stays on screen until dismissed instead of vanishing with the loading screen.
+//
 // The list on the confirm sheet IS the list that gets signed: revoke.js builds the instructions
 // from the same `batch` the sheet rendered, so a person approving "these 3" signs those 3.
 import React from "react";
 import { t, tf, useI18nReady } from "./i18n.js";
 import { Confirm, Loading } from "./pane.jsx";
 import { shortAddr } from "./addr.js";
-import { rpcFn, confirmSignature } from "./sign.js";
+import { rpcFn, checkPendingSwap } from "./sign.js";
 import { planRevoke, runRevoke, verifyRevoked, MAX_REVOKE_PER_TX } from "./revoke.js";
+
+// Which scanned accounts may NOT be offered for revoking right now — "all" while a send is
+// unresolved, otherwise a Set. A revoke that landed leaves its stale rows in the parent's list
+// until the background rescan returns; a not-landed one frees only what the chain still shows.
+function heldAccounts(outcome) {
+  if (!outcome) return new Set();
+  const accts = (outcome.accounts || []).map((a) => a.tokenAccount);
+  if (outcome.status === "unconfirmed") return "all";
+  if (outcome.status === "sent") return outcome.verify ? new Set(outcome.verify.cleared) : new Set(accts);
+  if (outcome.dead) {
+    if (!outcome.verify) return new Set(accts);
+    const still = new Set(outcome.verify.still.map((x) => x.tokenAccount));
+    return new Set(accts.filter((a) => !still.has(a)));
+  }
+  return new Set();
+}
 
 function solscanTx(sig) { return /^[1-9A-HJ-NP-Za-km-z]{43,88}$/.test(String(sig || "")) ? `https://solscan.io/tx/${sig}` : null; }
 
@@ -29,7 +55,11 @@ export default function CheckupRevoke({ wallet, approvals, scannedAddress, onDon
   // { status, sig?, error?, n, verify?: {cleared, still, unreadable}, verifying?, checking? }
   const [outcome, setOutcome] = React.useState(null);
 
-  const plan = React.useMemo(() => planRevoke(approvals, MAX_REVOKE_PER_TX), [approvals]);
+  const plan = React.useMemo(() => {
+    const held = heldAccounts(outcome);
+    const usable = held === "all" ? [] : (approvals || []).filter((a) => a && !held.has(a.tokenAccount));
+    return planRevoke(usable, MAX_REVOKE_PER_TX);
+  }, [approvals, outcome]);
   const n = plan.batch.length;
 
   if (!wallet || !wallet.connected) return null;
@@ -52,7 +82,7 @@ export default function CheckupRevoke({ wallet, approvals, scannedAddress, onDon
   }
 
   async function settle(res) {
-    const base = { n: res.accounts ? res.accounts.length : n, accounts: res.accounts || [] };
+    const base = { n: res.accounts ? res.accounts.length : n, accounts: res.accounts || [], recentBlockhash: res.recentBlockhash || null };
     if (res.status === "sent") {
       setOutcome({ ...base, status: "sent", sig: res.sig, verifying: true });
       const v = await verifyRevoked(rpcFn(), base.accounts.map((a) => a.tokenAccount));
@@ -68,25 +98,44 @@ export default function CheckupRevoke({ wallet, approvals, scannedAddress, onDon
     setBusy(false);
   }
 
-  // The recovery action for an ambiguous send: re-poll the exact signature via sign.js's own
-  // confirmSignature (searchHistory, because a person may tap this minutes later). "Still
-  // pending" changes nothing; landed → the same re-read as a plain send.
+  // The recovery action for an ambiguous send: ask sign.js's checkPendingSwap about the exact
+  // signature (it searches history, because a person may tap this minutes later). pending →
+  // nothing changes and there is still no Revoke; landed → the same re-read as a plain send;
+  // failed on chain, or expired (no status AND a dead blockhash) → known not landed, so the chain
+  // is re-read and only what still shows a delegate may be revoked again. `lastValidBlockHeight: 0`
+  // only skips checkPendingSwap's cheap height pre-filter — the blockhash check is the proof.
   async function recheck() {
     if (!outcome || outcome.status !== "unconfirmed" || outcome.checking) return;
     setOutcome((o) => ({ ...o, checking: true }));
     try {
-      const landed = await confirmSignature(rpcFn(), outcome.sig, { searchHistory: true, attempts: 1 });
-      if (landed) {
+      const r = await checkPendingSwap(rpcFn(), { signature: outcome.sig, lastValidBlockHeight: 0, recentBlockhash: outcome.recentBlockhash });
+      if (r.status === "sent") {
         setOutcome((o) => ({ ...o, status: "sent", checking: false, verifying: true }));
-        const v = await verifyRevoked(rpcFn(), outcome.accounts.map((a) => a.tokenAccount));
-        setOutcome((o) => (o ? { ...o, verify: v, verifying: false } : o));
-        if (typeof onDone === "function") onDone();
+      } else if (r.status === "failed" || r.status === "expired") {
+        setOutcome((o) => ({ ...o, status: "failed", dead: true, error: r.status === "failed" ? r.error : "", checking: false, verifying: true }));
       } else {
         setOutcome((o) => ({ ...o, checking: false }));
+        return;
       }
+      const v = await verifyRevoked(rpcFn(), outcome.accounts.map((a) => a.tokenAccount));
+      setOutcome((o) => (o ? { ...o, verify: v, verifying: false } : o));
+      if (typeof onDone === "function") onDone();
     } catch (e) {
-      setOutcome((o) => ({ ...o, status: "failed", error: (e && e.message) || String(e), checking: false }));
+      setOutcome((o) => (o ? { ...o, checking: false } : o));
     }
+  }
+
+  // The chain's own answer, per account — shared by a landed revoke and a known-not-landed one.
+  function verifyLines() {
+    if (outcome.verifying) return <p>{t("Re-reading each account on chain…")}</p>;
+    if (!outcome.verify) return null;
+    return (
+      <>
+        <p>{tf("Re-read on chain: {cleared} of {n} approvals are gone.", { cleared: outcome.verify.cleared.length, n: outcome.n })}</p>
+        {outcome.verify.still.length ? <p className="seeker-revoke-warn">{tf("{n} still show a delegate — rescan and revoke again.", { n: outcome.verify.still.length })}</p> : null}
+        {outcome.verify.unreadable.length ? <p className="seeker-revoke-warn">{tf("{n} could not be re-read — status unknown, not counted as cleared.", { n: outcome.verify.unreadable.length })}</p> : null}
+      </>
+    );
   }
 
   const rows = plan.batch.map((a) => ({
@@ -117,21 +166,14 @@ export default function CheckupRevoke({ wallet, approvals, scannedAddress, onDon
           {outcome.status === "sent" ? (
             <>
               <p className="seeker-revoke-outcome-title">{t("Revoke transaction confirmed")}</p>
-              {outcome.verifying ? (
-                <p>{t("Re-reading each account on chain…")}</p>
-              ) : outcome.verify ? (
-                <>
-                  <p>{tf("Re-read on chain: {cleared} of {n} approvals are gone.", { cleared: outcome.verify.cleared.length, n: outcome.n })}</p>
-                  {outcome.verify.still.length ? <p className="seeker-revoke-warn">{tf("{n} still show a delegate — rescan and revoke again.", { n: outcome.verify.still.length })}</p> : null}
-                  {outcome.verify.unreadable.length ? <p className="seeker-revoke-warn">{tf("{n} could not be re-read — status unknown, not counted as cleared.", { n: outcome.verify.unreadable.length })}</p> : null}
-                </>
-              ) : null}
+              {verifyLines()}
               {solscanTx(outcome.sig) ? <p><a className="seeker-forensic-link" href={solscanTx(outcome.sig)} target="_blank" rel="noopener noreferrer">{t("View transaction on Solscan")}</a></p> : null}
             </>
           ) : outcome.status === "unconfirmed" ? (
             <>
               <p className="seeker-revoke-outcome-title">{t("Unconfirmed")}</p>
               <p>{t("This was submitted but had no on-chain status after 30 seconds. It may still land — check before signing again.")}</p>
+              {outcome.sig ? <p className="seeker-checkup-mono seeker-revoke-sig">{shortAddr(outcome.sig)}</p> : null}
               <button type="button" className="seeker-btn seeker-btn-quiet" disabled={outcome.checking} onClick={recheck}>{outcome.checking ? t("Checking…") : t("Check status")}</button>
               {solscanTx(outcome.sig) ? <p><a className="seeker-forensic-link" href={solscanTx(outcome.sig)} target="_blank" rel="noopener noreferrer">{t("View transaction on Solscan")}</a></p> : null}
             </>
@@ -139,6 +181,8 @@ export default function CheckupRevoke({ wallet, approvals, scannedAddress, onDon
             <>
               <p className="seeker-revoke-outcome-title">{t("Revoke failed")}</p>
               <p>{t("Nothing was revoked — the transaction did not land.")}{outcome.error ? ` ${outcome.error}` : ""}</p>
+              {outcome.dead ? verifyLines() : null}
+              {outcome.dead && solscanTx(outcome.sig) ? <p><a className="seeker-forensic-link" href={solscanTx(outcome.sig)} target="_blank" rel="noopener noreferrer">{t("View transaction on Solscan")}</a></p> : null}
             </>
           ) : (
             <p>{t("You declined in your wallet — nothing was sent.")}</p>

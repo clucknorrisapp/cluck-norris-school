@@ -140,6 +140,177 @@ const pk = () => web3.Keypair.generate().publicKey.toBase58();
     ok("the Airdropper uses the same receipt-session module (one key, no private copy)", /from "\.\.\/receipt-session\.js"/.test(ad) && !/clkn_seeker_receipt_session/.test(ad));
   }
 
+  // (f) RENDERED — Codex on #458, both P2. WalletCheckup + CheckupRevoke are bundled with esbuild
+  // exactly as the app imports them (only runRevoke, the wallet-signing call, is replaced) and
+  // driven in headless Chromium with a scripted rpc: an unresolved send must offer NO Revoke and
+  // keep its signature; and the post-revoke refresh must not erase the chain re-read.
+  console.log("\n(f) rendered: unconfirmed offers no second revoke; the rescan keeps the re-read on screen\n");
+  {
+    let esbuild, chromium;
+    try { esbuild = require("esbuild"); } catch (_) { esbuild = null; }
+    try { ({ chromium } = require("playwright")); } catch (_) { try { ({ chromium } = require("playwright-core")); } catch (_2) { chromium = null; } }
+    if (!esbuild || !chromium) {
+      ok("esbuild + playwright are available for the rendered checks", false, "missing " + (!esbuild ? "esbuild " : "") + (!chromium ? "playwright" : ""));
+    } else {
+      const SEEKER = path.join(ROOT, "src", "seeker");
+      const shim = {
+        name: "revoke-runRevoke-shim",
+        setup(b) {
+          b.onResolve({ filter: /^\.\/revoke\.js$/ }, (args) => (/CheckupRevoke\.jsx$/.test(args.importer) ? { path: "revoke-shim", namespace: "shim" } : null));
+          b.onLoad({ filter: /.*/, namespace: "shim" }, () => ({
+            // an explicit export shadows the star re-export: the REAL planner and verifyRevoked
+            // run; only the call that asks a wallet to sign is scripted by the test.
+            contents: `export * from ${JSON.stringify(path.join(SEEKER, "revoke.js"))};\nexport const runRevoke = (a) => window.__state.runRevoke(a);`,
+            resolveDir: SEEKER,
+          }));
+        },
+      };
+      const built = await esbuild.build({
+        stdin: {
+          contents: `
+            import React from "react";
+            import { createRoot } from "react-dom/client";
+            import WalletCheckupPane from "./WalletCheckup.jsx";
+            import CheckupRevoke from "./CheckupRevoke.jsx";
+            const wallet = { connected: true, address: window.__ADDR, provider: {} };
+            const revoke = ({ approvals, address, rescan }) => <CheckupRevoke wallet={wallet} approvals={approvals} scannedAddress={address} onDone={rescan} />;
+            createRoot(document.getElementById("root")).render(<WalletCheckupPane address={window.__ADDR} revoke={revoke} />);
+          `,
+          resolveDir: SEEKER, loader: "jsx", sourcefile: "harness.jsx",
+        },
+        bundle: true, write: false, format: "iife", plugins: [shim], logLevel: "silent",
+        define: { "process.env.NODE_ENV": '"production"' },
+      });
+      const bundle = built.outputFiles[0].text;
+      const exe = ["/opt/pw-browsers/chromium", process.env.PLAYWRIGHT_CHROMIUM_PATH].find((p) => p && fs.existsSync(p));
+      const browser = await chromium.launch({ executablePath: exe, args: ["--no-sandbox"] });
+
+      const ADDR = pk(), A = pk(), B = pk(), SIG = "5VERv8NMvzbJMEkV8xnrLkEaWRtSz9CosKDYjCJjBRnbJLgp8uirBgmQpjKhoR4tjF3ZpRzrFmBV6UjKdiSZkQUW", BH = pk();
+      const approval = (ta) => ({ tokenAccount: ta, mint: pk(), delegate: pk(), program: R.TOKEN_PROGRAM, delegatedAmount: "5", balance: "10" });
+      const rowsAB = [approval(A), approval(B)];
+
+      // One fresh page per scenario. `state` is the scripted chain, mutable from the test.
+      async function open(state) {
+        const page = await browser.newPage();
+        const errors = [];
+        page.on("pageerror", (e) => errors.push(String(e)));
+        await page.setContent('<div id="root"></div>');
+        await page.evaluate(({ ADDR, A, B, SIG, BH, state }) => {
+          window.__ADDR = ADDR;
+          const s = window.__state = Object.assign({ fetchCount: 0, scanDelay: 0, height: 1000, blockhashValid: true, sigStatus: null, accounts: {} }, state);
+          s.runRevoke = async () => ({ status: s.sendStatus, sig: SIG, accounts: s.sentRows.map((r) => ({ tokenAccount: r.tokenAccount, program: r.program, mint: r.mint, delegate: r.delegate })), recentBlockhash: BH });
+          const parsed = (d) => ({ data: { parsed: { info: d ? { delegate: d } : {} } } });
+          window.CluckUtil = { rpc: async (m, p) => {
+            if (m === "getSignatureStatuses") return { value: [s.sigStatus] };
+            if (m === "getBlockHeight") return s.height;
+            if (m === "isBlockhashValid") return { value: s.blockhashValid };
+            if (m === "getMultipleAccounts") return { value: p[0].map((ta) => { const v = s.accounts[ta]; return v === "closed" ? null : v === "unreadable" ? { data: "base64" } : parsed(v === "delegate" ? "DeLeGate1111111111111111111111111111111111" : null); }) };
+            throw new Error("unexpected rpc " + m);
+          } };
+          window.fetch = async () => {
+            s.fetchCount++;
+            await new Promise((r) => setTimeout(r, s.scanDelay));
+            return { ok: true, status: 200, json: async () => ({ success: true, wallet: ADDR, tokensHeld: 2, scanned: 2, capped: false, unverified: 0, portfolioUsd: 0, atRiskUsd: 0, holdings: [], approvals: s.rows, riskyHoldings: [] }) };
+          };
+        }, { ADDR, A, B, SIG, BH, state: { ...state, sentRows: state.rows } });
+        await page.addScriptTag({ content: bundle });
+        await page.waitForSelector(".seeker-revoke-btn", { timeout: 10000 });
+        return { page, errors };
+      }
+      const body = (page) => page.evaluate(() => document.body.innerText);
+      const revokeBtns = (page) => page.evaluate(() => Array.from(document.querySelectorAll("button")).map((b) => b.innerText.trim()).filter((x) => /^Revoke( this approval| \d+ approvals)$/.test(x)));
+      async function submit(page) {
+        await page.click(".seeker-revoke-btn");
+        await page.click(".seeker-confirm .seeker-btn-danger");
+      }
+      const set = (page, patch) => page.evaluate((p) => Object.assign(window.__state, p), patch);
+
+      // ── Finding 1: unconfirmed ──────────────────────────────────────────────────────────
+      {
+        const { page, errors } = await open({ rows: rowsAB, sendStatus: "unconfirmed", accounts: { [A]: "delegate", [B]: "delegate" } });
+        await submit(page);
+        await page.waitForSelector(".seeker-revoke-outcome-unconfirmed", { timeout: 10000 });
+        let txt = await body(page);
+        ok("unconfirmed: NO Revoke button is offered for those accounts", (await revokeBtns(page)).length === 0, await revokeBtns(page));
+        ok("unconfirmed: the original signature is still shown (short form) with its explorer link",
+           txt.includes(SIG.slice(0, 4) + "…" + SIG.slice(-4)) && (await page.evaluate((s) => !!document.querySelector('a[href="https://solscan.io/tx/' + s + '"]'), SIG)));
+        // Check status while the chain says nothing and the blockhash is still live → still pending.
+        await page.click(".seeker-revoke-outcome-unconfirmed button");
+        await page.waitForFunction(() => !/Checking…/.test(document.body.innerText), null, { timeout: 10000 });
+        ok("still pending (no status, blockhash live): still unconfirmed, still NO Revoke, signature kept",
+           (await revokeBtns(page)).length === 0 && !!(await page.$(".seeker-revoke-outcome-unconfirmed")) && (await body(page)).includes(SIG.slice(0, 4)));
+        // The blockhash dies with no status → known not landed. Only the account the chain STILL shows
+        // a delegate on (A) may be revoked again; B (cleared by someone else) may not.
+        await set(page, { blockhashValid: false, accounts: { [A]: "delegate", [B]: "clear" } });
+        await page.click(".seeker-revoke-outcome-unconfirmed button");
+        await page.waitForSelector(".seeker-revoke-outcome-failed", { timeout: 10000 });
+        await page.waitForFunction(() => /Re-read on chain/.test(document.body.innerText), null, { timeout: 10000 });
+        const btns = await revokeBtns(page);
+        ok("expired + chain re-read: Revoke returns for ONLY the account still showing a delegate", btns.length === 1 && btns[0] === "Revoke this approval", btns);
+        ok("expired: the outcome says nothing was revoked and keeps the signature link", /Nothing was revoked/.test(await body(page)) && (await page.evaluate((s) => !!document.querySelector('a[href="https://solscan.io/tx/' + s + '"]'), SIG)));
+        ok("unconfirmed flow: no uncaught exception", errors.length === 0, errors.join(" | "));
+        await page.close();
+      }
+      {
+        // a landed-and-FAILED original is known not landed too, but a re-read that shows every
+        // approval already gone offers nothing to revoke
+        const { page } = await open({ rows: rowsAB, sendStatus: "unconfirmed", accounts: { [A]: "clear", [B]: "closed" } });
+        await submit(page);
+        await page.waitForSelector(".seeker-revoke-outcome-unconfirmed", { timeout: 10000 });
+        await set(page, { sigStatus: { err: { InstructionError: [0, "Custom"] }, confirmationStatus: "confirmed" } });
+        await page.click(".seeker-revoke-outcome-unconfirmed button");
+        await page.waitForFunction(() => /Re-read on chain: 2 of 2/.test(document.body.innerText), null, { timeout: 10000 });
+        ok("failed on chain + every approval already gone: no Revoke offered", (await revokeBtns(page)).length === 0);
+        await page.close();
+      }
+      {
+        // unconfirmed that turns out to have LANDED → confirmed + re-read, never a second revoke
+        const { page } = await open({ rows: rowsAB, sendStatus: "unconfirmed", accounts: { [A]: "delegate", [B]: "clear" } });
+        await submit(page);
+        await page.waitForSelector(".seeker-revoke-outcome-unconfirmed", { timeout: 10000 });
+        await set(page, { sigStatus: { err: null, confirmationStatus: "confirmed" } });
+        await page.click(".seeker-revoke-outcome-unconfirmed button");
+        await page.waitForFunction(() => /Revoke transaction confirmed/.test(document.body.innerText) && /Re-read on chain: 1 of 2/.test(document.body.innerText), null, { timeout: 10000 });
+        ok("unconfirmed that landed: confirmed + per-account re-read", /still show a delegate/.test(await body(page)));
+        await page.close();
+      }
+
+      // ── Finding 2: the refresh keeps the result ─────────────────────────────────────────
+      {
+        // A cleared, B could not be read. The refresh is slow so we can look in the middle of it.
+        const { page, errors } = await open({ rows: rowsAB, sendStatus: "sent", scanDelay: 400, accounts: { [A]: "clear", [B]: "unreadable" } });
+        await submit(page);
+        await page.waitForFunction(() => /Re-read on chain: 1 of 2/.test(document.body.innerText), null, { timeout: 10000 });
+        await page.waitForFunction(() => window.__state.fetchCount >= 2, null, { timeout: 10000 });
+        let txt = await body(page);
+        ok("mid-refresh: no loading screen replaced the result", !/Scanning your wallet/.test(txt) && /Revoke transaction confirmed/.test(txt), txt.slice(0, 300));
+        ok("mid-refresh: the unreadable account's warning is on screen", /1 could not be re-read — status unknown, not counted as cleared/.test(txt));
+        await page.waitForTimeout(900);   // the refresh has now returned
+        txt = await body(page);
+        ok("after the refresh: transaction outcome, cleared count and the unreadable warning are STILL on screen",
+           /Revoke transaction confirmed/.test(txt) && /1 of 2 approvals are gone/.test(txt) && /1 could not be re-read — status unknown/.test(txt), txt.slice(0, 400));
+        ok("after the refresh: the rescan really happened (list was fetched again)", (await page.evaluate(() => window.__state.fetchCount)) >= 2);
+        await page.click(".seeker-revoke-outcome-sent button");
+        ok("dismissing the result removes it", !(await page.$(".seeker-revoke-outcome")));
+        ok("refresh flow: no uncaught exception", errors.length === 0, errors.join(" | "));
+        await page.close();
+      }
+      {
+        // Every approval cleared and the rescan returns an EMPTY list: the approvals section goes
+        // away, and the result must outlive it.
+        const { page } = await open({ rows: rowsAB, sendStatus: "sent", accounts: { [A]: "clear", [B]: "clear" } });
+        await set(page, { rows: [] });     // what the post-revoke refresh will read: nothing left
+        await submit(page);
+        await page.waitForFunction(() => window.__state.fetchCount >= 2, null, { timeout: 10000 });
+        await page.waitForFunction(() => !document.querySelector(".seeker-checkup-section"), null, { timeout: 10000 });
+        ok("the approvals list is gone after the refresh", !(await page.$(".seeker-checkup-section")));
+        ok("all-cleared: the result is still on screen after the section that held it disappeared", /Revoke transaction confirmed/.test(await body(page)) && /2 of 2 approvals are gone/.test(await body(page)));
+        await page.close();
+      }
+      await browser.close();
+    }
+  }
+
   console.log(`\n${fail ? `${fail} FAILED, ` : ""}${pass} passed`);
   process.exit(fail ? 1 : 0);
 })().catch((e) => { console.error(e); process.exit(1); });
