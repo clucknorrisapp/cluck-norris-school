@@ -19,6 +19,8 @@ class BootScene extends Phaser.Scene {
     ["pirate-visor", "pirate-hook", "pirate-3d", "pirate-shades", "crab", "gull", "skeleton", "kraken-boss", "ship", "island", "tentacle", "nft-demo",
       "item-coin", "item-chest", "item-chest-open", "item-map-piece", "item-barrel", "item-key", "item-heart", "item-wheel", "item-shovel"]
       .forEach((k) => this.load.image(k, A + "sprite/" + k + ".png"));
+    // Pose frames per pirate (side view, facing right): two run frames, jump, duck, cutlass swing.
+    AHOY.CREW.forEach((c) => AHOY.POSES.forEach((p) => this.load.image(c.sprite + "-" + p, A + "sprite/pose/" + c.sprite + "-" + p + ".png")));
     // Holders' own NFTs (live mode): their images, so the HUD and crew screen can show them.
     this.load.setCORS("anonymous");
     (AHOY.Gate.state().nfts || []).forEach((n) => { if (n.image && !/nft-demo/.test(n.image)) this.load.image("nft-" + n.id, n.image); });

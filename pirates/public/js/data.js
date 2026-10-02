@@ -29,6 +29,9 @@ AHOY.LINKS = {
 };
 
 // The four starter pirates — the crew on @PUMPFUNPIRATES' banner.
+// Pose frames every crew sprite has under assets/sprite/pose/<sprite>-<pose>.png.
+AHOY.POSES = ["run1", "run2", "jump", "duck", "swing"];
+
 AHOY.CREW = [
   { id: "visor", name: "Captain Visor", sprite: "pirate-visor", tint: 0x8a5cff,
     power: "ghost", powerName: "Ghost Sight",

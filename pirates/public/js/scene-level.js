@@ -91,7 +91,8 @@
       this.sea = AHOY.SEAS[d.sea]; this.isl = this.sea.islands[d.island];
       this.pirate = AHOY.currentPirate();
       this.state = { hp: 3, coins: 0, secretsFound: 0, piece: false, done: false, invulnUntil: 0, dashUntil: 0, attackCd: 0, powerCd: 0,
-        ghostUntil: 0, xrayUntil: 0, grappling: false, facing: 1, coyote: 0, jumpBuf: 0, startedAt: 0, respawn: { x: 2 * U, y: GY - 80 }, paused: false };
+        ghostUntil: 0, xrayUntil: 0, grappling: false, facing: 1, coyote: 0, jumpBuf: 0, startedAt: 0, respawn: { x: 2 * U, y: GY - 80 }, paused: false,
+        airJumps: 1, ducking: false, swingUntil: 0, spinUntil: 0 };
     }
 
     create() {
@@ -151,8 +152,9 @@
       // The pirate: an invisible physics body + the sprite drawn on top of it.
       this.player = this.physics.add.sprite(this.state.respawn.x, this.state.respawn.y, "px").setDepth(20);
       this.player.body.setSize(44, 92, true).setMaxVelocity(900, 1100);
+      this.bodyOffset = { x: this.player.body.offset.x, y: this.player.body.offset.y };
       this.pv = this.add.image(0, 0, this.pirate.sprite).setOrigin(0.5, 1).setDepth(21);
-      this.pvScale = 112 / this.pv.height; this.pv.setScale(this.pvScale);
+      this.pvPose = null; this.setPose("idle");
       if (this.pirate.portrait) { // NFT holders: a crest with their NFT over the pirate
         const key = this.textures.exists(this.pirate.portrait) ? this.pirate.portrait : "nft-demo";
         this.crest = this.add.image(0, 0, key).setDisplaySize(40, 40).setDepth(22);
@@ -182,7 +184,7 @@
 
       // Input.
       this.keys = this.input.keyboard.addKeys("LEFT,RIGHT,UP,DOWN,SPACE,A,D,W,S,X,J,C,K,Z,ESC,P,SHIFT");
-      this.touch = { left: false, right: false, jump: false, attack: false, power: false };
+      this.touch = { left: false, right: false, jump: false, attack: false, power: false, duck: false };
       if (UI.isTouch()) this.makeTouch();
       this.input.keyboard.on("keydown-ESC", () => this.togglePause());
       this.input.keyboard.on("keydown-P", () => this.togglePause());
@@ -191,9 +193,9 @@
       this.banner(this.isl.name, this.pirate.powerName + ": press C / ★ to use · X / ⚔ to attack");
       if (!AHOY.Save.get().seenControls) { // first landing: a controls card
         AHOY.Save.set({ seenControls: true });
-        const c = this.add.container(640, 470).setScrollFactor(0).setDepth(960);
-        c.add(UI.panel(this, 0, 0, 760, 150));
-        c.add(UI.text(this, 0, -40, UI.isTouch() ? "◀ ▶ move · ⤒ jump · ⚔ cutlass · ★ power" : "← → / A D move · SPACE jump · X cutlass · C power · P pause", 34, "#2b1b12"));
+        const c = this.add.container(640, 330).setScrollFactor(0).setDepth(960);
+        c.add(UI.panel(this, 0, 0, 1060, 150));
+        c.add(UI.text(this, 0, -40, UI.isTouch() ? "◀ ▶ move · ⤒ jump (tap again to double jump) · ▼ duck · ⚔ cutlass · ★ power" : "← → move · SPACE jump, again for double jump · ↓ duck · X cutlass · C power", 27, "#2b1b12"));
         c.add(UI.text(this, 0, 6, "Stomp crabs and gulls · grab the torn MAP PIECE · reach the dock", 30, "#7a1f12"));
         c.add(UI.text(this, 0, 46, "Fall in the sea and you're back at the last flag", 26, "#3d2a1f"));
         this.tweens.add({ targets: c, alpha: 0, delay: 6500, duration: 600, onComplete: () => c.destroy() });
@@ -235,6 +237,32 @@
     }
 
     // ── Player ──
+    // Pose frames: idle is the front-facing crew art; the rest are side views facing right
+    // (flipped for left). Each pose has its own display height so a crouch reads as a crouch.
+    setPose(pose) {
+      if (pose === this.pvPose) return;
+      const key = pose === "idle" ? this.pirate.sprite : this.pirate.sprite + "-" + pose;
+      if (!this.textures.exists(key)) { if (this.pvPose === "idle") return; pose = "idle"; }
+      this.pvPose = pose;
+      this.pv.setTexture(pose === "idle" ? this.pirate.sprite : key);
+      const h = { idle: 112, run1: 110, run2: 112, jump: 108, duck: 74, swing: 110 }[pose] || 112;
+      this.pvScale = h / this.pv.height;
+    }
+    setDuck(on) {
+      const s = this.state, b = this.player.body;
+      if (on === s.ducking) return;
+      s.ducking = on;
+      if (on) { b.setSize(44, 60, false); b.setOffset(this.bodyOffset.x, this.bodyOffset.y + 32); }
+      else { b.setSize(44, 92, false); b.setOffset(this.bodyOffset.x, this.bodyOffset.y); }
+    }
+    doubleJump() {
+      const s = this.state, b = this.player.body;
+      s.airJumps = 0; b.setVelocityY(-740); s.spinUntil = this.time.now + 320; AHOY.Audio.play("jump");
+      for (let i = 0; i < 6; i++) { // a puff of sea spray under the boots
+        const p = this.add.circle(b.center.x + Phaser.Math.Between(-18, 18), b.bottom, Phaser.Math.Between(6, 11), 0xffffff, 0.85).setDepth(19);
+        this.tweens.add({ targets: p, x: p.x + Phaser.Math.Between(-40, 40), y: p.y + Phaser.Math.Between(10, 30), alpha: 0, scale: 0.4, duration: 380, onComplete: () => p.destroy() });
+      }
+    }
     hurt(spike, fromX) {
       const s = this.state;
       if (s.done || this.time.now < s.invulnUntil || this.time.now < s.dashUntil) return;
@@ -302,12 +330,18 @@
     attack() {
       const s = this.state;
       if (this.time.now < s.attackCd || s.done) return;
-      s.attackCd = this.time.now + 330; AHOY.Audio.play("slash");
+      s.attackCd = this.time.now + 330; s.swingUntil = this.time.now + 240; AHOY.Audio.play("slash");
       const hx = this.player.x + s.facing * 60, hy = this.player.y - 10;
-      const arc = this.add.graphics().setDepth(25); arc.lineStyle(8, 0xffffff, 0.9);
-      arc.beginPath(); arc.arc(this.player.x, this.player.y - 20, 70, s.facing > 0 ? -1.2 : Math.PI - 0.4, s.facing > 0 ? 0.4 : Math.PI + 1.2); arc.strokePath();
-      this.tweens.add({ targets: arc, alpha: 0, duration: 160, onComplete: () => arc.destroy() });
-      this.tweens.add({ targets: this.pv, angle: s.facing * 14, duration: 80, yoyo: true });
+      // The slash trail: a bright arc that sweeps from overhead to in front of the blade.
+      const arc = this.add.graphics().setDepth(25);
+      const cx = this.player.x + s.facing * 18, cy = this.player.y - 24;
+      const a0 = s.facing > 0 ? -1.5 : Math.PI + 1.5, a1 = s.facing > 0 ? 0.55 : Math.PI - 0.55;
+      const sweep = { t: 0 };
+      this.tweens.add({ targets: sweep, t: 1, duration: 120, onUpdate: () => {
+        const a = a0 + (a1 - a0) * sweep.t;
+        arc.clear().lineStyle(14, 0xffcd77, 0.35).beginPath().arc(cx, cy, 76, Math.min(a0, a), Math.max(a0, a)).strokePath()
+          .lineStyle(6, 0xffffff, 0.95).beginPath().arc(cx, cy, 76, Math.min(a0, a), Math.max(a0, a)).strokePath();
+      }, onComplete: () => this.tweens.add({ targets: arc, alpha: 0, duration: 140, onComplete: () => arc.destroy() }) });
       const hit = new Phaser.Geom.Rectangle(hx - 50, hy - 55, 100, 110);
       this.hitArea(hit);
       if (this.pirate.laser) this.fireLaser();
@@ -416,7 +450,7 @@
         const up = () => { this.touch[key] = false; };
         c.on("pointerup", up); c.on("pointerout", up);
       };
-      btn(95, 630, 62, "◀", "left"); btn(245, 630, 62, "▶", "right");
+      btn(95, 630, 62, "◀", "left"); btn(245, 630, 62, "▶", "right"); btn(170, 520, 44, "▼", "duck");
       btn(1180, 620, 70, "⤒", "jump"); btn(1035, 655, 54, "⚔", "attack"); btn(1060, 515, 50, "★", "power");
     }
 
@@ -501,8 +535,11 @@
       if (!s.done && !s.grappling) {
         const left = k.LEFT.isDown || k.A.isDown || this.touch.left, right = k.RIGHT.isDown || k.D.isDown || this.touch.right;
         const onGround = b.blocked.down || b.touching.down;
-        if (onGround) s.coyote = t + 110;
-        const target = (right ? 1 : 0) - (left ? 1 : 0);
+        if (onGround) { s.coyote = t + 110; s.airJumps = 1; }
+        const down = k.DOWN.isDown || k.S.isDown || this.touch.duck;
+        this.setDuck(down && onGround && t >= s.dashUntil);
+        const target = s.ducking ? 0 : (right ? 1 : 0) - (left ? 1 : 0);
+        if (s.ducking && (right || left)) s.facing = right ? 1 : -1;
         if (t >= s.dashUntil) {
           const accel = onGround ? 2600 : 1700, max = 330;
           if (target) { b.setVelocityX(Phaser.Math.Clamp(b.velocity.x + target * accel * dt, -max, max)); s.facing = target; }
@@ -510,19 +547,26 @@
           const ice = this.isl.ground === "ice" && onGround; if (ice && !target) b.setVelocityX(b.velocity.x / 0.72 * 0.93);
         }
         if (Phaser.Input.Keyboard.JustDown(k.SPACE) || Phaser.Input.Keyboard.JustDown(k.UP) || Phaser.Input.Keyboard.JustDown(k.W) || Phaser.Input.Keyboard.JustDown(k.Z)) s.jumpBuf = t + 140;
-        if (s.jumpBuf > t && s.coyote > t) { b.setVelocityY(-720); s.jumpBuf = 0; s.coyote = 0; AHOY.Audio.play("jump"); }
+        if (s.jumpBuf > t && s.coyote > t) { this.setDuck(false); b.setVelocityY(-720); s.jumpBuf = 0; s.coyote = 0; AHOY.Audio.play("jump"); }
+        else if (s.jumpBuf > t && s.airJumps > 0 && !onGround) { s.jumpBuf = 0; this.doubleJump(); }
         const jumpHeld = k.SPACE.isDown || k.UP.isDown || k.W.isDown || k.Z.isDown || this.touch.jump;
         if (!jumpHeld && b.velocity.y < -260) b.setVelocityY(b.velocity.y * 0.85); // short hop
         if (Phaser.Input.Keyboard.JustDown(k.X) || Phaser.Input.Keyboard.JustDown(k.J)) this.attack();
         if (Phaser.Input.Keyboard.JustDown(k.C) || Phaser.Input.Keyboard.JustDown(k.K) || Phaser.Input.Keyboard.JustDown(k.SHIFT)) this.usePower();
       }
       // Draw the pirate on its body: bob while running, squash in the air, flash when hurt.
-      const running = Math.abs(b.velocity.x) > 40 && (b.blocked.down || b.touching.down);
-      const bob = running ? Math.abs(Math.sin(t / 70)) * 6 : 0;
+      const grounded = b.blocked.down || b.touching.down;
+      const running = Math.abs(b.velocity.x) > 40 && grounded;
+      const air = !grounded && !s.grappling;
+      this.setPose(s.swingUntil > t ? "swing" : air || s.grappling ? "jump" : s.ducking ? "duck" : running ? (Math.floor(t / 120) % 2 ? "run2" : "run1") : "idle");
+      const bob = running ? Math.abs(Math.sin(t / 60)) * 4 : 0;
       this.pv.setPosition(b.center.x, b.bottom + 2 - bob).setFlipX(s.facing < 0);
-      const air = !(b.blocked.down || b.touching.down);
-      this.pv.setScale(this.pvScale * (air ? 0.94 : 1) * (s.facing < 0 ? 1 : 1), this.pvScale * (air ? 1.06 : 1));
-      this.pv.setAngle(s.dashUntil > t ? s.facing * 18 : running ? Math.sin(t / 90) * 4 : 0);
+      this.pv.setScale(this.pvScale * (air ? 0.96 : 1), this.pvScale * (air ? 1.04 : 1));
+      // The double jump does a quick somersault, turned about the pirate's middle, not his boots.
+      const spin = s.spinUntil > t ? (1 - (s.spinUntil - t) / 320) * 360 * s.facing : 0;
+      if (spin) this.pv.setOrigin(0.5, 0.5).setY(b.bottom + 2 - this.pv.displayHeight / 2);
+      else if (this.pv.originY !== 1) this.pv.setOrigin(0.5, 1).setY(b.bottom + 2 - bob);
+      this.pv.setAngle(spin || (s.dashUntil > t ? s.facing * 18 : running ? Math.sin(t / 90) * 3 : 0));
       this.pv.setAlpha(t < s.invulnUntil ? (Math.floor(t / 80) % 2 ? 0.35 : 1) : 1);
       if (this.crest) this.crest.setPosition(b.center.x - s.facing * 26, b.bottom - 98);
 

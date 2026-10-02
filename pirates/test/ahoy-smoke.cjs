@@ -80,6 +80,46 @@ function chromiumPath() {
     check((await active()).includes("Mishap"), "mishap " + k + " runs");
   }
 
+  // Moves and pose frames, on Launch Beach as Hook Jack (no Ghost Sight, so only the double jump reaches the high chest).
+  const missingPoses = await page.evaluate(() => AHOY.CREW.flatMap((c) => AHOY.POSES.map((p) => c.sprite + "-" + p)).filter((k) => !window.__AHOY_GAME.textures.exists(k)));
+  check(missingPoses.length === 0, "all 20 pose frames loaded" + (missingPoses.length ? ": missing " + missingPoses.join(", ") : ""));
+  await page.evaluate(() => AHOY.Save.set({ crew: "hook", nft: null }));
+  await go("Level", { sea: 0, island: 0 });
+  const pose = () => page.evaluate(() => window.__AHOY_LEVEL.pvPose);
+  await page.keyboard.down("ArrowRight"); await wait(450);
+  const runPoses = new Set(); for (let i = 0; i < 6; i++) { runPoses.add(await pose()); await wait(70); }
+  await shot("05b-run"); await page.keyboard.up("ArrowRight");
+  check(runPoses.has("run1") && runPoses.has("run2"), "running alternates run1/run2 (" + [...runPoses].join(",") + ")");
+  await wait(500);
+  await page.keyboard.down("ArrowDown"); await wait(200);
+  const duck = await page.evaluate(() => { const L = window.__AHOY_LEVEL; return { pose: L.pvPose, ducking: L.state.ducking, h: L.player.body.height }; });
+  await shot("05c-duck"); await page.keyboard.up("ArrowDown"); await wait(200);
+  check(duck.pose === "duck" && duck.ducking && duck.h === 60, `ducking shows the duck frame and lowers the body (${JSON.stringify(duck)})`);
+  check(await page.evaluate(() => window.__AHOY_LEVEL.player.body.height === 92), "standing up restores the body");
+  await page.keyboard.press("x"); await wait(60);
+  const swingPose = await pose(); await shot("05d-swing");
+  check(swingPose === "swing", "cutlass attack shows the swing frame (" + swingPose + ")");
+  await wait(400);
+  // The high chest on Launch Beach (the ghost-plank secret): ground jump, then a second jump at the top.
+  const chestInfo = await page.evaluate(() => {
+    const L = window.__AHOY_LEVEL; const c = L.chests.getChildren().find((ch) => ch.secret === "ghost");
+    L.state.invulnUntil = 1e12; L.player.body.reset(c.x - 30, 540); L.player.body.setVelocity(0, 0);
+    return { x: c.x, y: c.y };
+  });
+  await wait(500);
+  // Hold for a full jump (a tap is a deliberate short hop), let go near the top, press again.
+  await page.keyboard.down("Space"); await wait(200);
+  const jumpPose = await pose();
+  await wait(200); await page.keyboard.up("Space"); await wait(40);
+  await page.keyboard.down("Space"); await wait(60);
+  const spun = await page.evaluate(() => window.__AHOY_LEVEL.state.spinUntil > window.__AHOY_LEVEL.time.now);
+  await shot("05e-double-jump");
+  await wait(700); await page.keyboard.up("Space"); await wait(600);
+  const opened = await page.evaluate(() => window.__AHOY_LEVEL.chests.getChildren().find((ch) => ch.secret === "ghost").opened === true);
+  check(jumpPose === "jump", "in the air shows the jump frame (" + jumpPose + ")");
+  check(spun, "second jump in the air is a double jump");
+  check(opened, `double jump reaches the high chest at y=${chestInfo.y} without Ghost Sight`);
+
   // Every island: play briefly, then carry the pirate to the exit.
   for (const r of layoutReport) {
     if (only && r.id !== only) continue;

@@ -2,6 +2,7 @@
 // Download the Higgsfield art listed in art-sources.json and compress it into public/assets.
 //   bg/*.jpg     1920x1080 (cover)        card/*.jpg  1280x720
 //   ui/*.jpg     1920x1080                sprite/*.png trimmed to the subject, max 512px
+//   sprite/pose/*.png  pirate pose frames, trimmed, max 360px
 // Raw downloads are cached in tools/.cache (gitignored), so a rerun only re-encodes.
 // Usage: node pirates/tools/build-assets.cjs
 const fs = require("fs");
@@ -34,11 +35,11 @@ async function main() {
     const dir = path.join(OUT, j.group);
     fs.mkdirSync(dir, { recursive: true });
     let out;
-    if (j.group === "sprite") {
+    if (j.group.startsWith("sprite")) {
       out = path.join(dir, j.name + ".png");
       // items is a 3x3 icon sheet: keep it whole (sliced by cutItems below).
       if (j.name === "items") await sharp(raw).resize(1024, 1024, { fit: "inside" }).png({ compressionLevel: 9, palette: true }).toFile(out);
-      else await sharp(raw).trim({ threshold: 4 }).resize(512, 512, { fit: "inside", withoutEnlargement: true }).png({ compressionLevel: 9, palette: true, quality: 90 }).toFile(out);
+      else await sharp(raw).trim({ threshold: 4 }).resize(j.group === "sprite/pose" ? 360 : 512, j.group === "sprite/pose" ? 360 : 512, { fit: "inside", withoutEnlargement: true }).png({ compressionLevel: 9, palette: true, quality: 90 }).toFile(out);
     } else {
       out = path.join(dir, j.name + ".jpg");
       const [w, h] = j.group === "card" ? [1280, 720] : [1920, 1080];

@@ -26,10 +26,11 @@ until the Pump Fun Pirates team has seen it and said yes. The art is theirs and 
 - **Crossings**: every first crossing hits a **mishap**: storm, Rug Kraken, jeeter gulls, the
   Sirens (shill songs; following one shipwrecks you, steering away pays), message in a bottle,
   rival ship duel, the liquidity-pool whirlpool. Booty is in-game only.
+- **Moves**: run, jump (hold for height, tap for a short hop), **double jump** (press again in the air; a spin and a puff of spray), duck (↓ / ▼, lowers the hitbox), cutlass (X / ⚔, swing frame plus a sweeping slash trail). Each pirate has its own pose frames in `assets/sprite/pose/` (`run1`, `run2`, `jump`, `duck`, `swing`, side view facing right); idle is the front-facing crew art.
 - **Pirates**: the four from @PUMPFUNPIRATES' banner, each with a power: Ghost Sight (reveals
   ghost planks), Grapple Hook (golden rings to high ledges), X-Ray Specs (see through cracked
   walls), Sun Dash (smash cracked walls, shrug off hits). Every island is completable by every
-  pirate. Powers open bonus secrets only.
+  pirate. Powers open bonus secrets; since the double jump (2026-10-02, owner ask) the high ghost-plank and grapple-ledge chests are also reachable by a well-timed double jump, and the cracked-wall pockets still need X-Ray or Dash.
 - **NFT holders** sail as their own pirate: eyewear trait → power (vr→Ghost Sight,
   patch→Grapple, 3d→X-Ray, shades→Dash, hook arm→Grapple), and **laser** eyewear adds a laser
   attack. Their NFT shows as a crest and on the HUD.
