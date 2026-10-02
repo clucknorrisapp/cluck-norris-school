@@ -91,7 +91,8 @@
       this.sea = AHOY.SEAS[d.sea]; this.isl = this.sea.islands[d.island];
       this.pirate = AHOY.currentPirate();
       this.state = { hp: 3, coins: 0, secretsFound: 0, piece: false, done: false, invulnUntil: 0, dashUntil: 0, attackCd: 0, powerCd: 0,
-        ghostUntil: 0, xrayUntil: 0, grappling: false, facing: 1, coyote: 0, jumpBuf: 0, startedAt: 0, respawn: { x: 2 * U, y: GY - 80 }, paused: false };
+        ghostUntil: 0, xrayUntil: 0, grappling: false, facing: 1, coyote: 0, jumpBuf: 0, startedAt: 0, respawn: { x: 2 * U, y: GY - 80 }, paused: false,
+        airJumps: 1, swingUntil: 0, spinUntil: 0 };
     }
 
     create() {
@@ -152,7 +153,7 @@
       this.player = this.physics.add.sprite(this.state.respawn.x, this.state.respawn.y, "px").setDepth(20);
       this.player.body.setSize(44, 92, true).setMaxVelocity(900, 1100);
       this.pv = this.add.image(0, 0, this.pirate.sprite).setOrigin(0.5, 1).setDepth(21);
-      this.pvScale = 112 / this.pv.height; this.pv.setScale(this.pvScale);
+      this.pvPose = null; this.setPose("idle");
       if (this.pirate.portrait) { // NFT holders: a crest with their NFT over the pirate
         const key = this.textures.exists(this.pirate.portrait) ? this.pirate.portrait : "nft-demo";
         this.crest = this.add.image(0, 0, key).setDisplaySize(40, 40).setDepth(22);
@@ -188,12 +189,12 @@
       this.input.keyboard.on("keydown-P", () => this.togglePause());
 
       this.makeHud();
-      this.banner(this.isl.name, this.pirate.powerName + ": press C / ★ to use · X / ⚔ to attack");
+      this.banner(this.isl.name, this.pirate.powerName + (UI.isTouch() ? ": tap ★ to use · tap ⚔ to swing your cutlass" : ": press C to use · X to swing your cutlass"));
       if (!AHOY.Save.get().seenControls) { // first landing: a controls card
         AHOY.Save.set({ seenControls: true });
-        const c = this.add.container(640, 470).setScrollFactor(0).setDepth(960);
-        c.add(UI.panel(this, 0, 0, 760, 150));
-        c.add(UI.text(this, 0, -40, UI.isTouch() ? "◀ ▶ move · ⤒ jump · ⚔ cutlass · ★ power" : "← → / A D move · SPACE jump · X cutlass · C power · P pause", 34, "#2b1b12"));
+        const c = this.add.container(640, 330).setScrollFactor(0).setDepth(960);
+        c.add(UI.panel(this, 0, 0, 1060, 150));
+        c.add(UI.text(this, 0, -40, UI.isTouch() ? "◀ ▶ move · ⬆ jump (tap again in the air to double jump) · swords = cutlass · ★ power" : "← → move · SPACE jump (again in the air = double jump) · X cutlass · C power · ESC pause", 27, "#2b1b12"));
         c.add(UI.text(this, 0, 6, "Stomp crabs and gulls · grab the torn MAP PIECE · reach the dock", 30, "#7a1f12"));
         c.add(UI.text(this, 0, 46, "Fall in the sea and you're back at the last flag", 26, "#3d2a1f"));
         this.tweens.add({ targets: c, alpha: 0, delay: 6500, duration: 600, onComplete: () => c.destroy() });
@@ -201,6 +202,7 @@
       this.state.startedAt = this.time.now;
       AHOY.Audio.music(true);
       if (spec.boss) this.bossSpec = spec.boss;
+      this.navOff = () => !(this.state.paused || this.state.done); // the arrows steer the pirate while playing
       window.__AHOY_LEVEL = this; // test hook (headless playthrough)
     }
 
@@ -235,6 +237,25 @@
     }
 
     // ── Player ──
+    // Pose frames: idle is the front-facing crew art; the rest are side views facing right
+    // (flipped for left). Each pose has its own display height so a crouch reads as a crouch.
+    setPose(pose) {
+      if (pose === this.pvPose) return;
+      const key = pose === "idle" ? this.pirate.sprite : this.pirate.sprite + "-" + pose;
+      if (!this.textures.exists(key)) { if (this.pvPose === "idle") return; pose = "idle"; }
+      this.pvPose = pose;
+      this.pv.setTexture(pose === "idle" ? this.pirate.sprite : key);
+      const h = { idle: 112, run1: 110, run2: 112, jump: 108, swing: 110 }[pose] || 112;
+      this.pvScale = h / this.pv.height;
+    }
+    doubleJump() {
+      const s = this.state, b = this.player.body;
+      s.airJumps = 0; b.setVelocityY(-740); s.spinUntil = this.time.now + 320; AHOY.Audio.play("jump");
+      for (let i = 0; i < 6; i++) { // a puff of sea spray under the boots
+        const p = this.add.circle(b.center.x + Phaser.Math.Between(-18, 18), b.bottom, Phaser.Math.Between(6, 11), 0xffffff, 0.85).setDepth(19);
+        this.tweens.add({ targets: p, x: p.x + Phaser.Math.Between(-40, 40), y: p.y + Phaser.Math.Between(10, 30), alpha: 0, scale: 0.4, duration: 380, onComplete: () => p.destroy() });
+      }
+    }
     hurt(spike, fromX) {
       const s = this.state;
       if (s.done || this.time.now < s.invulnUntil || this.time.now < s.dashUntil) return;
@@ -302,12 +323,18 @@
     attack() {
       const s = this.state;
       if (this.time.now < s.attackCd || s.done) return;
-      s.attackCd = this.time.now + 330; AHOY.Audio.play("slash");
+      s.attackCd = this.time.now + 330; s.swingUntil = this.time.now + 240; AHOY.Audio.play("slash");
       const hx = this.player.x + s.facing * 60, hy = this.player.y - 10;
-      const arc = this.add.graphics().setDepth(25); arc.lineStyle(8, 0xffffff, 0.9);
-      arc.beginPath(); arc.arc(this.player.x, this.player.y - 20, 70, s.facing > 0 ? -1.2 : Math.PI - 0.4, s.facing > 0 ? 0.4 : Math.PI + 1.2); arc.strokePath();
-      this.tweens.add({ targets: arc, alpha: 0, duration: 160, onComplete: () => arc.destroy() });
-      this.tweens.add({ targets: this.pv, angle: s.facing * 14, duration: 80, yoyo: true });
+      // The slash trail: a bright arc that sweeps from overhead to in front of the blade.
+      const arc = this.add.graphics().setDepth(25);
+      const cx = this.player.x + s.facing * 18, cy = this.player.y - 24;
+      const a0 = s.facing > 0 ? -1.5 : Math.PI + 1.5, a1 = s.facing > 0 ? 0.55 : Math.PI - 0.55;
+      const sweep = { t: 0 };
+      this.tweens.add({ targets: sweep, t: 1, duration: 120, onUpdate: () => {
+        const a = a0 + (a1 - a0) * sweep.t;
+        arc.clear().lineStyle(14, 0xffcd77, 0.35).beginPath().arc(cx, cy, 76, Math.min(a0, a), Math.max(a0, a)).strokePath()
+          .lineStyle(6, 0xffffff, 0.95).beginPath().arc(cx, cy, 76, Math.min(a0, a), Math.max(a0, a)).strokePath();
+      }, onComplete: () => this.tweens.add({ targets: arc, alpha: 0, duration: 140, onComplete: () => arc.destroy() }) });
       const hit = new Phaser.Geom.Rectangle(hx - 50, hy - 55, 100, 110);
       this.hitArea(hit);
       if (this.pirate.laser) this.fireLaser();
@@ -409,32 +436,67 @@
     // ── Touch controls ──
     makeTouch() {
       this.input.addPointer(3);
-      const btn = (x, y, r, label, key) => {
-        const c = this.add.circle(x, y, r, 0x2b1b12, 0.45).setScrollFactor(0).setDepth(1000).setStrokeStyle(4, 0xffcd77, 0.8).setInteractive();
-        UI.text(this, x, y, label, r * 0.9, "#ffffff").setScrollFactor(0).setDepth(1001);
-        c.on("pointerdown", () => { this.touch[key] = true; if (key === "jump") this.state.jumpBuf = this.time.now + 140; if (key === "attack") this.attack(); if (key === "power") this.usePower(); });
-        const up = () => { this.touch[key] = false; };
-        c.on("pointerup", up); c.on("pointerout", up);
+      // Icons are drawn, not typed: iOS turns ◀ ▶ into blue emoji tiles.
+      const icon = (g, kind, x, y, s) => {
+        g.fillStyle(0xffffff, 0.95).lineStyle(Math.max(4, s * 0.16), 0xffffff, 0.95);
+        if (kind === "left") g.fillTriangle(x - s * 0.5, y, x + s * 0.35, y - s * 0.5, x + s * 0.35, y + s * 0.5);
+        else if (kind === "right") g.fillTriangle(x + s * 0.5, y, x - s * 0.35, y - s * 0.5, x - s * 0.35, y + s * 0.5);
+        else if (kind === "jump") { g.fillTriangle(x, y - s * 0.55, x - s * 0.5, y, x + s * 0.5, y); g.fillRect(x - s * 0.17, y - 2, s * 0.34, s * 0.5); }
+        else if (kind === "attack") { // two crossed cutlasses, hilts at the bottom
+          const k = Math.SQRT1_2;
+          [-1, 1].forEach((d) => {
+            const hx = x + d * s * 0.42, hy = y + s * 0.42; // hilt
+            g.lineBetween(hx, hy, x - d * s * 0.48, y - s * 0.48); // blade
+            const gx = hx - d * k * s * 0.2, gy = hy - k * s * 0.2; // guard sits across the blade, just above the hilt
+            g.lineBetween(gx - k * s * 0.18, gy + d * k * s * 0.18, gx + k * s * 0.18, gy - d * k * s * 0.18);
+          });
+        } else if (kind === "power") {
+          const pts = []; for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + i * Math.PI / 5, rr = i % 2 ? s * 0.24 : s * 0.55; pts.push(new Phaser.Geom.Point(x + Math.cos(a) * rr, y + Math.sin(a) * rr)); }
+          g.fillPoints(pts, true);
+        }
       };
-      btn(95, 630, 62, "◀", "left"); btn(245, 630, 62, "▶", "right");
-      btn(1180, 620, 70, "⤒", "jump"); btn(1035, 655, 54, "⚔", "attack"); btn(1060, 515, 50, "★", "power");
+      const btn = (x, y, r, key) => {
+        // The tap zone is bigger than the circle you see (thumbs miss), and sliding a thumb onto a button presses it.
+        const c = this.add.circle(x, y, r, 0x2b1b12, 0.42).setScrollFactor(0).setDepth(1000).setStrokeStyle(3, 0xffcd77, 0.75)
+          .setInteractive(new Phaser.Geom.Circle(r, r, r + 14), Phaser.Geom.Circle.Contains);
+        const g = this.add.graphics().setScrollFactor(0).setDepth(1001); icon(g, key, x, y, r * 0.95);
+        const down = () => {
+          this.touch[key] = true; c.setFillStyle(0xffcd77, 0.45);
+          if (key === "jump") this.state.jumpBuf = this.time.now + 140; if (key === "attack") this.attack(); if (key === "power") this.usePower();
+        };
+        const up = () => { this.touch[key] = false; c.setFillStyle(0x2b1b12, 0.42); };
+        c.on("pointerdown", down); c.on("pointerup", up); c.on("pointerout", up); c.on("pointerupoutside", up);
+        if (key === "left" || key === "right") c.on("pointerover", (p) => { if (p.isDown) down(); });
+      };
+      // Every button sits on the ground strip (below GY), so none of them cover the play space.
+      btn(80, 660, 46, "left"); btn(198, 660, 46, "right");
+      btn(1206, 654, 50, "jump"); btn(1096, 672, 38, "attack"); btn(990, 676, 34, "power");
     }
 
     // ── HUD ──
     makeHud() {
       const d = 900;
-      const bar = this.add.graphics().setScrollFactor(0).setDepth(d); bar.fillStyle(0x2b1b12, 0.75).fillRoundedRect(12, 10, 470, 64, 14);
+      const bar = this.add.graphics().setScrollFactor(0).setDepth(d); bar.fillStyle(0x2b1b12, 0.75).fillRoundedRect(12, 10, 560, 64, 14);
       this.hearts = [0, 1, 2].map((i) => this.add.image(46 + i * 46, 42, "item-heart").setScale(0.24).setScrollFactor(0).setDepth(d + 1));
       this.add.image(200, 42, "item-coin").setScale(0.24).setScrollFactor(0).setDepth(d + 1);
       this.coinText = UI.text(this, 226, 42, "0", 36, "#ffcd77", { ox: 0 }).setScrollFactor(0).setDepth(d + 1);
-      this.hudPiece = this.add.image(330, 42, "item-map-piece").setScale(0.26).setScrollFactor(0).setDepth(d + 1).setAlpha(0.35).setTint(0x555555);
+      // The map-piece slot: an outlined empty slot until this island's piece is found.
+      this.add.graphics().setScrollFactor(0).setDepth(d + 1).lineStyle(2, 0xffcd77, 0.7).strokeRoundedRect(300, 18, 60, 48, 8);
+      this.hudPiece = this.add.image(330, 42, "item-map-piece").setScale(0.22).setScrollFactor(0).setDepth(d + 1).setAlpha(0.3);
       if (AHOY.Save.island(this.isl.id).piece) this.hudPiece.setAlpha(0.8).clearTint();
-      this.powerText = UI.text(this, 420, 42, "★", 34, "#ffffff", { stroke: "#2b1b12", strokeThickness: 5 }).setScrollFactor(0).setDepth(d + 1);
+      this.powerText = UI.text(this, 384, 42, "★", 30, "#ffffff", { stroke: "#2b1b12", strokeThickness: 5, ox: 0 }).setScrollFactor(0).setDepth(d + 1);
       this.secretText = UI.text(this, 640, 30, `Secrets 0/${this.spec.secrets}`, 28, "#ffffff", { stroke: "#2b1b12", strokeThickness: 5 }).setScrollFactor(0).setDepth(d + 1);
       if (this.pirate.portrait) UI.text(this, 640, 60, this.pirate.name + (this.pirate.laser ? " · LASER EYES" : ""), 22, "#ffcd77", { stroke: "#2b1b12", strokeThickness: 4 }).setScrollFactor(0).setDepth(d + 1);
       const pause = UI.text(this, 1170, 40, "❚❚", 36, "#ffffff", { stroke: "#2b1b12", strokeThickness: 6 }).setScrollFactor(0).setDepth(d + 1).setInteractive({ useHandCursor: true });
       pause.on("pointerup", () => this.togglePause());
       UI.muteButton(this);
+      // Always-on controls reminder along the ground strip (keyboard, or the controller's buttons once one is used).
+      const KEY_HINT = "SPACE jump · again in the air = double jump · X cutlass · C power · ESC pause";
+      const PAD_HINT = "A jump · again in the air = double jump · X/B cutlass · Y power · START pause";
+      this.hint = UI.text(this, 640, 702, AHOY.Input.pad().active ? PAD_HINT : KEY_HINT, 24, "#fff7e0", { stroke: "#2b1b12", strokeThickness: 5 }).setScrollFactor(0).setDepth(d + 1).setAlpha(0.9);
+      if (UI.isTouch() && !AHOY.Input.pad().active) this.hint.setVisible(false);
+      const onPad = (ev) => { if (!this.hint.active) return; this.hint.setText(ev === "connect" ? PAD_HINT : KEY_HINT).setVisible(ev === "connect" || !UI.isTouch()); };
+      AHOY.Input.onPad(onPad); this.events.once("shutdown", () => AHOY.Input.offPad(onPad));
     }
     hudCoins() { this.coinText && this.coinText.setText(String(this.state.coins)); this.secretText && this.secretText.setText(`Secrets ${this.state.secretsFound}/${this.spec.secrets}`); }
     hudHearts() { this.hearts.forEach((h, i) => h.setAlpha(i < this.state.hp ? 1 : 0.2)); }
@@ -458,12 +520,13 @@
       this.physics.pause(); this.tweens.pauseAll(); this.state.paused = true;
       const L = this.pauseLayer = this.add.container(0, 0).setScrollFactor(0).setDepth(3000);
       L.add(this.add.rectangle(640, 360, 1280, 720, 0x000000, 0.55).setScrollFactor(0));
-      L.add(UI.panel(this, 640, 360, 520, 400).setScrollFactor(0));
-      L.add(UI.title(this, 640, 220, "PAUSED", 60).setScrollFactor(0));
-      const b1 = UI.button(this, 640, 310, "RESUME", () => this.togglePause(), { w: 280, h: 62, size: 34 });
-      const b2 = UI.button(this, 640, 390, "RESTART ISLAND", () => { this.tweens.resumeAll(); this.scene.restart({ sea: this.seaIdx, island: this.islIdx }); }, { w: 280, h: 62, size: 30 });
-      const b3 = UI.button(this, 640, 470, "BACK TO MAP", () => { this.tweens.resumeAll(); this.scene.start("Map", { sea: this.seaIdx }); }, { w: 280, h: 62, size: 30 });
-      [b1, b2, b3].forEach((b) => { b.setScrollFactor(0); L.add(b); });
+      L.add(UI.panel(this, 640, 370, 520, 470).setScrollFactor(0));
+      L.add(UI.title(this, 640, 190, "PAUSED", 60).setScrollFactor(0));
+      const b1 = UI.button(this, 640, 275, "RESUME", () => this.togglePause(), { w: 280, h: 62, size: 34 });
+      const b2 = UI.button(this, 640, 350, "CONTROLS", () => AHOY.ControlsPanel.open(this), { w: 280, h: 62, size: 30 });
+      const b3 = UI.button(this, 640, 425, "RESTART ISLAND", () => { this.tweens.resumeAll(); this.scene.restart({ sea: this.seaIdx, island: this.islIdx }); }, { w: 280, h: 62, size: 30 });
+      const b4 = UI.button(this, 640, 500, "BACK TO MAP", () => { this.tweens.resumeAll(); this.scene.start("Map", { sea: this.seaIdx }); }, { w: 280, h: 62, size: 30 });
+      [b1, b2, b3, b4].forEach((b) => { b.setScrollFactor(0); L.add(b); });
     }
 
     // ── Finish ──
@@ -501,7 +564,7 @@
       if (!s.done && !s.grappling) {
         const left = k.LEFT.isDown || k.A.isDown || this.touch.left, right = k.RIGHT.isDown || k.D.isDown || this.touch.right;
         const onGround = b.blocked.down || b.touching.down;
-        if (onGround) s.coyote = t + 110;
+        if (onGround) { s.coyote = t + 110; s.airJumps = 1; }
         const target = (right ? 1 : 0) - (left ? 1 : 0);
         if (t >= s.dashUntil) {
           const accel = onGround ? 2600 : 1700, max = 330;
@@ -511,18 +574,25 @@
         }
         if (Phaser.Input.Keyboard.JustDown(k.SPACE) || Phaser.Input.Keyboard.JustDown(k.UP) || Phaser.Input.Keyboard.JustDown(k.W) || Phaser.Input.Keyboard.JustDown(k.Z)) s.jumpBuf = t + 140;
         if (s.jumpBuf > t && s.coyote > t) { b.setVelocityY(-720); s.jumpBuf = 0; s.coyote = 0; AHOY.Audio.play("jump"); }
+        else if (s.jumpBuf > t && s.airJumps > 0 && !onGround) { s.jumpBuf = 0; this.doubleJump(); }
         const jumpHeld = k.SPACE.isDown || k.UP.isDown || k.W.isDown || k.Z.isDown || this.touch.jump;
         if (!jumpHeld && b.velocity.y < -260) b.setVelocityY(b.velocity.y * 0.85); // short hop
         if (Phaser.Input.Keyboard.JustDown(k.X) || Phaser.Input.Keyboard.JustDown(k.J)) this.attack();
         if (Phaser.Input.Keyboard.JustDown(k.C) || Phaser.Input.Keyboard.JustDown(k.K) || Phaser.Input.Keyboard.JustDown(k.SHIFT)) this.usePower();
       }
       // Draw the pirate on its body: bob while running, squash in the air, flash when hurt.
-      const running = Math.abs(b.velocity.x) > 40 && (b.blocked.down || b.touching.down);
-      const bob = running ? Math.abs(Math.sin(t / 70)) * 6 : 0;
+      const grounded = b.blocked.down || b.touching.down;
+      const running = Math.abs(b.velocity.x) > 40 && grounded;
+      const air = !grounded && !s.grappling;
+      this.setPose(s.swingUntil > t ? "swing" : air || s.grappling ? "jump" : running ? (Math.floor(t / 120) % 2 ? "run2" : "run1") : "idle");
+      const bob = running ? Math.abs(Math.sin(t / 60)) * 4 : 0;
       this.pv.setPosition(b.center.x, b.bottom + 2 - bob).setFlipX(s.facing < 0);
-      const air = !(b.blocked.down || b.touching.down);
-      this.pv.setScale(this.pvScale * (air ? 0.94 : 1) * (s.facing < 0 ? 1 : 1), this.pvScale * (air ? 1.06 : 1));
-      this.pv.setAngle(s.dashUntil > t ? s.facing * 18 : running ? Math.sin(t / 90) * 4 : 0);
+      this.pv.setScale(this.pvScale * (air ? 0.96 : 1), this.pvScale * (air ? 1.04 : 1));
+      // The double jump does a quick somersault, turned about the pirate's middle, not his boots.
+      const spin = s.spinUntil > t ? (1 - (s.spinUntil - t) / 320) * 360 * s.facing : 0;
+      if (spin) this.pv.setOrigin(0.5, 0.5).setY(b.bottom + 2 - this.pv.displayHeight / 2);
+      else if (this.pv.originY !== 1) this.pv.setOrigin(0.5, 1).setY(b.bottom + 2 - bob);
+      this.pv.setAngle(spin || (s.dashUntil > t ? s.facing * 18 : running ? Math.sin(t / 90) * 3 : 0));
       this.pv.setAlpha(t < s.invulnUntil ? (Math.floor(t / 80) % 2 ? 0.35 : 1) : 1);
       if (this.crest) this.crest.setPosition(b.center.x - s.facing * 26, b.bottom - 98);
 

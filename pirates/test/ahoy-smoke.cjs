@@ -40,6 +40,12 @@ function chromiumPath() {
   try { browser = await chromium.launch(launch); }
   catch (_) { browser = await chromium.launch({ ...launch, executablePath: "/opt/pw-browsers/chromium" }); }
   const page = await browser.newPage({ viewport: { width: 1280, height: 720 }, ignoreHTTPSErrors: !!remote }); // remote runs go through the container's TLS proxy
+  // A fake standard-mapping controller the test can press, read through the real Gamepad API path.
+  await page.addInitScript(() => {
+    const mk = () => ({ pressed: false, value: 0 });
+    window.__fakePad = { id: "Test Pad (STANDARD GAMEPAD)", index: 0, connected: true, mapping: "standard", buttons: Array.from({ length: 17 }, mk), axes: [0, 0, 0, 0] };
+    Object.defineProperty(navigator, "getGamepads", { value: () => [window.__fakePad], configurable: true });
+  });
   const errors = [];
   page.on("pageerror", (e) => errors.push("pageerror: " + e.message));
   page.on("response", (r) => { if (r.status() >= 400 && !/fonts\.g/.test(r.url())) if (!/\/api\/ahoy\//.test(r.url())) errors.push("http " + r.status() + " " + r.url()); });
@@ -55,6 +61,25 @@ function chromiumPath() {
   await wait(800);
   check(true, "boots to Title");
   await shot("01-title");
+
+  // Controller: pad presses reach menus and play through the same keys the keyboard uses.
+  const padPress = async (i, ms = 90) => {
+    await page.evaluate((b) => { window.__fakePad.buttons[b] = { pressed: true, value: 1 }; }, i); await wait(ms);
+    await page.evaluate((b) => { window.__fakePad.buttons[b] = { pressed: false, value: 0 }; }, i); await wait(ms);
+  };
+  const BTN = { A: 0, B: 1, X: 2, Y: 3, START: 9, UP: 12, DOWN: 13, LEFT: 14, RIGHT: 15 };
+  await page.evaluate(() => AHOY.ControlsPanel.open(window.__AHOY_GAME.scene.getScene("Title")));
+  await wait(400); await shot("01b-controls");
+  await padPress(BTN.A); // first press wakes the pad and shows the highlight
+  const status = await page.evaluate(() => AHOY.Input.pad());
+  check(status.active && /Test Pad/.test(status.name), "controller detected (" + status.name + ")");
+  await padPress(BTN.RIGHT);
+  await padPress(BTN.A); // CLOSE (the highlight moved right from REMAP)
+  const panelGone = await page.evaluate(() => !window.__AHOY_GAME.scene.getScene("Title").children.list.some((o) => o.depth === 4500 && o.active));
+  check(panelGone, "d-pad + A closes the Controls panel");
+  await padPress(BTN.DOWN); await padPress(BTN.UP); await padPress(BTN.A); // focus SET SAIL, press it
+  await page.waitForFunction(() => window.__AHOY_GAME.scene.getScenes(true).some((s) => s.scene.key === "Select" || s.scene.key === "Map"), null, { timeout: 10000 }).catch(() => {});
+  check((await active()).some((k) => k === "Select" || k === "Map"), "controller presses SET SAIL from the title (" + (await active()).join(",") + ")");
 
   // Layout sanity for every island (pure, no rendering).
   const layoutReport = await page.evaluate(() => AHOY.SEAS.flatMap((s, si) => s.islands.map((isl, ii) => {
@@ -79,6 +104,58 @@ function chromiumPath() {
     await shot("04-mishap-" + k);
     check((await active()).includes("Mishap"), "mishap " + k + " runs");
   }
+
+  // Moves and pose frames, on Launch Beach as Hook Jack (no Ghost Sight, so only the double jump reaches the high chest).
+  const missingPoses = await page.evaluate(() => AHOY.CREW.flatMap((c) => AHOY.POSES.map((p) => c.sprite + "-" + p)).filter((k) => !window.__AHOY_GAME.textures.exists(k)));
+  check(missingPoses.length === 0, "all 16 pose frames loaded" + (missingPoses.length ? ": missing " + missingPoses.join(", ") : ""));
+  await page.evaluate(() => AHOY.Save.set({ crew: "hook", nft: null }));
+  await go("Level", { sea: 0, island: 0 });
+  const pose = () => page.evaluate(() => window.__AHOY_LEVEL.pvPose);
+  await page.keyboard.down("ArrowRight"); await wait(450);
+  const runPoses = new Set(); for (let i = 0; i < 6; i++) { runPoses.add(await pose()); await wait(70); }
+  await shot("05b-run"); await page.keyboard.up("ArrowRight");
+  check(runPoses.has("run1") && runPoses.has("run2"), "running alternates run1/run2 (" + [...runPoses].join(",") + ")");
+  await wait(500);
+  await page.keyboard.press("x"); await wait(60);
+  const swingPose = await pose(); await shot("05d-swing");
+  check(swingPose === "swing", "cutlass attack shows the swing frame (" + swingPose + ")");
+  await wait(400);
+  // Controller in a level: A jumps, X swings, START pauses, A resumes.
+  await page.evaluate(() => { const L = window.__AHOY_LEVEL; L.player.body.reset(L.player.x, 540); });
+  await wait(500);
+  await page.evaluate(() => { window.__fakePad.buttons[0] = { pressed: true, value: 1 }; }); await wait(120);
+  const padVy = await page.evaluate(() => window.__AHOY_LEVEL.player.body.velocity.y);
+  await page.evaluate(() => { window.__fakePad.buttons[0] = { pressed: false, value: 0 }; }); await wait(700);
+  check(padVy < -100, "controller A jumps (vy " + Math.round(padVy) + ")");
+  await page.evaluate(() => { window.__fakePad.buttons[2] = { pressed: true, value: 1 }; }); await wait(50);
+  const padSwing = await pose();
+  await page.evaluate(() => { window.__fakePad.buttons[2] = { pressed: false, value: 0 }; }); await wait(400);
+  check(padSwing === "swing", "controller X swings the cutlass (" + padSwing + ")");
+  await padPress(BTN.START);
+  check(await page.evaluate(() => window.__AHOY_LEVEL.state.paused), "controller START pauses");
+  await shot("05f-pause");
+  await padPress(BTN.A); await padPress(BTN.A); // highlight RESUME, press it
+  check(await page.evaluate(() => !window.__AHOY_LEVEL.state.paused), "controller A resumes from the pause menu");
+
+  // The high chest on Launch Beach (the ghost-plank secret): ground jump, then a second jump at the top.
+  const chestInfo = await page.evaluate(() => {
+    const L = window.__AHOY_LEVEL; const c = L.chests.getChildren().find((ch) => ch.secret === "ghost");
+    L.state.invulnUntil = 1e12; L.player.body.reset(c.x - 30, 540); L.player.body.setVelocity(0, 0);
+    return { x: c.x, y: c.y };
+  });
+  await wait(500);
+  // Hold for a full jump (a tap is a deliberate short hop), let go near the top, press again.
+  await page.keyboard.down("Space"); await wait(200);
+  const jumpPose = await pose();
+  await wait(200); await page.keyboard.up("Space"); await wait(40);
+  await page.keyboard.down("Space"); await wait(60);
+  const spun = await page.evaluate(() => window.__AHOY_LEVEL.state.spinUntil > window.__AHOY_LEVEL.time.now);
+  await shot("05e-double-jump");
+  await wait(700); await page.keyboard.up("Space"); await wait(600);
+  const opened = await page.evaluate(() => window.__AHOY_LEVEL.chests.getChildren().find((ch) => ch.secret === "ghost").opened === true);
+  check(jumpPose === "jump", "in the air shows the jump frame (" + jumpPose + ")");
+  check(spun, "second jump in the air is a double jump");
+  check(opened, `double jump reaches the high chest at y=${chestInfo.y} without Ghost Sight`);
 
   // Every island: play briefly, then carry the pirate to the exit.
   for (const r of layoutReport) {

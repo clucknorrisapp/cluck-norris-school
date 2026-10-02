@@ -1,5 +1,5 @@
 {
-  "_note": "Higgsfield generations for AHOY: PumpFunPirates (2026-10-02). build-assets.cjs downloads + compresses these into public/assets. Sprites are the background-removed versions.",
+  "_note": "Higgsfield generations for AHOY: PumpFunPirates (2026-10-02). build-assets.cjs downloads + compresses these into public/assets. Sprites are the background-removed versions. sprite/pose: per-pirate side-view frames (run1, run2, jump, swing), generated with the crew sprite as reference, background-removed.",
   "base": "https://d8j0ntlcm91z4.cloudfront.net/user_3FusN3Ju3eYDQtXzIkwBTR7xnLV/",
   "bg": {
     "launch-beach": "hf_20261002_023400_67670d33-1c21-4b70-9748-4a6ad7125c7a.png",
@@ -22,7 +22,7 @@
     "captains-cove": "hf_20261002_023907_8eccb5e8-99ee-468f-aff2-2ba463524bd4.png"
   },
   "ui": {
-    "sea-chart": "hf_20261002_023907_b3ebd454-2610-4afb-93ee-2c80c9eda894.png",
+    "sea-chart": "hf_20261002_115941_11cd95e6-3cc6-4e9f-9fd3-8a9ea6790db7.png",
     "title": "hf_20261002_023400_31c1d9d7-3e88-4ed1-aafe-1ba51c828c7d.png"
   },
   "card": {
@@ -47,5 +47,23 @@
     "ship": "hf_20261002_024418_9acb5fef-8551-482f-affa-f4f226e2f84e.png",
     "island": "hf_20261002_024420_fd71da52-94ac-44d0-875f-b3b49ad6fa8f.png",
     "tentacle": "hf_20261002_024422_a5cd8d85-50bd-4ca3-8e48-438762d36504.png"
+  },
+  "sprite/pose": {
+    "pirate-visor-run1": "hf_20261002_114431_e5a3ac7f-7f37-4898-b1db-ff9dd1cee2ba.png",
+    "pirate-visor-run2": "hf_20261002_114437_359bd4ec-3d8e-4c1d-86d6-90cc1cbe1f75.png",
+    "pirate-visor-jump": "hf_20261002_114438_fee2468d-55f0-4aae-9ab8-37b0d2ab6a17.png",
+    "pirate-visor-swing": "hf_20261002_114440_84f5cd9b-f945-41a7-b36a-ff4e7a2ca206.png",
+    "pirate-hook-run1": "hf_20261002_114441_abef1ee8-7680-4d41-834f-c8b2d5122888.png",
+    "pirate-hook-run2": "hf_20261002_114443_d9f8e018-211e-4bf0-9413-88edec08e76c.png",
+    "pirate-hook-jump": "hf_20261002_114444_8a6e0bd5-2b07-404b-92dc-eb3e4f9cf59d.png",
+    "pirate-hook-swing": "hf_20261002_114447_85ebfd09-efa9-439a-a341-4a74cdd43001.png",
+    "pirate-3d-run1": "hf_20261002_114448_818a5d08-b856-4fb1-abc8-86089f082a0a.png",
+    "pirate-3d-run2": "hf_20261002_114450_e6ac7904-b388-46fb-83c0-e936ad4c9070.png",
+    "pirate-3d-jump": "hf_20261002_114451_5d872775-56a2-4396-b7c0-0e54744de0c5.png",
+    "pirate-3d-swing": "hf_20261002_114454_dfdee7de-5d71-4960-8211-c708037c2029.png",
+    "pirate-shades-run1": "hf_20261002_114456_22df44c5-c0d0-4a62-8f33-9ce5799b8e35.png",
+    "pirate-shades-run2": "hf_20261002_114457_c94731be-978e-434e-a6c0-20f10e7a2f2f.png",
+    "pirate-shades-jump": "hf_20261002_114459_b863e72f-a91f-4af9-b70f-7a30b4bc2bc8.png",
+    "pirate-shades-swing": "hf_20261002_114500_820cb15c-5cf6-49e9-b281-073ceeda6f15.png"
   }
 }

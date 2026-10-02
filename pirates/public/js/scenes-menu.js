@@ -19,6 +19,8 @@ class BootScene extends Phaser.Scene {
     ["pirate-visor", "pirate-hook", "pirate-3d", "pirate-shades", "crab", "gull", "skeleton", "kraken-boss", "ship", "island", "tentacle", "nft-demo",
       "item-coin", "item-chest", "item-chest-open", "item-map-piece", "item-barrel", "item-key", "item-heart", "item-wheel", "item-shovel"]
       .forEach((k) => this.load.image(k, A + "sprite/" + k + ".png"));
+    // Pose frames per pirate (side view, facing right): two run frames, jump, cutlass swing.
+    AHOY.CREW.forEach((c) => AHOY.POSES.forEach((p) => this.load.image(c.sprite + "-" + p, A + "sprite/pose/" + c.sprite + "-" + p + ".png")));
     // Holders' own NFTs (live mode): their images, so the HUD and crew screen can show them.
     this.load.setCORS("anonymous");
     (AHOY.Gate.state().nfts || []).forEach((n) => { if (n.image && !/nft-demo/.test(n.image)) this.load.image("nft-" + n.id, n.image); });
@@ -119,8 +121,9 @@ class TitleScene extends Phaser.Scene {
     const save = AHOY.Save.get();
     const started = Object.keys(save.done).length > 0;
     UI.button(this, 640, 470, started ? "CONTINUE VOYAGE" : "SET SAIL", () => UI.fadeTo(this, started ? "Map" : "Select", { first: !started }), { w: 380, h: 84, size: 52, fill: 0xc0392b });
-    UI.button(this, 480, 570, "CREW", () => UI.fadeTo(this, "Select"), { w: 220, h: 64, size: 36 });
-    UI.button(this, 800, 570, "HOLDERS", () => AHOY.HolderPanel.open(this), { w: 220, h: 64, size: 36 });
+    UI.button(this, 400, 570, "CREW", () => UI.fadeTo(this, "Select"), { w: 220, h: 64, size: 36 });
+    UI.button(this, 640, 570, "CONTROLS", () => AHOY.ControlsPanel.open(this), { w: 220, h: 64, size: 36 });
+    UI.button(this, 880, 570, "HOLDERS", () => AHOY.HolderPanel.open(this), { w: 220, h: 64, size: 36 });
 
     // The real contract address — the only one the game ever shows (a copycat exists).
     const ca = AHOY.CA;
@@ -139,6 +142,14 @@ class TitleScene extends Phaser.Scene {
     UI.text(this, 1150, 700, "Crafted by Cluck Norris Productions", 22, "#ffefc9", { stroke: "#2b1b12", strokeThickness: 4 });
     if (AHOY.Gate.mode() === "demo") UI.text(this, 1120, 36, "PREVIEW BUILD", 26, "#ffffff", { stroke: "#fa0d0d", strokeThickness: 5 });
     UI.muteButton(this);
+    UI.fullscreenButton(this, 1240, 96);
+    // On a phone or tablet in the browser, point at the full-screen install (no browser bars at all).
+    if (UI.isTouch() && !UI.isInstalled()) {
+      const ios = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+      const tip = ios ? "Play full screen: tap Share, then Add to Home Screen" : "Play full screen: browser menu, then Add to Home screen";
+      const plate = this.add.graphics(); plate.fillStyle(0x2b1b12, 0.78).fillRoundedRect(330, 282, 620, 40, 12);
+      UI.text(this, 640, 302, "📲 " + tip, 28, "#ffefc9");
+    }
     this.input.once("pointerdown", () => { AHOY.Audio.unlock(); AHOY.Audio.music(true); });
     this.input.keyboard.once("keydown", () => { AHOY.Audio.unlock(); AHOY.Audio.music(true); });
     this.input.keyboard.on("keydown-ENTER", () => UI.fadeTo(this, started ? "Map" : "Select", { first: !started }));
@@ -165,6 +176,7 @@ class SelectScene extends Phaser.Scene {
       UI.text(this, x, y + 128, c.blurb, 26, "#3d2a1f", { wrap: 236, style: { lineSpacing: -4 } });
       const zone = this.add.zone(x, y, 270, 400).setInteractive({ useHandCursor: true });
       zone.on("pointerup", () => { AHOY.Audio.unlock(); AHOY.Audio.play("good"); AHOY.Save.set({ crew: c.id, nft: null }); paint(); });
+      AHOY.Nav.add(this, zone, () => zone.emit("pointerup"));
       cards.push({ c, x, y, img });
     });
     const ring = this.add.graphics();
@@ -184,6 +196,7 @@ class SelectScene extends Phaser.Scene {
         const key = this.textures.exists("nft-" + n.id) ? "nft-" + n.id : "nft-demo";
         const im = this.add.image(430 + i * 90, 600, key).setDisplaySize(76, 76).setInteractive({ useHandCursor: true });
         im.on("pointerup", () => { AHOY.Save.set({ nft: n.id }); AHOY.Audio.play("power"); paint(); });
+        AHOY.Nav.add(this, im, () => im.emit("pointerup"));
       });
     } else {
       UI.text(this, 640, 600, "Hold a Pump Fun Pirates NFT to sail as your own pirate — with its traits as powers.", 28, "#ffefc9", { stroke: "#2b1b12", strokeThickness: 4 });

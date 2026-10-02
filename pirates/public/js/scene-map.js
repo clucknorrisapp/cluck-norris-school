@@ -56,7 +56,7 @@
           }
         }
         const zone = this.add.zone(isl.x, isl.y + 20, 190, 170).setInteractive({ useHandCursor: open });
-        zone.on("pointerup", () => this.pick(i));
+        zone.on("pointerup", () => this.pick(i)); AHOY.Nav.add(this, zone, () => this.pick(i));
         this.islandObjs.push({ img, label });
       });
 
@@ -66,7 +66,9 @@
       this.tweens.add({ targets: this.ship, y: this.ship.y - 8, angle: 3, duration: 1100, yoyo: true, repeat: -1, ease: "Sine.inOut" });
 
       this.drawHud();
-      UI.muteButton(this, 1238, 92);
+      UI.muteButton(this, 52, 104); // top-left: the chart's compass rose sits top-right
+      UI.fullscreenButton(this, 108, 104);
+      UI.button(this, 112, 162, "CONTROLS", () => AHOY.ControlsPanel.open(this), { w: 170, h: 46, size: 26 });
 
       if (this.data0.arrived != null) this.time.delayedCall(350, () => this.landPrompt(this.data0.arrived));
       else if (this.data0.first) this.toast("Click an island to sail there. Each island hides a piece of the map!");
@@ -91,8 +93,9 @@
         g.fillStyle(0x2b1b12, 1).fillRoundedRect(x - 86, y - 24, 172, 48, 10);
         g.fillStyle(cur ? 0xfa0d0d : (open ? 0xb5652f : 0x6d6359), 1).fillRoundedRect(x - 83, y - 21, 166, 42, 8);
         const done = AHOY.Save.treasure(s.id);
-        UI.text(this, x, y + 1, (open ? "" : "🔒 ") + (done ? "★ " : "") + s.name.replace("Rug Kraken's Deep", "Kraken's Deep").replace("Cold Storage Glacier", "Glacier"), 22, "#fff7e0");
+        UI.text(this, x, y + 1, (open ? "" : "🔒 ") + (done ? "★ " : "") + s.name.replace("Rug Kraken's Deep", "Kraken's Deep").replace("Cold Storage Glacier", "Glacier").replace("Bonding Curve Bay", "Bonding Bay"), 25, "#fff7e0");
         const z = this.add.zone(x, y, 172, 48).setInteractive({ useHandCursor: true });
+        AHOY.Nav.add(this, z, () => z.emit("pointerup"));
         z.on("pointerup", () => {
           AHOY.Audio.play("click");
           if (open) this.scene.restart({ sea: i });
@@ -109,14 +112,14 @@
       const pieces = this.sea.islands.filter((x) => !x.treasure);
       const got = pieces.filter((x) => AHOY.Save.island(x.id).piece).length;
       this.add.image(250, 658, "item-map-piece").setScale(0.32);
-      UI.text(this, 280, 658, `${got}/${pieces.length} map pieces`, 32, "#ffffff", { ox: 0 });
+      UI.text(this, 280, 658, pieces.length ? `${got}/${pieces.length} map pieces` : "One island, one treasure", 32, "#ffffff", { ox: 0 });
       const p = AHOY.currentPirate();
       const portrait = this.add.image(1180, 640, p.portrait && this.textures.exists(p.portrait) ? p.portrait : p.sprite);
       portrait.setScale(110 / Math.max(portrait.width, portrait.height));
       UI.text(this, 1180, 704, p.name.length > 18 ? p.name.slice(0, 17) + "…" : p.name, 24, "#ffffff", { stroke: "#2b1b12", strokeThickness: 4 });
-      UI.button(this, 1010, 660, "CREW", () => UI.fadeTo(this, "Select"), { w: 150, h: 54, size: 30 });
-      UI.button(this, 850, 660, "HOLDERS", () => AHOY.HolderPanel.open(this, () => this.scene.restart({ sea: this.seaIdx })), { w: 170, h: 54, size: 30 });
-      UI.button(this, 680, 660, "TITLE", () => UI.fadeTo(this, "Title"), { w: 140, h: 54, size: 30 });
+      UI.button(this, 1000, 660, "CREW", () => UI.fadeTo(this, "Select"), { w: 150, h: 54, size: 30 });
+      UI.button(this, 828, 660, "HOLDERS", () => AHOY.HolderPanel.open(this, () => this.scene.restart({ sea: this.seaIdx })), { w: 170, h: 54, size: 30 });
+      UI.button(this, 660, 660, "TITLE", () => UI.fadeTo(this, "Title"), { w: 140, h: 54, size: 30 });
     }
 
     toast(msg) {
