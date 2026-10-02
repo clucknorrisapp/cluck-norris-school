@@ -60,9 +60,9 @@ import { t, tf, useI18nReady } from "../i18n.js";
 import { Pane, Loading, Empty, Unavailable, Refused, Confirm, toolFetch, useOnline } from "../pane.jsx";
 import { NeedsWallet } from "../needswallet.jsx";
 import { shortAddr } from "../addr.js";
-import { signSendConfirm, splTokenShim, rpcFn } from "../sign.js";
+import { signSendConfirm, splTokenShim, rpcFn, signatureSlot } from "../sign.js";
 import "./tools.css";
-import { applyRecent } from "./firepit-recent.js";
+import { reconcileRecent } from "./firepit-recent.js";
 
 // Closing a wrapped-SOL account UNWRAPS it back to the owner — it is not a burn, and its value
 // is never counted as "destroyed" (matches public/firepit.html's isNativeSol()).
@@ -208,14 +208,13 @@ function SurplusRow({ a, checked, onToggle }) {
   );
 }
 
-// Rows this session watched close / withdraw — see ./firepit-recent.js for the rule.
-// The chain's confirmed slot read AFTER the transaction was seen to confirm, so it is >= the tx's
-// own slot: any scan answered at or past it already reflects the transaction.
-function stampSlot(entry) {
-  try {
-    Promise.resolve(rpcFn()("getSlot", [{ commitment: "confirmed" }])).then((v) => { if (typeof v === "number") entry.slot = v; }).catch(() => {});
-  } catch (_) { /* no RPC layer: the exact-match rule alone applies */ }
+// Rows this session watched close / withdraw — see ./firepit-recent.js for the rule. Each record
+// carries the slot its transaction LANDED in, read once from the chain after confirmation.
+function stampTxSlot(entry, sig) {
+  if (!sig) return;
+  try { signatureSlot(rpcFn(), sig).then((slot) => { if (slot != null) entry.txSlot = slot; }); } catch (_) { /* no RPC layer: no proof, so nothing is hidden */ }
 }
+const reconcile = (list, recent) => { let rpc = null; try { rpc = rpcFn(); } catch (_) {} return reconcileRecent(list, recent, rpc); };
 
 function useToggleSet(initial) {
   const [set, setSet] = React.useState(initial || (() => new Set()));
@@ -303,7 +302,7 @@ export default function FirepitPane({ wallet }) {
     try { abortRef.current && abortRef.current.abort(); } catch (_) {}
     const ctrl = new AbortController();
     abortRef.current = ctrl;
-    toolFetch(`/api/burn-scan?wallet=${encodeURIComponent(address)}`, { signal: ctrl.signal }).then((res) => {
+    toolFetch(`/api/burn-scan?wallet=${encodeURIComponent(address)}`, { signal: ctrl.signal }).then(async (res) => {
       if (res.kind === "aborted") return;
       if (!res.ok) {
         // A 4xx here is the wallet address itself, not the chain — ListingCheckup/ProjectBurn's
@@ -319,7 +318,8 @@ export default function FirepitPane({ wallet }) {
         setPhase("unavailable");
         return;
       }
-      const accounts = applyRecent(res.data.accounts, recentRef.current, res.data.slot);
+      const accounts = await reconcile(res.data.accounts, recentRef.current);
+      if (ctrl.signal.aborted) return;
       setData({ ...res.data, accounts });
       // Pre-select the empty (rent-only) accounts, same as the desktop tool: reclaiming them is
       // risk-free, so the total is meaningful the moment the scan lands. Nothing that could
@@ -398,7 +398,8 @@ export default function FirepitPane({ wallet }) {
     const res = await toolFetch(`/api/burn-scan?wallet=${encodeURIComponent(wallet.address)}`, { signal: ctrl.signal });
     if (res.kind === "aborted") return;
     if (!res.ok) { setConfirmPhase("error"); return; }
-    const freshAccounts = applyRecent(res.data.accounts, recentRef.current, res.data.slot);
+    const freshAccounts = await reconcile(res.data.accounts, recentRef.current);
+    if (ctrl.signal.aborted) return;
     // Keep the underlying page in step with the same fresh read — never leave it showing an
     // older scan next to a sheet built from a newer one.
     setData({ ...res.data, accounts: freshAccounts });
@@ -536,12 +537,13 @@ export default function FirepitPane({ wallet }) {
     // Only act on rows we watched actually land (status "sent") — an unconfirmed or failed row is
     // untouched on-chain and must stay in the list so Rescan can re-check it truthfully.
     const sentIds = new Set();
-    collected.forEach(({ chunk, status }) => { if (status === "sent") chunk.forEach((a) => sentIds.add(a.tokenAccount)); });
+    const sigById = {};
+    collected.forEach(({ chunk, status, sig }) => { if (status === "sent") chunk.forEach((a) => { sentIds.add(a.tokenAccount); sigById[a.tokenAccount] = sig; }); });
     const nowMs = Date.now();
     sel.forEach((a) => {
       if (!sentIds.has(a.tokenAccount)) return;
-      if (kind === "surplus") stampSlot(recentRef.current.withdrawn[a.tokenAccount] = { at: nowMs, prior: Number(a.rentLamports) || 0, slot: null });
-      else stampSlot(recentRef.current.closed[a.tokenAccount] = { at: nowMs, amountRaw: a.amountRaw, lamports: Number(a.rentLamports) || 0, slot: null });
+      if (kind === "surplus") stampTxSlot(recentRef.current.withdrawn[a.tokenAccount] = { at: nowMs, prior: Number(a.rentLamports) || 0, txSlot: null }, sigById[a.tokenAccount]);
+      else stampTxSlot(recentRef.current.closed[a.tokenAccount] = { at: nowMs, amountRaw: a.amountRaw, lamports: Number(a.rentLamports) || 0, txSlot: null }, sigById[a.tokenAccount]);
     });
     if (sentIds.size) {
       if (kind === "surplus") {
