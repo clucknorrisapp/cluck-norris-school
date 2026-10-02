@@ -253,6 +253,78 @@ function chromiumPath() {
     check(!g.canNft && g.stored === null, "a demo cache means nothing on the live site (discarded)");
   }
 
+  // ── Holder gate round 2: expiry is enforced at decision time; a late answer cannot revive a session ──
+  const NFT_SESSION = { ok: true, tier: "nft", unavailable: false, ahoy: 0, usd: 0, nfts: [{ id: "n1", name: "P", image: null, traits: {} }] };
+  const newGatePage = async (routes) => {
+    const ctx = await browser.newContext({ viewport: { width: 1280, height: 720 }, ignoreHTTPSErrors: !!remote });
+    const gp = await ctx.newPage();
+    await gp.route(/\/api\/ahoy\/config/, (r) => r.fulfill({ json: CONFIG }));
+    await routes(gp);
+    return { ctx, gp };
+  };
+  const deferred = () => { let release; const p = new Promise((r) => { release = r; }); return { p, release }; };
+
+  // (a) Validate to NFT, then let the clock pass the session expiry: locked again, cache gone.
+  {
+    const { ctx, gp } = await newGatePage(async (p) => { await p.route(/\/api\/ahoy\/session/, (r) => r.fulfill({ json: NFT_SESSION })); });
+    await gp.addInitScript(([k, v]) => { try { sessionStorage.setItem(k, v); } catch (_) {} }, ["ahoy_pfp_gate_v1", JSON.stringify({ wallet: WALLET, token: "tok", exp: Date.now() + 3600e3 })]);
+    await gp.goto(base, { waitUntil: "load" });
+    await gp.waitForFunction(() => window.__AHOY_GAME, null, { timeout: 30000 });
+    const before = await gp.evaluate(() => ({ nft: AHOY.Gate.canSail(AHOY.SEAS.find((x) => x.access === "nft")), confirmed: AHOY.Gate.state().confirmed }));
+    check(before.nft && before.confirmed, "validated NFT session unlocks the NFT sea before expiry");
+    const after = await gp.evaluate(() => {
+      const real = Date.now; Date.now = () => real() + 2 * 3600e3;   // the tab stays open past the token's life
+      const nftSea = AHOY.SEAS.find((x) => x.access === "nft"), capSea = AHOY.SEAS.find((x) => x.access === "captain");
+      const s = AHOY.Gate.state();
+      return { canNft: AHOY.Gate.canSail(nftSea), canCap: AHOY.Gate.canSail(capSea), tier: AHOY.Gate.tier(), wallet: s.wallet, confirmed: s.confirmed, pending: AHOY.Gate.pending(), stored: sessionStorage.getItem("ahoy_pfp_gate_v1") };
+    });
+    check(!after.canNft && !after.canCap && after.tier === "free" && after.wallet === null && !after.confirmed && !after.pending && after.stored === null,
+      `after the session expiry the gated seas lock again and the cache is dropped (nft ${after.canNft}, tier ${after.tier}, wallet ${after.wallet})`);
+    await ctx.close();
+  }
+
+  // (b) A /session answer that lands after a disconnect is discarded.
+  {
+    const gate = deferred(); let seen;
+    const asked = new Promise((r) => { seen = r; });
+    const { ctx, gp } = await newGatePage(async (p) => { await p.route(/\/api\/ahoy\/session/, async (r) => { seen(); await gate.p; try { await r.fulfill({ json: NFT_SESSION }); } catch (_) {} }); });
+    await gp.addInitScript(([k, v]) => { try { sessionStorage.setItem(k, v); } catch (_) {} }, ["ahoy_pfp_gate_v1", JSON.stringify({ wallet: WALLET, token: "tok", exp: Date.now() + 3600e3 })]);
+    await gp.goto(base, { waitUntil: "commit" });
+    await gp.waitForFunction(() => window.AHOY && AHOY.Gate && AHOY.Save, null, { timeout: 30000 });
+    await asked; await wait(100);   // the session request is now in flight (boot is awaiting it)
+    await gp.evaluate(() => AHOY.Gate.disconnect());
+    gate.release(); await wait(700);
+    await gp.waitForFunction(() => window.__AHOY_GAME, null, { timeout: 30000 });
+    const out = await gp.evaluate(() => ({ locked: !(AHOY.Gate.canSail(AHOY.SEAS.find((x) => x.access === "nft")) || AHOY.Gate.canSail(AHOY.SEAS.find((x) => x.access === "captain"))), st: AHOY.Gate.state(), stored: sessionStorage.getItem("ahoy_pfp_gate_v1") }));
+    check(out.locked && out.st.wallet === null && !out.st.confirmed && out.st.tier === "free" && out.stored === null, `a /session answer arriving after disconnect is discarded (wallet ${out.st.wallet}, tier ${out.st.tier}, confirmed ${out.st.confirmed})`);
+    await ctx.close();
+  }
+
+  // (c) A /verify answer that lands after a disconnect is discarded.
+  {
+    const gate = deferred(); let seen;
+    const asked = new Promise((r) => { seen = r; });
+    const { ctx, gp } = await newGatePage(async (p) => {
+      await p.route(/\/api\/ahoy\/challenge/, (r) => r.fulfill({ json: { ok: true, message: "sign me", nonce: "n1" } }));
+      await p.route(/\/api\/ahoy\/verify/, async (r) => { seen(); await gate.p; try { await r.fulfill({ json: { ok: true, tier: "nft", ahoy: 0, usd: 0, nfts: [{ id: "n1", name: "P", image: null, traits: {} }], token: "tok2", expiresAt: Date.now() + 3600e3 } }); } catch (_) {} });
+    });
+    await gp.addInitScript((w) => {
+      window.solana = { publicKey: null, connect: async () => { window.solana.publicKey = { toString: () => w }; return { publicKey: window.solana.publicKey }; },
+        signMessage: async () => ({ signature: new Uint8Array(64).fill(7) }), disconnect: async () => {} };
+    }, WALLET);
+    await gp.goto(base, { waitUntil: "load" });
+    await gp.waitForFunction(() => window.__AHOY_GAME && AHOY.Gate.mode() === "live", null, { timeout: 30000 });
+    await gp.evaluate(() => { window.__verifyP = AHOY.Gate.connectAndVerify().then(() => "applied", (e) => "rejected: " + e.message); });
+    await asked; await wait(100);
+    await gp.evaluate(() => AHOY.Gate.disconnect());
+    gate.release();
+    const settled = await gp.evaluate(() => window.__verifyP);
+    await wait(300);
+    const out = await gp.evaluate(() => ({ locked: !(AHOY.Gate.canSail(AHOY.SEAS.find((x) => x.access === "nft")) || AHOY.Gate.canSail(AHOY.SEAS.find((x) => x.access === "captain"))), st: AHOY.Gate.state(), stored: sessionStorage.getItem("ahoy_pfp_gate_v1") }));
+    check(out.locked && out.st.wallet === null && !out.st.confirmed && out.st.tier === "free" && out.stored === null && /^rejected/.test(settled), `a /verify answer arriving after disconnect is discarded (${settled}; wallet ${out.st.wallet}, tier ${out.st.tier})`);
+    await ctx.close();
+  }
+
   check(errors.length === 0, "no console errors" + (errors.length ? ":\n    " + errors.slice(0, 12).join("\n    ") : ""));
   await browser.close(); if (server) server.close();
   console.log(fails.length ? `\n${fails.length} FAILED` : "\nall passed");

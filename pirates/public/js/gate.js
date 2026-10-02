@@ -17,6 +17,14 @@
 // re-reads the chain, and until that answer arrives nothing above the free seas is unlocked
 // (st.confirmed). If that check is unavailable the cache is kept and the screen says so.
 //
+// Two rules keep a grant from outliving the thing that earned it:
+//  • EXPIRY is checked at decision time. Every read of "what may this player unlock" goes through
+//    expireIfDue() (effectiveTier, state, pending), so a tab left open for a day, or a laptop that
+//    slept, loses its grant the moment anything asks — there is no timer that could be missed.
+//  • Every async call is bound to a GENERATION. Connect, disconnect, expiry and a fresh boot each
+//    bump it; a /session or /verify answer applies only if the generation (and, for /session, the
+//    wallet + token) is still the one that asked. A late answer after a disconnect is discarded.
+//
 // This is a PRODUCT boundary, not a security one — the game runs in the player's own browser.
 window.AHOY = window.AHOY || {};
 
@@ -29,6 +37,7 @@ AHOY.Gate = (function () {
   let mode = "offline";
   let config = null;     // { tiers: [{id, label, holdUsd, holdAhoy, seas:[...] }], priceUsd, nftCollection }
   let st = FREE();
+  let gen = 0;           // bumped by anything that replaces the session; in-flight answers check it
   const TIER_RANK = { free: 0, deckhand: 1, captain: 2, nft: 3 };
   const SKEY = "ahoy_pfp_gate_v1";
   const store = () => { try { return window.sessionStorage; } catch (_) { return null; } };
@@ -54,9 +63,20 @@ AHOY.Gate = (function () {
       else s.removeItem(SKEY);
     } catch (_) {}
   };
+  // The session's expiry has passed: drop the grant (and the cache) so the player is asked to
+  // connect and sign again, and void every in-flight answer. The demo preview has no session.
+  function expireIfDue() {
+    if (st.demo || !st.wallet || st.exp > Date.now()) return false;
+    gen++; st = FREE(); clearCache();
+    return true;
+  }
   // What the game may unlock RIGHT NOW: the free tier unless the server confirmed this wallet this
-  // session (or this is the explicit labelled preview).
-  const effectiveTier = () => ((mode === "demo" && st.demo) || st.confirmed ? st.tier : "free");
+  // session and that session has not expired (or this is the explicit labelled preview). Every gate
+  // decision goes through here.
+  const effectiveTier = () => {
+    expireIfDue();
+    return (mode === "demo" && st.demo) || st.confirmed ? st.tier : "free";
+  };
 
   // Minimal base58 (bitcoin alphabet) — the signature goes to the server in base58.
   const ALPH = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
@@ -88,18 +108,24 @@ AHOY.Gate = (function () {
   // answers; "unavailable" keeps the cache, grants nothing and says so; an expired/invalid token
   // is the one case that clears it.
   async function revalidate() {
-    if (!st.wallet || !st.token) return st;
+    if (expireIfDue() || !st.wallet || !st.token) return st;
+    // Bound to the wallet + token + generation that asked. If any of them has changed by the time
+    // the answer arrives (disconnect, a new sign-in, expiry), the answer is discarded.
+    const g = gen, w = st.wallet, t = st.token;
+    const current = () => g === gen && st.wallet === w && st.token === t;
     try {
-      const r = await postJson("/session", { wallet: st.wallet, token: st.token }, 6000);
-      if (r.status === 401) { st = FREE(); clearCache(); return st; }
+      const r = await postJson("/session", { wallet: w, token: t }, 6000);
+      if (!current()) return st;
+      if (r.status === 401) { gen++; st = FREE(); clearCache(); return st; }
       const b = r.body;
       if (r.status !== 200 || !b.ok || b.unavailable) { st.confirmed = false; st.unavailable = true; return st; }
       st = Object.assign(st, { tier: b.tier, ahoy: b.ahoy || 0, usd: b.usd || 0, nfts: b.nfts || [], checkedAt: Date.now(), confirmed: true, unavailable: false });
-    } catch (_) { st.confirmed = false; st.unavailable = true; }
+    } catch (_) { if (current()) { st.confirmed = false; st.unavailable = true; } }
     return st;
   }
 
   async function boot() {
+    const g = ++gen;
     st = FREE(); config = null;
     const cached = readCache();
     if (PREVIEW) {
@@ -119,8 +145,10 @@ AHOY.Gate = (function () {
       if (!r.ok) throw new Error("config " + r.status);
       const j = await r.json();
       if (!j || j.ok !== true || !Array.isArray(j.tiers)) throw new Error("bad config");
+      if (g !== gen) return mode;   // superseded (disconnect / another boot) while the config loaded
       config = j; mode = "live";
     } catch (_) {
+      if (g !== gen) return mode;
       // Gate temporarily unavailable: free seas only, retry offered. Never demo mode — and the
       // cached grant stays in storage for the next try.
       mode = "offline"; config = null;
@@ -157,16 +185,20 @@ AHOY.Gate = (function () {
     if (mode !== "live") throw new Error("Wallet check needs the live game — this is the preview build.");
     const p = provider();
     if (!p) throw new Error("No Solana wallet found. Open this page in Phantom, Solflare or Backpack.");
-    const res = await p.connect();
+    // This attempt owns the session until something else bumps the generation. Disconnect, expiry or
+    // a newer connect voids it, and a stale answer is dropped instead of written into the new state.
+    const g = ++gen;
+    const stale = () => { if (g !== gen) throw new Error("The wallet check was cancelled."); };
+    const res = await p.connect(); stale();
     const pk = (res && res.publicKey) || p.publicKey;
     const wallet = pk && pk.toString();
     if (!wallet) throw new Error("Wallet did not share an address.");
-    const ch = await (await fetch(API + "/challenge", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ wallet }) })).json();
+    const ch = await (await fetch(API + "/challenge", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ wallet }) })).json(); stale();
     if (!ch.ok) throw new Error(ch.error || "Could not start the check.");
     const enc = new TextEncoder().encode(ch.message);
-    const sig = await p.signMessage(enc, "utf8");
+    const sig = await p.signMessage(enc, "utf8"); stale();
     const sigBytes = sig && (sig.signature || sig);
-    const r = await (await fetch(API + "/verify", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ wallet, nonce: ch.nonce, signature: b58(new Uint8Array(sigBytes)) }) })).json();
+    const r = await (await fetch(API + "/verify", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ wallet, nonce: ch.nonce, signature: b58(new Uint8Array(sigBytes)) }) })).json(); stale();
     if (!r.ok) throw new Error(r.error || "Check failed.");
     const exp = Math.min(Number(r.expiresAt) || 0, Date.now() + MAX_GRANT_MS);
     st = { tier: r.tier, wallet, ahoy: r.ahoy || 0, usd: r.usd || 0, nfts: r.nfts || [], demo: false, token: r.token || null, exp, checkedAt: Date.now(), confirmed: true, unavailable: !!r.unavailable };
@@ -181,18 +213,21 @@ AHOY.Gate = (function () {
     await revalidate(); persist(); return st;
   }
   // A remembered wallet whose grant the server has not confirmed this session.
-  const pending = () => !!(st.wallet && st.token && !st.confirmed);
+  const pending = () => { expireIfDue(); return !!(st.wallet && st.token && !st.confirmed); };
 
   async function disconnect() {
-    try { const p = provider(); if (p && p.disconnect) await p.disconnect(); } catch (_) {}
-    st = FREE();
+    // Synchronously first: void every in-flight answer and clear the state before the wallet's own
+    // disconnect (which can take a moment) — nothing may land in between.
+    gen++; st = FREE();
     AHOY.Save.set({ nft: null });
     clearCache();
+    try { const p = provider(); if (p && p.disconnect) await p.disconnect(); } catch (_) {}
   }
 
   // Preview build only: show the holder content to an audience, clearly labelled as a demo.
   function demoUnlock() {
     if (mode !== "demo") return st;
+    gen++;
     st = Object.assign(FREE(), { tier: "nft", demo: true, checkedAt: Date.now(),
       nfts: [{ id: "demo-16", name: "Pump Fun Pirates #16 (demo)", image: "assets/sprite/nft-demo.png",
         traits: { eyewear: "laser", beard: "neon", hat: "black", clothes: "tshirt", eyes: "brown", arm: "transparent" } }] });
@@ -201,5 +236,5 @@ AHOY.Gate = (function () {
   }
 
   return { boot, canSail, seaNeeds, needText, connectAndVerify, disconnect, demoUnlock, recheck, pending,
-    mode: () => mode, config: () => config, state: () => st, tier: effectiveTier, rank: (t) => TIER_RANK[t] || 0, provider };
+    mode: () => mode, config: () => config, state: () => { expireIfDue(); return st; }, tier: effectiveTier, rank: (t) => TIER_RANK[t] || 0, provider };
 })();
