@@ -60,8 +60,9 @@ import { t, tf, useI18nReady } from "../i18n.js";
 import { Pane, Loading, Empty, Unavailable, Refused, Confirm, toolFetch, useOnline } from "../pane.jsx";
 import { NeedsWallet } from "../needswallet.jsx";
 import { shortAddr } from "../addr.js";
-import { signSendConfirm, splTokenShim } from "../sign.js";
+import { signSendConfirm, splTokenShim, rpcFn } from "../sign.js";
 import "./tools.css";
+import { applyRecent } from "./firepit-recent.js";
 
 // Closing a wrapped-SOL account UNWRAPS it back to the owner — it is not a burn, and its value
 // is never counted as "destroyed" (matches public/firepit.html's isNativeSol()).
@@ -207,20 +208,13 @@ function SurplusRow({ a, checked, onToggle }) {
   );
 }
 
-// Accounts this session WATCHED close (and surpluses it watched withdraw). An RPC node can lag a
-// few seconds behind the confirmation we saw, so a Rescan in that window must not bring a closed
-// account back or re-offer a surplus already taken (owner report 2026-10-02: "after you burn a
-// token, Rescan doesn't actually rescan — you have to disconnect and reconnect"). The server also
-// reads at "confirmed" now; this covers the node-to-node lag that remains.
-const RECENT_MS = 120000;
-function applyRecent(list, recent) {
-  const now = Date.now();
-  return (list || []).filter((a) => { const t = recent.closed[a.tokenAccount]; return !(t && now - t < RECENT_MS); })
-    .map((a) => {
-      const w = recent.withdrawn[a.tokenAccount];
-      if (w && now - w.at < RECENT_MS && (Number(a.rentLamports) || 0) >= w.prior) return { ...a, surplusLamports: 0, surplusEligible: false };
-      return a;
-    });
+// Rows this session watched close / withdraw — see ./firepit-recent.js for the rule.
+// The chain's confirmed slot read AFTER the transaction was seen to confirm, so it is >= the tx's
+// own slot: any scan answered at or past it already reflects the transaction.
+function stampSlot(entry) {
+  try {
+    Promise.resolve(rpcFn()("getSlot", [{ commitment: "confirmed" }])).then((v) => { if (typeof v === "number") entry.slot = v; }).catch(() => {});
+  } catch (_) { /* no RPC layer: the exact-match rule alone applies */ }
 }
 
 function useToggleSet(initial) {
@@ -325,7 +319,7 @@ export default function FirepitPane({ wallet }) {
         setPhase("unavailable");
         return;
       }
-      const accounts = applyRecent(res.data.accounts, recentRef.current);
+      const accounts = applyRecent(res.data.accounts, recentRef.current, res.data.slot);
       setData({ ...res.data, accounts });
       // Pre-select the empty (rent-only) accounts, same as the desktop tool: reclaiming them is
       // risk-free, so the total is meaningful the moment the scan lands. Nothing that could
@@ -404,7 +398,7 @@ export default function FirepitPane({ wallet }) {
     const res = await toolFetch(`/api/burn-scan?wallet=${encodeURIComponent(wallet.address)}`, { signal: ctrl.signal });
     if (res.kind === "aborted") return;
     if (!res.ok) { setConfirmPhase("error"); return; }
-    const freshAccounts = applyRecent(res.data.accounts, recentRef.current);
+    const freshAccounts = applyRecent(res.data.accounts, recentRef.current, res.data.slot);
     // Keep the underlying page in step with the same fresh read — never leave it showing an
     // older scan next to a sheet built from a newer one.
     setData({ ...res.data, accounts: freshAccounts });
@@ -546,8 +540,8 @@ export default function FirepitPane({ wallet }) {
     const nowMs = Date.now();
     sel.forEach((a) => {
       if (!sentIds.has(a.tokenAccount)) return;
-      if (kind === "surplus") recentRef.current.withdrawn[a.tokenAccount] = { at: nowMs, prior: Number(a.rentLamports) || 0 };
-      else recentRef.current.closed[a.tokenAccount] = nowMs;
+      if (kind === "surplus") stampSlot(recentRef.current.withdrawn[a.tokenAccount] = { at: nowMs, prior: Number(a.rentLamports) || 0, slot: null });
+      else stampSlot(recentRef.current.closed[a.tokenAccount] = { at: nowMs, amountRaw: a.amountRaw, lamports: Number(a.rentLamports) || 0, slot: null });
     });
     if (sentIds.size) {
       if (kind === "surplus") {

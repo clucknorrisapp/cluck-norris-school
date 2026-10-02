@@ -404,20 +404,39 @@ function scanErrMsg(e){
     return "Your wallet’s in-app browser blocked the scan (it got a web page, not data — usually a security checkpoint). Try again, or open clucknorris.app/firepit in Chrome/Safari or in Phantom or Solflare’s browser, then reconnect.";
   return "Scan failed: " + ((e && e.message) || e);
 }
-// Accounts we watched close (and surpluses we watched withdraw) in this tab, with when. An RPC node
-// can lag a few seconds behind the confirmation we saw, so a Rescan in that window must not bring
-// a closed account back (owner report 2026-10-02: "rescan doesn't actually rescan" after a burn).
+// Accounts we watched close (and surpluses we watched withdraw) in this tab. An RPC node can lag a
+// few seconds behind the confirmation we saw, so a Rescan in that window must not bring a closed
+// account back (owner report 2026-10-02: "rescan doesn't actually rescan" after a burn).
+// A row is hidden ONLY when it is provably that lag (Codex review of #471): the scan is not known
+// to be newer than our transaction (its slot is below the slot we read once the tx confirmed, or
+// either slot is unknown) AND the row is byte-for-byte the state we acted on — same amount and
+// same lamports. A recreated account, a new deposit, or any scan read after our transaction is
+// always shown. The two-minute window only bounds how long the record is kept.
 var RECENT_MS = 120000;
-var recentlyClosed = {};      // tokenAccount -> ms
-var recentlyWithdrawn = {};   // tokenAccount -> { at: ms, priorLamports }
-function applyRecent(list){
+var recentlyClosed = {};      // tokenAccount -> { at, amountRaw, lamports, slot }
+var recentlyWithdrawn = {};   // tokenAccount -> { at, priorLamports, slot }
+function scanIsAfter(entry, scanSlot){
+  return typeof scanSlot === "number" && typeof entry.slot === "number" && scanSlot >= entry.slot;
+}
+function stampSlot(entry){
+  // The chain's confirmed slot read AFTER we watched the tx confirm, so it is >= the tx's own slot:
+  // any scan at or past it already reflects the transaction.
+  rpc("getSlot", [{ commitment: "confirmed" }]).then(function(v){ if (typeof v === "number") entry.slot = v; }).catch(function(){});
+}
+function applyRecent(list, scanSlot){
   var now = Date.now();
   return (list || []).filter(function(a){
-    var t = recentlyClosed[a.tokenAccount];
-    return !(t && now - t < RECENT_MS);
+    var c = recentlyClosed[a.tokenAccount];
+    if (!c) return true;
+    if (now - c.at >= RECENT_MS) { delete recentlyClosed[a.tokenAccount]; return true; }
+    if (scanIsAfter(c, scanSlot)) return true;   // this read already reflects our tx; a later, slower node may not, so the record stays
+    return !(String(a.amountRaw) === String(c.amountRaw) && a.rentLamports === c.lamports);   // the exact pre-close state = the lagging view
   }).map(function(a){
     var w = recentlyWithdrawn[a.tokenAccount];
-    if (w && now - w.at < RECENT_MS && a.rentLamports >= w.priorLamports) {
+    if (!w) return a;
+    if (now - w.at >= RECENT_MS) { delete recentlyWithdrawn[a.tokenAccount]; return a; }
+    if (scanIsAfter(w, scanSlot)) return a;
+    if (a.rentLamports === w.priorLamports) {
       return Object.assign({}, a, { surplusLamports: 0, surplusEligible: false });   // the withdrawal we saw land hasn't reached this node yet
     }
     return a;
@@ -427,7 +446,7 @@ async function scan(){
   setStatus($("status"), "Scanning your wallet on-chain…");
   try {
     var r = await fetchScan(wPubkey, 3);
-    accounts = applyRecent(r.accounts || []);
+    accounts = applyRecent(r.accounts || [], r.slot);
     // Strict: a MISSING field (older server) must read the same as an explicit false (P2-3).
     surplusAvailable = r.surplusAvailable === true;
     selected = {};
@@ -460,7 +479,7 @@ async function rescanUntilClean(burnedSet){
     try {
       var r2 = await fetchScan(wPubkey, 1);   // one try per loop; the loop itself is the retry
       if (!r2 || !r2.success) continue;
-      var fresh = applyRecent(r2.accounts || []);
+      var fresh = applyRecent(r2.accounts || [], r2.slot);
       var lingering = (r2.accounts || []).some(function(a){ return burnedSet[a.tokenAccount]; });
       if (!lingering){
         accounts = fresh; selected = {};
@@ -772,7 +791,7 @@ async function doBurn(){
     var freshScan = await fetchScan(wPubkey, 1);
     if (freshScan && freshScan.success){
       var freshById = {};
-      applyRecent(freshScan.accounts || []).forEach(function(a){ freshById[a.tokenAccount] = a; });
+      applyRecent(freshScan.accounts || [], freshScan.slot).forEach(function(a){ freshById[a.tokenAccount] = a; });
       sel = sel.filter(function(a){
         var f = freshById[a.tokenAccount];
         if (!f || !burnable(f)) return false;
@@ -873,7 +892,7 @@ async function doBurn(){
 // with accounts whose tx we saw confirmed — never with merely-sent ones.
 function pruneConfirmed(confirmedAccounts){
   var set = {}, now = Date.now();
-  confirmedAccounts.forEach(function(a){ set[a.tokenAccount] = true; recentlyClosed[a.tokenAccount] = now; delete selected[a.tokenAccount]; });
+  confirmedAccounts.forEach(function(a){ set[a.tokenAccount] = true; var e = recentlyClosed[a.tokenAccount] = { at: now, amountRaw: a.amountRaw, lamports: a.rentLamports, slot: null }; stampSlot(e); delete selected[a.tokenAccount]; });
   accounts = accounts.filter(function(a){ return !set[a.tokenAccount]; });
   render(); applyScanFoot(accounts.length, false);
   rescanUntilClean(set);
@@ -914,7 +933,7 @@ async function doSurplusReclaim(){
     var freshScan = await fetchScan(wPubkey, 1);
     if (freshScan && freshScan.success){
       var freshById = {};
-      applyRecent(freshScan.accounts || []).forEach(function(a){ freshById[a.tokenAccount] = a; });
+      applyRecent(freshScan.accounts || [], freshScan.slot).forEach(function(a){ freshById[a.tokenAccount] = a; });
       sel = sel.filter(function(a){ var f = freshById[a.tokenAccount]; return f && f.surplusEligible; })
                .map(function(a){ return freshById[a.tokenAccount]; });
     }
@@ -996,7 +1015,7 @@ async function doSurplusReclaim(){
 // confirms what actually arrived — never trust the request amount as the delivered amount.
 function pruneSurplusConfirmed(confirmedAccounts){
   var set = {}, nowW = Date.now();
-  confirmedAccounts.forEach(function(a){ set[a.tokenAccount] = true; recentlyWithdrawn[a.tokenAccount] = { at: nowW, priorLamports: a.rentLamports }; delete selectedSurplus[a.tokenAccount]; });
+  confirmedAccounts.forEach(function(a){ set[a.tokenAccount] = true; var e = recentlyWithdrawn[a.tokenAccount] = { at: nowW, priorLamports: a.rentLamports, slot: null }; stampSlot(e); delete selectedSurplus[a.tokenAccount]; });
   accounts = accounts.map(function(a){
     return set[a.tokenAccount] ? Object.assign({}, a, { surplusLamports: 0, surplusEligible: false }) : a;
   });
@@ -1042,7 +1061,7 @@ async function rescanUntilCleanSurplus(touchedSet, requestedSol){
             actualLamports += Math.max(0, priorLamports[a.tokenAccount] - a.rentLamports);
           }
         });
-        accounts = applyRecent(fresh);
+        accounts = applyRecent(fresh, r2.slot);
         surplusAvailable = r2.surplusAvailable === true;   // strict — see scan()'s comment (P2-3)
         render(); applyScanFoot(fresh.length, r2.capped);
         setStatus($("status"), "💧 Confirmed — " + fmtSol(actualLamports/LAMPORTS) + " actually arrived in your wallet (requested ~" + fmtSol(requestedSol) + ").", "ok");
