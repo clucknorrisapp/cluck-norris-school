@@ -189,7 +189,7 @@
       this.input.keyboard.on("keydown-P", () => this.togglePause());
 
       this.makeHud();
-      this.banner(this.isl.name, this.pirate.powerName + ": press C / ★ to use · X / ⚔ to attack");
+      this.banner(this.isl.name, this.pirate.powerName + (UI.isTouch() ? ": tap ★ to use · tap ⚔ to swing your cutlass" : ": press C to use · X to swing your cutlass"));
       if (!AHOY.Save.get().seenControls) { // first landing: a controls card
         AHOY.Save.set({ seenControls: true });
         const c = this.add.container(640, 330).setScrollFactor(0).setDepth(960);
@@ -456,7 +456,9 @@
         }
       };
       const btn = (x, y, r, key) => {
-        const c = this.add.circle(x, y, r, 0x2b1b12, 0.42).setScrollFactor(0).setDepth(1000).setStrokeStyle(3, 0xffcd77, 0.75).setInteractive();
+        // The tap zone is bigger than the circle you see (thumbs miss), and sliding a thumb onto a button presses it.
+        const c = this.add.circle(x, y, r, 0x2b1b12, 0.42).setScrollFactor(0).setDepth(1000).setStrokeStyle(3, 0xffcd77, 0.75)
+          .setInteractive(new Phaser.Geom.Circle(r, r, r + 14), Phaser.Geom.Circle.Contains);
         const g = this.add.graphics().setScrollFactor(0).setDepth(1001); icon(g, key, x, y, r * 0.95);
         const down = () => {
           this.touch[key] = true; c.setFillStyle(0xffcd77, 0.45);
@@ -464,9 +466,10 @@
         };
         const up = () => { this.touch[key] = false; c.setFillStyle(0x2b1b12, 0.42); };
         c.on("pointerdown", down); c.on("pointerup", up); c.on("pointerout", up); c.on("pointerupoutside", up);
+        if (key === "left" || key === "right") c.on("pointerover", (p) => { if (p.isDown) down(); });
       };
       // Every button sits on the ground strip (below GY), so none of them cover the play space.
-      btn(80, 660, 46, "left"); btn(190, 660, 46, "right");
+      btn(80, 660, 46, "left"); btn(198, 660, 46, "right");
       btn(1206, 654, 50, "jump"); btn(1096, 672, 38, "attack"); btn(990, 676, 34, "power");
     }
 

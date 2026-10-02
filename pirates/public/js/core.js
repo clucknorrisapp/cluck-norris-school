@@ -57,6 +57,7 @@ AHOY.Audio = (function () {
     const src = ctx.createBufferSource(), g = ctx.createGain(); g.gain.value = vol;
     src.buffer = buf; src.connect(g); g.connect(master); src.start();
   };
+  const BUZZ = { jump: 8, hit: 45, stomp: 14, chest: 25, piece: 30, boom: 30 }; // vibration ms per sound
   const SFX = {
     jump: () => tone(380, 0.14, { type: "square", vol: 0.12, slide: 1.8 }),
     coin: () => { tone(988, 0.07, { type: "square", vol: 0.1 }); tone(1319, 0.12, { type: "square", vol: 0.1, at: 0.06 }); },
@@ -87,7 +88,11 @@ AHOY.Audio = (function () {
   };
   return {
     unlock() { if (ensure() && ctx.state === "suspended") ctx.resume().catch(() => {}); },
-    play(name) { try { (SFX[name] || (() => {}))(); } catch (_) {} },
+    play(name) {
+      try { (SFX[name] || (() => {}))(); } catch (_) {}
+      // A small buzz with the big moments on phones that allow it (Android; iPhone Safari has no vibration).
+      const ms = BUZZ[name]; if (ms && navigator.vibrate && (("ontouchstart" in window) || navigator.maxTouchPoints > 0)) { try { navigator.vibrate(ms); } catch (_) {} }
+    },
     music(on) {
       musicOn = !!on;
       if (musicOn && ensure() && !musicTimer) musicTimer = setInterval(tick, 190);
@@ -157,6 +162,15 @@ AHOY.UI = {
     return img.setScale(s);
   },
   isTouch: () => ("ontouchstart" in window) || navigator.maxTouchPoints > 0,
+  // Running from the home screen (manifest display: fullscreen/standalone)?
+  isInstalled: () => !!(navigator.standalone || (window.matchMedia && window.matchMedia("(display-mode: fullscreen), (display-mode: standalone)").matches)),
+  // ⛶ toggles browser fullscreen where the browser allows it (iPad, Android, desktop; not iPhone Safari).
+  fullscreenButton(scene, x, y) {
+    const sc = scene.scale; if (!sc.fullscreen.available || AHOY.UI.isInstalled()) return null;
+    const b = AHOY.UI.text(scene, x, y, "⛶", 40, "#ffffff", { stroke: "#2b1b12", strokeThickness: 6 }).setDepth(1000).setScrollFactor(0).setInteractive({ useHandCursor: true });
+    b.on("pointerup", () => { if (sc.isFullscreen) sc.stopFullscreen(); else sc.startFullscreen(); });
+    return b;
+  },
   muteButton(scene, x = 1240, y = 36) {
     const b = AHOY.UI.text(scene, x, y, AHOY.Audio.muted() ? "🔇" : "🔊", 34).setDepth(1000).setScrollFactor(0).setInteractive({ useHandCursor: true });
     b.on("pointerup", () => { const m = !AHOY.Audio.muted(); AHOY.Audio.setMuted(m); b.setText(m ? "🔇" : "🔊"); });

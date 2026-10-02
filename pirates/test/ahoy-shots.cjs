@@ -35,9 +35,11 @@ const VENDOR = path.join(__dirname, "..", "..", "public", "vendor");
     }, [key, data]);
     await page.waitForTimeout(1100);
   };
+  await page.screenshot({ path: path.join(out, "title.png") });
   const seas = await page.evaluate(() => AHOY.SEAS.length);
   for (let i = 0; i < seas; i++) { await go("Map", { sea: i }); await page.screenshot({ path: path.join(out, `map-${i}.png`) }); }
   await go("Level", { sea: 0, island: 1 }); await page.screenshot({ path: path.join(out, "level-touch.png") });
+  await page.evaluate(() => window.__AHOY_LEVEL.togglePause()); await page.waitForTimeout(400); await page.screenshot({ path: path.join(out, "level-pause.png") });
   await browser.close(); server.close();
-  console.log(errors.length ? "errors:\n" + errors.join("\n") : "ok, " + (seas + 1) + " shots in " + out);
+  console.log(errors.length ? "errors:\n" + errors.join("\n") : "ok, " + (seas + 3) + " shots in " + out);
 })().catch((e) => { console.error(e); process.exit(1); });

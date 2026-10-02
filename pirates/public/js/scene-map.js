@@ -67,6 +67,7 @@
 
       this.drawHud();
       UI.muteButton(this, 52, 104); // top-left: the chart's compass rose sits top-right
+      UI.fullscreenButton(this, 108, 104);
       UI.button(this, 112, 162, "CONTROLS", () => AHOY.ControlsPanel.open(this), { w: 170, h: 46, size: 26 });
 
       if (this.data0.arrived != null) this.time.delayedCall(350, () => this.landPrompt(this.data0.arrived));
@@ -92,7 +93,7 @@
         g.fillStyle(0x2b1b12, 1).fillRoundedRect(x - 86, y - 24, 172, 48, 10);
         g.fillStyle(cur ? 0xfa0d0d : (open ? 0xb5652f : 0x6d6359), 1).fillRoundedRect(x - 83, y - 21, 166, 42, 8);
         const done = AHOY.Save.treasure(s.id);
-        UI.text(this, x, y + 1, (open ? "" : "🔒 ") + (done ? "★ " : "") + s.name.replace("Rug Kraken's Deep", "Kraken's Deep").replace("Cold Storage Glacier", "Glacier"), 22, "#fff7e0");
+        UI.text(this, x, y + 1, (open ? "" : "🔒 ") + (done ? "★ " : "") + s.name.replace("Rug Kraken's Deep", "Kraken's Deep").replace("Cold Storage Glacier", "Glacier").replace("Bonding Curve Bay", "Bonding Bay"), 25, "#fff7e0");
         const z = this.add.zone(x, y, 172, 48).setInteractive({ useHandCursor: true });
         AHOY.Nav.add(this, z, () => z.emit("pointerup"));
         z.on("pointerup", () => {

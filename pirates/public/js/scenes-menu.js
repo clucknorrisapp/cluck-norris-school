@@ -142,6 +142,14 @@ class TitleScene extends Phaser.Scene {
     UI.text(this, 1150, 700, "Crafted by Cluck Norris Productions", 22, "#ffefc9", { stroke: "#2b1b12", strokeThickness: 4 });
     if (AHOY.Gate.mode() === "demo") UI.text(this, 1120, 36, "PREVIEW BUILD", 26, "#ffffff", { stroke: "#fa0d0d", strokeThickness: 5 });
     UI.muteButton(this);
+    UI.fullscreenButton(this, 1240, 96);
+    // On a phone or tablet in the browser, point at the full-screen install (no browser bars at all).
+    if (UI.isTouch() && !UI.isInstalled()) {
+      const ios = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+      const tip = ios ? "Play full screen: tap Share, then Add to Home Screen" : "Play full screen: browser menu, then Add to Home screen";
+      const plate = this.add.graphics(); plate.fillStyle(0x2b1b12, 0.78).fillRoundedRect(330, 282, 620, 40, 12);
+      UI.text(this, 640, 302, "📲 " + tip, 28, "#ffefc9");
+    }
     this.input.once("pointerdown", () => { AHOY.Audio.unlock(); AHOY.Audio.music(true); });
     this.input.keyboard.once("keydown", () => { AHOY.Audio.unlock(); AHOY.Audio.music(true); });
     this.input.keyboard.on("keydown-ENTER", () => UI.fadeTo(this, started ? "Map" : "Select", { first: !started }));
