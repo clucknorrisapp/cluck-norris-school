@@ -58,7 +58,8 @@ API (`pirates/routes.js`, read-only, no transactions):
 ```
 node pirates/tools/build-assets.cjs        # re-download + compress the Higgsfield art (tools/art-sources.json)
 node pirates/test/ahoy-gate-test.cjs       # holder gate: real ed25519 keypair vs a fake chain (15 cases)
-node pirates/test/ahoy-smoke.cjs [--shots dir]   # headless: every scene, mishap and island; no console errors
+node pirates/test/ahoy-smoke.cjs [--shots dir] [--base url]   # headless: every scene, mishap and island; no console errors
+node pirates/test/ahoy-shots.cjs <dir> [w h]     # screenshots of every sea map + a touch level (default iPad 1366x1024)
 node pirates/tools/build-artifact.cjs <dir>      # the shareable preview (inlined scripts, Phaser from cdnjs)
 ```
 

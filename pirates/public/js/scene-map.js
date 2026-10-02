@@ -66,7 +66,7 @@
       this.tweens.add({ targets: this.ship, y: this.ship.y - 8, angle: 3, duration: 1100, yoyo: true, repeat: -1, ease: "Sine.inOut" });
 
       this.drawHud();
-      UI.muteButton(this, 1238, 92);
+      UI.muteButton(this, 52, 104); // top-left: the chart's compass rose sits top-right
 
       if (this.data0.arrived != null) this.time.delayedCall(350, () => this.landPrompt(this.data0.arrived));
       else if (this.data0.first) this.toast("Click an island to sail there. Each island hides a piece of the map!");
@@ -109,14 +109,14 @@
       const pieces = this.sea.islands.filter((x) => !x.treasure);
       const got = pieces.filter((x) => AHOY.Save.island(x.id).piece).length;
       this.add.image(250, 658, "item-map-piece").setScale(0.32);
-      UI.text(this, 280, 658, `${got}/${pieces.length} map pieces`, 32, "#ffffff", { ox: 0 });
+      UI.text(this, 280, 658, pieces.length ? `${got}/${pieces.length} map pieces` : "One island, one treasure", 32, "#ffffff", { ox: 0 });
       const p = AHOY.currentPirate();
       const portrait = this.add.image(1180, 640, p.portrait && this.textures.exists(p.portrait) ? p.portrait : p.sprite);
       portrait.setScale(110 / Math.max(portrait.width, portrait.height));
       UI.text(this, 1180, 704, p.name.length > 18 ? p.name.slice(0, 17) + "…" : p.name, 24, "#ffffff", { stroke: "#2b1b12", strokeThickness: 4 });
-      UI.button(this, 1010, 660, "CREW", () => UI.fadeTo(this, "Select"), { w: 150, h: 54, size: 30 });
-      UI.button(this, 850, 660, "HOLDERS", () => AHOY.HolderPanel.open(this, () => this.scene.restart({ sea: this.seaIdx })), { w: 170, h: 54, size: 30 });
-      UI.button(this, 680, 660, "TITLE", () => UI.fadeTo(this, "Title"), { w: 140, h: 54, size: 30 });
+      UI.button(this, 1000, 660, "CREW", () => UI.fadeTo(this, "Select"), { w: 150, h: 54, size: 30 });
+      UI.button(this, 828, 660, "HOLDERS", () => AHOY.HolderPanel.open(this, () => this.scene.restart({ sea: this.seaIdx })), { w: 170, h: 54, size: 30 });
+      UI.button(this, 660, 660, "TITLE", () => UI.fadeTo(this, "Title"), { w: 140, h: 54, size: 30 });
     }
 
     toast(msg) {

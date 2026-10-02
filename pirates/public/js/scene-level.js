@@ -443,27 +443,53 @@
     // ── Touch controls ──
     makeTouch() {
       this.input.addPointer(3);
-      const btn = (x, y, r, label, key) => {
-        const c = this.add.circle(x, y, r, 0x2b1b12, 0.45).setScrollFactor(0).setDepth(1000).setStrokeStyle(4, 0xffcd77, 0.8).setInteractive();
-        UI.text(this, x, y, label, r * 0.9, "#ffffff").setScrollFactor(0).setDepth(1001);
-        c.on("pointerdown", () => { this.touch[key] = true; if (key === "jump") this.state.jumpBuf = this.time.now + 140; if (key === "attack") this.attack(); if (key === "power") this.usePower(); });
-        const up = () => { this.touch[key] = false; };
-        c.on("pointerup", up); c.on("pointerout", up);
+      // Icons are drawn, not typed: iOS turns ◀ ▶ into blue emoji tiles.
+      const icon = (g, kind, x, y, s) => {
+        g.fillStyle(0xffffff, 0.95).lineStyle(Math.max(4, s * 0.16), 0xffffff, 0.95);
+        if (kind === "left") g.fillTriangle(x - s * 0.5, y, x + s * 0.35, y - s * 0.5, x + s * 0.35, y + s * 0.5);
+        else if (kind === "right") g.fillTriangle(x + s * 0.5, y, x - s * 0.35, y - s * 0.5, x - s * 0.35, y + s * 0.5);
+        else if (kind === "jump") { g.fillTriangle(x, y - s * 0.55, x - s * 0.5, y, x + s * 0.5, y); g.fillRect(x - s * 0.17, y - 2, s * 0.34, s * 0.5); }
+        else if (kind === "duck") g.fillTriangle(x, y + s * 0.4, x - s * 0.5, y - s * 0.3, x + s * 0.5, y - s * 0.3);
+        else if (kind === "attack") { // two crossed cutlasses, hilts at the bottom
+          const k = Math.SQRT1_2;
+          [-1, 1].forEach((d) => {
+            const hx = x + d * s * 0.42, hy = y + s * 0.42; // hilt
+            g.lineBetween(hx, hy, x - d * s * 0.48, y - s * 0.48); // blade
+            const gx = hx - d * k * s * 0.2, gy = hy - k * s * 0.2; // guard sits across the blade, just above the hilt
+            g.lineBetween(gx - k * s * 0.18, gy + d * k * s * 0.18, gx + k * s * 0.18, gy - d * k * s * 0.18);
+          });
+        } else if (kind === "power") {
+          const pts = []; for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + i * Math.PI / 5, rr = i % 2 ? s * 0.24 : s * 0.55; pts.push(new Phaser.Geom.Point(x + Math.cos(a) * rr, y + Math.sin(a) * rr)); }
+          g.fillPoints(pts, true);
+        }
       };
-      btn(95, 630, 62, "◀", "left"); btn(245, 630, 62, "▶", "right"); btn(170, 520, 44, "▼", "duck");
-      btn(1180, 620, 70, "⤒", "jump"); btn(1035, 655, 54, "⚔", "attack"); btn(1060, 515, 50, "★", "power");
+      const btn = (x, y, r, key) => {
+        const c = this.add.circle(x, y, r, 0x2b1b12, 0.42).setScrollFactor(0).setDepth(1000).setStrokeStyle(3, 0xffcd77, 0.75).setInteractive();
+        const g = this.add.graphics().setScrollFactor(0).setDepth(1001); icon(g, key, x, y, r * 0.95);
+        const down = () => {
+          this.touch[key] = true; c.setFillStyle(0xffcd77, 0.45);
+          if (key === "jump") this.state.jumpBuf = this.time.now + 140; if (key === "attack") this.attack(); if (key === "power") this.usePower();
+        };
+        const up = () => { this.touch[key] = false; c.setFillStyle(0x2b1b12, 0.42); };
+        c.on("pointerdown", down); c.on("pointerup", up); c.on("pointerout", up); c.on("pointerupoutside", up);
+      };
+      // Every button sits on the ground strip (below GY), so none of them cover the play space.
+      btn(80, 660, 46, "left"); btn(190, 660, 46, "right"); btn(296, 668, 34, "duck");
+      btn(1206, 654, 50, "jump"); btn(1096, 672, 38, "attack"); btn(990, 676, 34, "power");
     }
 
     // ── HUD ──
     makeHud() {
       const d = 900;
-      const bar = this.add.graphics().setScrollFactor(0).setDepth(d); bar.fillStyle(0x2b1b12, 0.75).fillRoundedRect(12, 10, 470, 64, 14);
+      const bar = this.add.graphics().setScrollFactor(0).setDepth(d); bar.fillStyle(0x2b1b12, 0.75).fillRoundedRect(12, 10, 560, 64, 14);
       this.hearts = [0, 1, 2].map((i) => this.add.image(46 + i * 46, 42, "item-heart").setScale(0.24).setScrollFactor(0).setDepth(d + 1));
       this.add.image(200, 42, "item-coin").setScale(0.24).setScrollFactor(0).setDepth(d + 1);
       this.coinText = UI.text(this, 226, 42, "0", 36, "#ffcd77", { ox: 0 }).setScrollFactor(0).setDepth(d + 1);
-      this.hudPiece = this.add.image(330, 42, "item-map-piece").setScale(0.26).setScrollFactor(0).setDepth(d + 1).setAlpha(0.35).setTint(0x555555);
+      // The map-piece slot: an outlined empty slot until this island's piece is found.
+      this.add.graphics().setScrollFactor(0).setDepth(d + 1).lineStyle(2, 0xffcd77, 0.7).strokeRoundedRect(300, 18, 60, 48, 8);
+      this.hudPiece = this.add.image(330, 42, "item-map-piece").setScale(0.22).setScrollFactor(0).setDepth(d + 1).setAlpha(0.3);
       if (AHOY.Save.island(this.isl.id).piece) this.hudPiece.setAlpha(0.8).clearTint();
-      this.powerText = UI.text(this, 420, 42, "★", 34, "#ffffff", { stroke: "#2b1b12", strokeThickness: 5 }).setScrollFactor(0).setDepth(d + 1);
+      this.powerText = UI.text(this, 384, 42, "★", 30, "#ffffff", { stroke: "#2b1b12", strokeThickness: 5, ox: 0 }).setScrollFactor(0).setDepth(d + 1);
       this.secretText = UI.text(this, 640, 30, `Secrets 0/${this.spec.secrets}`, 28, "#ffffff", { stroke: "#2b1b12", strokeThickness: 5 }).setScrollFactor(0).setDepth(d + 1);
       if (this.pirate.portrait) UI.text(this, 640, 60, this.pirate.name + (this.pirate.laser ? " · LASER EYES" : ""), 22, "#ffcd77", { stroke: "#2b1b12", strokeThickness: 4 }).setScrollFactor(0).setDepth(d + 1);
       const pause = UI.text(this, 1170, 40, "❚❚", 36, "#ffffff", { stroke: "#2b1b12", strokeThickness: 6 }).setScrollFactor(0).setDepth(d + 1).setInteractive({ useHandCursor: true });
