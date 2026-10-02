@@ -92,14 +92,20 @@ const pk = () => web3.Keypair.generate().publicKey.toBase58();
     const owner = pk();
     const batch = [{ tokenAccount: pk(), program: R.TOKEN_PROGRAM, mint: pk(), delegate: pk() }, { tokenAccount: pk(), program: R.TOKEN_2022_PROGRAM, mint: pk(), delegate: pk() }];
     let built = null;
+    let lvbh = 777;   // what the fake node's getLatestBlockhash reports as the blockhash's lifetime
     global.window = {
       solanaWeb3: web3,
       CluckWallet: { asTransaction: (s) => s, b58encode: () => null },
-      CluckUtil: { rpc: async (m) => { if (m === "getLatestBlockhash") return { value: { blockhash: web3.Keypair.generate().publicKey.toBase58() } }; throw new Error("unexpected " + m); } },
+      CluckUtil: { rpc: async (m) => { if (m === "getLatestBlockhash") return { value: lvbh === undefined ? { blockhash: web3.Keypair.generate().publicKey.toBase58() } : { blockhash: web3.Keypair.generate().publicKey.toBase58(), lastValidBlockHeight: lvbh } }; throw new Error("unexpected " + m); } },
     };
     const declining = { publicKey: new web3.PublicKey(owner), signTransaction: async (tx) => { built = tx; const e = new Error("User rejected the request."); e.code = 4001; throw e; } };
     const res = await R.runRevoke({ provider: declining, owner, batch });
     ok("a wallet decline is reported as declined (a normal outcome, not an error)", res.status === "declined", res);
+    ok("runRevoke returns the lastValidBlockHeight that came with the blockhash it built against (Codex round 2)", res.lastValidBlockHeight === 777 && typeof res.recentBlockhash === "string", res);
+    lvbh = undefined;
+    const noLife = await R.runRevoke({ provider: declining, owner, batch });
+    ok("a node that gave no lastValidBlockHeight -> null, never a guessed number", noLife.lastValidBlockHeight === null, noLife);
+    lvbh = 777;
     ok("the transaction the wallet was shown carried exactly one instruction per account", built && built.instructions.length === 2);
     const ixOk = built && built.instructions.every((ix, i) =>
       ix.programId.toBase58() === batch[i].program
@@ -114,6 +120,30 @@ const pk = () => web3.Keypair.generate().publicKey.toBase58();
     const nothing = await R.runRevoke({ provider: declining, owner, batch: [] });
     ok("an empty batch never reaches the wallet", nothing.status === "failed" && nothing.accounts.length === 0);
     delete global.window;
+  }
+
+  console.log("\n(d2) the persisted unresolved-send record — by wallet, validated, never throws\n");
+  {
+    const mem = {};
+    const store = { getItem: (k) => (k in mem ? mem[k] : null), setItem: (k, v) => { mem[k] = String(v); }, removeItem: (k) => { delete mem[k]; } };
+    global.window = { localStorage: store };
+    const w1 = pk(), w2 = pk(), acct = pk();
+    const rec = { sig: "S".repeat(88), accounts: [{ tokenAccount: acct, program: R.TOKEN_PROGRAM, mint: pk(), delegate: pk() }], recentBlockhash: pk(), lastValidBlockHeight: 250, wallet: w1, at: 12345 };
+    ok("save then load round-trips every field", R.saveRevokePending(rec) && JSON.stringify(R.loadRevokePending(w1)) === JSON.stringify({ ...rec, accounts: [{ tokenAccount: acct, program: R.TOKEN_PROGRAM, mint: rec.accounts[0].mint, delegate: rec.accounts[0].delegate }] }), R.loadRevokePending(w1));
+    ok("it is keyed by wallet: another wallet sees nothing", R.loadRevokePending(w2) === null);
+    ok("a second wallet's record does not clobber the first", R.saveRevokePending({ ...rec, wallet: w2, sig: "T".repeat(88) }) && R.loadRevokePending(w1).sig === rec.sig && R.loadRevokePending(w2).sig === "T".repeat(88));
+    R.clearRevokePending(w1);
+    ok("clear removes only that wallet's record", R.loadRevokePending(w1) === null && !!R.loadRevokePending(w2));
+    R.clearRevokePending(w2);
+    ok("clearing the last record removes the key", !(R.REVOKE_PENDING_KEY in mem));
+    mem[R.REVOKE_PENDING_KEY] = "{not json";
+    ok("a corrupt value loads as null instead of throwing", R.loadRevokePending(w1) === null);
+    mem[R.REVOKE_PENDING_KEY] = JSON.stringify({ [w1]: { sig: "x", wallet: w2, accounts: rec.accounts } });
+    ok("a record whose wallet field disagrees with its key is refused", R.loadRevokePending(w1) === null);
+    global.window = { localStorage: { getItem() { throw new Error("denied"); }, setItem() { throw new Error("quota"); }, removeItem() { throw new Error("denied"); } } };
+    ok("storage that throws: save reports false, load is null, clear does not throw", R.saveRevokePending(rec) === false && R.loadRevokePending(w1) === null && (R.clearRevokePending(w1), true));
+    delete global.window;
+    ok("no window at all: nothing throws", R.saveRevokePending(rec) === false && R.loadRevokePending(w1) === null);
   }
 
   console.log("\n(e) the shared pane and the education edition stay clean\n");
@@ -177,7 +207,11 @@ const pk = () => web3.Keypair.generate().publicKey.toBase58();
             import CheckupRevoke from "./CheckupRevoke.jsx";
             const wallet = { connected: true, address: window.__ADDR, provider: {} };
             const revoke = ({ approvals, address, rescan }) => <CheckupRevoke wallet={wallet} approvals={approvals} scannedAddress={address} onDone={rescan} />;
-            createRoot(document.getElementById("root")).render(<WalletCheckupPane address={window.__ADDR} revoke={revoke} />);
+            // mount/unmount hooks: leaving the Checkup tab and coming back is a real unmount.
+            let root = null;
+            window.__mount = () => { root = createRoot(document.getElementById("root")); root.render(<WalletCheckupPane address={window.__ADDR} revoke={revoke} />); };
+            window.__unmount = () => { if (root) root.unmount(); root = null; };
+            window.__mount();
           `,
           resolveDir: SEEKER, loader: "jsx", sourcefile: "harness.jsx",
         },
@@ -194,19 +228,25 @@ const pk = () => web3.Keypair.generate().publicKey.toBase58();
 
       // One fresh page per scenario. `state` is the scripted chain, mutable from the test.
       async function open(state) {
-        const page = await browser.newPage();
+        // A fresh context per page (its own localStorage) on a routed https origin — about:blank has
+        // no usable localStorage, and the persisted record is exactly what is under test.
+        const context = await browser.newContext();
+        const page = await context.newPage();
+        await page.route("https://seeker.test/**", (r) => r.fulfill({ contentType: "text/html", body: '<!doctype html><div id="root"></div>' }));
         const errors = [];
         page.on("pageerror", (e) => errors.push(String(e)));
-        await page.setContent('<div id="root"></div>');
+        await page.goto("https://seeker.test/");
         await page.evaluate(({ ADDR, A, B, SIG, BH, state }) => {
           window.__ADDR = ADDR;
-          const s = window.__state = Object.assign({ fetchCount: 0, scanDelay: 0, height: 1000, blockhashValid: true, sigStatus: null, accounts: {} }, state);
-          s.runRevoke = async () => ({ status: s.sendStatus, sig: SIG, accounts: s.sentRows.map((r) => ({ tokenAccount: r.tokenAccount, program: r.program, mint: r.mint, delegate: r.delegate })), recentBlockhash: BH });
+          // `lvbh` is the lastValidBlockHeight that came with the blockhash; 900 < height 1000 means
+          // "the chain has moved past the transaction's lifetime" unless a scenario says otherwise.
+          const s = window.__state = Object.assign({ fetchCount: 0, scanDelay: 0, height: 1000, lvbh: 900, blockhashValid: true, sigStatus: null, accounts: {} }, state);
+          s.runRevoke = async () => ({ status: s.sendStatus, sig: SIG, accounts: s.sentRows.map((r) => ({ tokenAccount: r.tokenAccount, program: r.program, mint: r.mint, delegate: r.delegate })), recentBlockhash: BH, lastValidBlockHeight: s.lvbh });
           const parsed = (d) => ({ data: { parsed: { info: d ? { delegate: d } : {} } } });
           window.CluckUtil = { rpc: async (m, p) => {
             if (m === "getSignatureStatuses") return { value: [s.sigStatus] };
             if (m === "getBlockHeight") return s.height;
-            if (m === "isBlockhashValid") return { value: s.blockhashValid };
+            if (m === "isBlockhashValid") return "validRaw" in s ? s.validRaw : { value: s.blockhashValid };
             if (m === "getMultipleAccounts") return { value: p[0].map((ta) => { const v = s.accounts[ta]; return v === "closed" ? null : v === "unreadable" ? { data: "base64" } : parsed(v === "delegate" ? "DeLeGate1111111111111111111111111111111111" : null); }) };
             throw new Error("unexpected rpc " + m);
           } };
@@ -218,6 +258,7 @@ const pk = () => web3.Keypair.generate().publicKey.toBase58();
         }, { ADDR, A, B, SIG, BH, state: { ...state, sentRows: state.rows } });
         await page.addScriptTag({ content: bundle });
         await page.waitForSelector(".seeker-revoke-btn", { timeout: 10000 });
+        page.__context = context;
         return { page, errors };
       }
       const body = (page) => page.evaluate(() => document.body.innerText);
@@ -226,6 +267,13 @@ const pk = () => web3.Keypair.generate().publicKey.toBase58();
         await page.click(".seeker-revoke-btn");
         await page.click(".seeker-confirm .seeker-btn-danger");
       }
+      const stored = (page) => page.evaluate(() => window.localStorage.getItem("clkn_seeker_revoke_pending"));
+      const remount = async (page) => { await page.evaluate(() => { window.__unmount(); window.__mount(); }); };
+      const unconfirmedCard = (page) => page.waitForSelector(".seeker-revoke-outcome-unconfirmed", { timeout: 10000 });
+      const checkStatus = async (page) => {
+        await page.click(".seeker-revoke-outcome-unconfirmed .seeker-btn-quiet");
+        await page.waitForFunction(() => !/Checking…/.test(document.body.innerText), null, { timeout: 10000 });
+      };
       const set = (page, patch) => page.evaluate((p) => Object.assign(window.__state, p), patch);
 
       // ── Finding 1: unconfirmed ──────────────────────────────────────────────────────────
@@ -235,6 +283,9 @@ const pk = () => web3.Keypair.generate().publicKey.toBase58();
         await page.waitForSelector(".seeker-revoke-outcome-unconfirmed", { timeout: 10000 });
         let txt = await body(page);
         ok("unconfirmed: NO Revoke button is offered for those accounts", (await revokeBtns(page)).length === 0, await revokeBtns(page));
+        const persisted = JSON.parse((await stored(page)) || "null");
+        ok("unconfirmed: the record is persisted by wallet with signature, accounts, blockhash, REAL lastValidBlockHeight and time",
+           persisted && persisted[ADDR] && persisted[ADDR].sig === SIG && persisted[ADDR].accounts.length === 2 && persisted[ADDR].recentBlockhash === BH && persisted[ADDR].lastValidBlockHeight === 900 && persisted[ADDR].wallet === ADDR && typeof persisted[ADDR].at === "number", persisted);
         ok("unconfirmed: the original signature is still shown (short form) with its explorer link",
            txt.includes(SIG.slice(0, 4) + "…" + SIG.slice(-4)) && (await page.evaluate((s) => !!document.querySelector('a[href="https://solscan.io/tx/' + s + '"]'), SIG)));
         // Check status while the chain says nothing and the blockhash is still live → still pending.
@@ -250,6 +301,7 @@ const pk = () => web3.Keypair.generate().publicKey.toBase58();
         await page.waitForFunction(() => /Re-read on chain/.test(document.body.innerText), null, { timeout: 10000 });
         const btns = await revokeBtns(page);
         ok("expired + chain re-read: Revoke returns for ONLY the account still showing a delegate", btns.length === 1 && btns[0] === "Revoke this approval", btns);
+        ok("expired (strict rule met): the persisted record is cleared", (await stored(page)) === null, await stored(page));
         ok("expired: the outcome says nothing was revoked and keeps the signature link", /Nothing was revoked/.test(await body(page)) && (await page.evaluate((s) => !!document.querySelector('a[href="https://solscan.io/tx/' + s + '"]'), SIG)));
         ok("unconfirmed flow: no uncaught exception", errors.length === 0, errors.join(" | "));
         await page.close();
@@ -275,6 +327,114 @@ const pk = () => web3.Keypair.generate().publicKey.toBase58();
         await page.click(".seeker-revoke-outcome-unconfirmed button");
         await page.waitForFunction(() => /Revoke transaction confirmed/.test(document.body.innerText) && /Re-read on chain: 1 of 2/.test(document.body.innerText), null, { timeout: 10000 });
         ok("unconfirmed that landed: confirmed + per-account re-read", /still show a delegate/.test(await body(page)));
+        await page.close();
+      }
+
+      // ── Codex round 2, Finding 2: only an explicit `false` is a dead blockhash ──────────────
+      for (const [label, patch] of [
+        ["isBlockhashValid answers {} (unknown)", { validRaw: {} }],
+        ["isBlockhashValid answers null (unknown)", { validRaw: null }],
+        ["isBlockhashValid answers {value:null} (unknown)", { validRaw: { value: null } }],
+      ]) {
+        const { page } = await open({ rows: rowsAB, sendStatus: "unconfirmed", accounts: { [A]: "delegate", [B]: "delegate" } });
+        await submit(page);
+        await unconfirmedCard(page);
+        await set(page, patch);                     // height 1000 is past lvbh 900, status is null
+        await checkStatus(page);
+        ok(`${label}: still unconfirmed, NO Revoke button, signature kept, record kept`,
+           (await revokeBtns(page)).length === 0 && !!(await page.$(".seeker-revoke-outcome-unconfirmed")) && (await body(page)).includes(SIG.slice(0, 4)) && (await stored(page)) !== null);
+        await page.close();
+      }
+      {
+        // The node's height has not reached the transaction's own lifetime: with the REAL
+        // lastValidBlockHeight (250) a node at height 90 is "pending" even when the blockhash looks dead.
+        const { page } = await open({ rows: rowsAB, sendStatus: "unconfirmed", height: 90, lvbh: 250, blockhashValid: false, accounts: { [A]: "delegate", [B]: "delegate" } });
+        await submit(page);
+        await unconfirmedCard(page);
+        await checkStatus(page);
+        ok("node at height 90 below lastValidBlockHeight 250 (blockhash reported dead): pending, NO Revoke, record kept",
+           (await revokeBtns(page)).length === 0 && !!(await page.$(".seeker-revoke-outcome-unconfirmed")) && (await stored(page)) !== null);
+        // ...and once the node passes the lifetime AND says the blockhash is dead, it IS expired.
+        await set(page, { height: 300 });
+        await checkStatus(page);
+        await page.waitForSelector(".seeker-revoke-outcome-failed", { timeout: 10000 });
+        ok("the same send at height 300 > 250 with a dead blockhash: expired (the strict rule, not a weaker one)", !!(await page.$(".seeker-revoke-outcome-failed")));
+        await page.close();
+      }
+      {
+        // No lifetime known (the node gave none): the send can never be judged expired.
+        const { page } = await open({ rows: rowsAB, sendStatus: "unconfirmed", lvbh: null, blockhashValid: false, accounts: { [A]: "delegate", [B]: "delegate" } });
+        await submit(page);
+        await unconfirmedCard(page);
+        await checkStatus(page);
+        ok("lastValidBlockHeight missing (null): pending, never expired, NO Revoke", (await revokeBtns(page)).length === 0 && !!(await page.$(".seeker-revoke-outcome-unconfirmed")));
+        await page.close();
+      }
+
+      // ── Codex round 2, Finding 3: the unresolved send survives rescans and remounts ─────────
+      {
+        const { page, errors } = await open({ rows: rowsAB, sendStatus: "unconfirmed", accounts: { [A]: "delegate", [B]: "delegate" } });
+        await submit(page);
+        await unconfirmedCard(page);
+        await page.click(".seeker-checkup-rescanbtn");          // the ordinary manual Rescan
+        await page.waitForFunction(() => window.__state.fetchCount >= 2, null, { timeout: 10000 });
+        await unconfirmedCard(page);
+        ok("manual Rescan: still NO Revoke button for the same accounts", (await revokeBtns(page)).length === 0, await revokeBtns(page));
+        ok("manual Rescan: the SAME signature is still shown", (await body(page)).includes(SIG.slice(0, 4) + "…" + SIG.slice(-4)) && (await page.evaluate((s) => !!document.querySelector('a[href="https://solscan.io/tx/' + s + '"]'), SIG)));
+        await remount(page);                                     // leave the Checkup tab and come back
+        await unconfirmedCard(page);
+        ok("unmount + remount: still pending, still NO Revoke, same signature",
+           (await revokeBtns(page)).length === 0 && (await body(page)).includes(SIG.slice(0, 4) + "…" + SIG.slice(-4)));
+        // the restored card still resolves through Check status
+        await set(page, { sigStatus: { err: null, confirmationStatus: "confirmed" }, accounts: { [A]: "clear", [B]: "clear" } });
+        await checkStatus(page);
+        await page.waitForFunction(() => /Revoke transaction confirmed/.test(document.body.innerText) && /Re-read on chain: 2 of 2/.test(document.body.innerText), null, { timeout: 10000 });
+        ok("a restored record resolves through Check status, and resolving clears it", (await stored(page)) === null, await stored(page));
+        ok("rescan/remount flow: no uncaught exception", errors.length === 0, errors.join(" | "));
+        await page.close();
+      }
+      {
+        // the back-online rescan takes the same loading-screen path as the manual one
+        const { page } = await open({ rows: rowsAB, sendStatus: "unconfirmed", accounts: { [A]: "delegate", [B]: "delegate" } });
+        await submit(page);
+        await unconfirmedCard(page);
+        await page.evaluate(() => { Object.defineProperty(navigator, "onLine", { configurable: true, get: () => false }); window.dispatchEvent(new Event("offline")); });
+        await page.click(".seeker-checkup-rescanbtn");          // offline: the pane shows its offline screen
+        await page.waitForFunction(() => /offline/i.test(document.body.innerText), null, { timeout: 10000 });
+        await page.evaluate(() => { Object.defineProperty(navigator, "onLine", { configurable: true, get: () => true }); window.dispatchEvent(new Event("online")); });
+        await unconfirmedCard(page);
+        ok("offline then back-online rescan: still pending, NO Revoke, same signature", (await revokeBtns(page)).length === 0 && (await body(page)).includes(SIG.slice(0, 4)));
+        await page.close();
+      }
+      {
+        // a record belongs to the wallet that signed it; another wallet's pane does not show it
+        const { page } = await open({ rows: rowsAB, sendStatus: "unconfirmed", accounts: { [A]: "delegate", [B]: "delegate" } });
+        await submit(page);
+        await unconfirmedCard(page);
+        await page.evaluate((o) => { window.localStorage.setItem("clkn_seeker_revoke_pending", JSON.stringify({ [o]: JSON.parse(window.localStorage.getItem("clkn_seeker_revoke_pending"))[window.__ADDR] })); }, pk());
+        await remount(page);
+        await page.waitForSelector(".seeker-revoke-btn", { timeout: 10000 });
+        ok("a record stored for a DIFFERENT wallet is not applied here", !(await page.$(".seeker-revoke-outcome-unconfirmed")) && (await revokeBtns(page)).length === 1);
+        await page.close();
+      }
+      {
+        // the 10-minute escape hatch (Swap's pattern): nothing before it, "Stop watching" after it
+        const { page } = await open({ rows: rowsAB, sendStatus: "unconfirmed", accounts: { [A]: "delegate", [B]: "delegate" } });
+        await submit(page);
+        await unconfirmedCard(page);
+        ok("a fresh unresolved send offers no escape hatch yet", !/Stop watching/.test(await body(page)));
+        await page.evaluate(() => {
+          const m = JSON.parse(window.localStorage.getItem("clkn_seeker_revoke_pending"));
+          m[window.__ADDR].at = Date.now() - 11 * 60 * 1000;
+          window.localStorage.setItem("clkn_seeker_revoke_pending", JSON.stringify(m));
+        });
+        await remount(page);
+        await unconfirmedCard(page);
+        ok("after 10 minutes the card offers 'Stop watching' and still shows the signature link", /Stop watching/.test(await body(page)) && (await page.evaluate((s) => !!document.querySelector('a[href="https://solscan.io/tx/' + s + '"]'), SIG)));
+        ok("...and still NO Revoke until it is dismissed", (await revokeBtns(page)).length === 0);
+        await page.click(".seeker-revoke-stopwatch");
+        await page.waitForSelector(".seeker-revoke-btn", { timeout: 10000 });
+        ok("dismissing through the escape hatch clears the record and frees the accounts", (await stored(page)) === null && (await revokeBtns(page)).length === 1 && !(await page.$(".seeker-revoke-outcome-unconfirmed")));
         await page.close();
       }
 

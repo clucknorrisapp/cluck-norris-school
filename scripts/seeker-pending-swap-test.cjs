@@ -122,6 +122,31 @@ function heightResult(h) { return h; }
   }
 
   // ══════════════════════════════════════════════════════════════════════════════════════════
+  console.log("\n(2e) Revoke round 2 P2 — ONLY an explicit isBlockhashValid `value: false` is dead; every other shape is pending\n");
+  {
+    const cases = [
+      ["{}", {}, "pending"],
+      ["null", null, "pending"],
+      ["{value:null}", { context: { slot: 1 }, value: null }, "pending"],
+      ["{value:undefined}", { context: { slot: 1 } }, "pending"],
+      ["{value:0}", { value: 0 }, "pending"],
+      ["{value:\"false\"}", { value: "false" }, "pending"],
+      ["{value:true}", { value: true }, "pending"],
+      ["{value:false}", { context: { slot: 1 }, value: false }, "expired"],
+    ];
+    for (const [label, validity, want] of cases) {
+      const rpc = fakeRpc([
+        { result: statusResult([null]) },
+        { result: heightResult(LVB + 50) },
+        { result: statusResult([null]) },
+        { result: validity },
+      ]);
+      const r = await checkPendingSwap(rpc, { signature: SIG, lastValidBlockHeight: LVB, recentBlockhash: BLOCKHASH });
+      ok(`isBlockhashValid answers ${label} -> ${want}`, r.status === want, r);
+    }
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════════════════════
   console.log("\n(3) null status + height past limit + history says confirmed -> sent\n");
   {
     const rpc = fakeRpc([
