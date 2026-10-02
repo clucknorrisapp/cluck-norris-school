@@ -3,7 +3,8 @@
 //   <out>/index.html   page content (no doctype/html/head/body — the artifact skeleton adds them),
 //                      game scripts inlined, Phaser from cdnjs (the artifact CSP's script host)
 //   <out>/assets/**    art + fonts, published alongside as files
-// The preview has no server, so the holder gate runs in its labelled demo mode.
+// The preview has no server, so the holder gate runs in its labelled demo mode (set explicitly
+// with window.AHOY_PREVIEW — it is never inferred from a failed request).
 // Usage: node pirates/tools/build-artifact.cjs <outDir>
 const fs = require("fs");
 const path = require("path");
@@ -17,7 +18,9 @@ const head = html.slice(html.indexOf("<head>") + 6, html.indexOf("</head>"));
 const body = html.slice(html.indexOf("<body>") + 6, html.indexOf("</body>"));
 const title = (head.match(/<title>.*?<\/title>/) || ["<title>AHOY: PumpFunPirates</title>"])[0];
 const style = (head.match(/<style>[\s\S]*?<\/style>/) || [""])[0];
-let scripts = "";
+// The preview is EXPLICIT: only this build sets the flag. On the live site a failed holder-config
+// request is "gate unavailable — free seas only", never a fall back into demo mode.
+let scripts = "<script>window.AHOY_PREVIEW = true;</script>\n";
 const bodyNoScripts = body.replace(/<script src="([^"]+)"><\/script>\s*/g, (_, src) => {
   if (/phaser/.test(src)) scripts += `<script src="https://cdnjs.cloudflare.com/ajax/libs/phaser/3.60.0/phaser.min.js"></script>\n`;
   else scripts += `<script>\n${fs.readFileSync(path.join(PUB, src), "utf8")}\n</script>\n`;

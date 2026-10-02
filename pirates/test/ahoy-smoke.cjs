@@ -56,7 +56,10 @@ function chromiumPath() {
   const wait = (ms) => page.waitForTimeout(ms);
   const active = () => page.evaluate(() => window.__AHOY_GAME && window.__AHOY_GAME.scene.getScenes(true).map((s) => s.scene.key));
 
-  await page.goto(base, { waitUntil: "load" });
+  // The static test server has no API, so the main run is the EXPLICIT preview (?preview=1, honoured on
+  // loopback only). A failed config request is never what turns demo mode on — the gate cases at the
+  // end of this file prove that.
+  await page.goto(remote ? base : base + "?preview=1", { waitUntil: "load" });
   await page.waitForFunction(() => window.__AHOY_GAME && window.__AHOY_GAME.scene.isActive("Title"), null, { timeout: 30000 });
   await wait(800);
   check(true, "boots to Title");
@@ -186,6 +189,69 @@ function chromiumPath() {
   for (let i = 0; i < 20; i++) { await page.keyboard.press("Space"); await wait(120); }
   await wait(2600); await shot("08-treasure");
   check(await page.evaluate(() => AHOY.Save.treasure("bay")), "dig completes and records the treasure");
+
+  // ── Holder gate (findings 4 + 5): the cache is not a grant, and a failed config is not demo mode ──
+  const WALLET = "4Nd1mBQtrMJVYVfKf2PJy9NZUZdTAsp7D4xWLs4gDB4T";
+  const CONFIG = { ok: true, mint: "m", nftCollection: "c", priceUsd: 0.00004, tiers: [
+    { id: "deckhand", label: "Deckhand", holdUsd: 5, holdAhoy: 125000, seas: ["reef", "glacier"] },
+    { id: "captain", label: "Captain", holdUsd: 25, holdAhoy: 625000, seas: [] },
+    { id: "nft", label: "Crew (NFT holder)", holdUsd: null, holdAhoy: null, seas: [] } ] };
+  const gateCase = async ({ seed, seedLocal, config = "ok", session, query = "" }) => {
+    const ctx = await browser.newContext({ viewport: { width: 1280, height: 720 }, ignoreHTTPSErrors: !!remote });
+    const gp = await ctx.newPage();
+    const sessionCalls = [];
+    await gp.route(/\/api\/ahoy\/config/, (r) => (config === "ok" ? r.fulfill({ json: CONFIG }) : config === "abort" ? r.abort() : r.fulfill({ status: 500, body: "boom" })));
+    await gp.route(/\/api\/ahoy\/session/, (r) => {
+      sessionCalls.push(JSON.parse(r.request().postData() || "{}"));
+      if (!session) return r.abort();
+      return r.fulfill({ status: session.status || 200, json: session.json });
+    });
+    if (seed != null) await gp.addInitScript(([k, v]) => { try { sessionStorage.setItem(k, v); } catch (_) {} }, ["ahoy_pfp_gate_v1", JSON.stringify(seed)]);
+    if (seedLocal != null) await gp.addInitScript(([k, v]) => { try { localStorage.setItem(k, v); } catch (_) {} }, ["ahoy_pfp_gate_v1", JSON.stringify(seedLocal)]);
+    await gp.goto(base + query, { waitUntil: "load" });
+    await gp.waitForFunction(() => window.__AHOY_GAME, null, { timeout: 30000 });
+    const out = await gp.evaluate(() => {
+      const nftSea = AHOY.SEAS.find((x) => x.access === "nft"), capSea = AHOY.SEAS.find((x) => x.access === "captain");
+      AHOY.Gate.demoUnlock();
+      const afterDemo = AHOY.Gate.canSail(nftSea);
+      return { mode: AHOY.Gate.mode(), st: AHOY.Gate.state(), canNft: AHOY.Gate.canSail(nftSea), canCap: AHOY.Gate.canSail(capSea), afterDemo, stored: sessionStorage.getItem("ahoy_pfp_gate_v1") };
+    });
+    out.sessionCalls = sessionCalls;
+    await ctx.close();
+    return out;
+  };
+  const future = Date.now() + 3600e3;
+  // Finding 4: a hand-written grant unlocks nothing, with or without a live config.
+  let g = await gateCase({ seed: { tier: "nft", demo: false }, seedLocal: { tier: "nft", demo: false } });
+  check(g.mode === "live" && !g.canNft && !g.canCap && g.sessionCalls.length === 0, `forged {"tier":"nft"} (no wallet/token/expiry) unlocks nothing and is discarded (mode ${g.mode}, nft ${g.canNft})`);
+  g = await gateCase({ seed: { tier: "nft", demo: false, wallet: WALLET, token: "x", exp: Date.now() - 1000 } });
+  check(!g.canNft && g.sessionCalls.length === 0 && g.stored === null, "an EXPIRED cached grant is discarded without asking the server");
+  g = await gateCase({ seed: { tier: "nft", wallet: WALLET, token: "x", exp: Date.now() + 90 * 24 * 3600e3 } });
+  check(!g.canNft && g.sessionCalls.length === 0, "a cached grant with an expiry beyond the server's one-day token life is discarded");
+  // A wallet-bound grant is re-checked, and nothing opens until the server says so.
+  g = await gateCase({ seed: { tier: "nft", wallet: WALLET, token: "tok", exp: future }, session: { status: 200, json: { ok: true, tier: "free", unavailable: false, ahoy: 0, usd: 0, nfts: [] } } });
+  check(g.sessionCalls.length === 1 && g.sessionCalls[0].wallet === WALLET && g.sessionCalls[0].token === "tok" && !g.canNft && !g.canCap, "a cached wallet grant is revalidated on boot; the cached tier is ignored (server says free → locked)");
+  g = await gateCase({ seed: { wallet: WALLET, token: "tok", exp: future }, session: { status: 200, json: { ok: true, tier: "nft", unavailable: false, ahoy: 0, usd: 0, nfts: [{ id: "n1", name: "P", image: null, traits: {} }] } } });
+  check(g.canNft && g.canCap && g.st.confirmed, "server-confirmed NFT tier unlocks every sea after revalidation");
+  g = await gateCase({ seed: { wallet: WALLET, token: "tok", exp: future }, session: { status: 503, json: { ok: false, unavailable: true } } });
+  check(!g.canNft && !g.canCap && g.st.unavailable === true && g.stored && JSON.parse(g.stored).wallet === WALLET, "session check unavailable: nothing granted, state says unavailable, cache kept");
+  g = await gateCase({ seed: { wallet: WALLET, token: "tok", exp: future } /* session route aborts: network failure */ });
+  check(!g.canNft && g.st.unavailable === true && g.stored, "session network failure behaves as unavailable (nothing granted, cache kept)");
+  g = await gateCase({ seed: { wallet: WALLET, token: "bad", exp: future }, session: { status: 401, json: { ok: false, expired: true } } });
+  check(!g.canNft && g.stored === null && g.st.wallet === null, "a token the server refuses (401) clears the cache");
+  // Finding 5: a failed config on the live site is 'gate unavailable', never the demo unlock.
+  for (const [label, config] of [["refused connection", "abort"], ["HTTP 500", "500"]]) {
+    g = await gateCase({ config });
+    check(g.mode === "offline" && !g.st.demo && !g.afterDemo && !g.canNft && !g.canCap, `config ${label} on the live site: mode offline, demo unlock refused, free seas only (mode ${g.mode}, afterDemo ${g.afterDemo})`);
+  }
+  if (!remote) {
+    g = await gateCase({ config: "abort", query: "?preview=1" });
+    check(g.mode === "demo" && g.afterDemo, "an EXPLICIT preview (?preview=1 on loopback) still offers the labelled demo unlock");
+    g = await gateCase({ config: "abort", query: "?preview=1", seed: { demo: true, tier: "nft", nfts: [] } });
+    check(g.mode === "demo" && g.st.demo, "preview keeps its own demo cache");
+    g = await gateCase({ seed: { demo: true, tier: "nft", nfts: [] } });
+    check(!g.canNft && g.stored === null, "a demo cache means nothing on the live site (discarded)");
+  }
 
   check(errors.length === 0, "no console errors" + (errors.length ? ":\n    " + errors.slice(0, 12).join("\n    ") : ""));
   await browser.close(); if (server) server.close();
