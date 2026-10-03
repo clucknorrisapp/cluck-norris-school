@@ -1,5 +1,21 @@
 # Seeker app — pay the 7-day tools pass in SKR
 
+> **Built 2026-10-03** (owner: "build it"). Implementation deviations from the text below, each
+> deliberate: (1) the USD figure lives on the schedule entry (`skr: { usd: 1 }`, as designed) AND an
+> env knob `TOOLGATE_SKR_PASS_USD` (0 < usd ≤ 50, else ignored with a log) overrides what is
+> QUOTED — a pinned quote means moving it never touches a pass already bought; (2) the SKR leg is
+> entered by `skrQuote` OR an explicit `payKind:"skr"` in the session body, so a recovery on a device
+> with no quote reaches the SKR verifier rather than the SOL one; (3) the quote route answers
+> `receiverAtaExists` (design §App step 3) and refuses a stale SKR price (an accepted tick older
+> than 15 min → 503, a tick older than 60 s is re-read first); (4) the schedule entry's `from` is
+> 2026-10-03 00:00 UTC (the design's 09-25 predates the build); (5) a quote that is presented but
+> does not verify is a 401 on an UNCONSUMED signature and is ignored (recovery proceeds) on a
+> CONSUMED one; (6) the redemption responses carry `definitive` and `code` so the app never regexes
+> an English sentence; (7) the app persists the recovery record from `signSendConfirm`'s `onSigned`
+> with `requireOnSigned` (the broadcast is stopped if the record cannot be stored), and "Check
+> payment" releases a record as never-landed only when the node proves the blockhash dead. Pinned
+> by `scripts/tool-pass-skr-test.cjs`, `scripts/seeker-skr-pay-test.cjs`, `scripts/tool-pass-terms-test.cjs`.
+
 **Owner decision, 2026-09-24:** *"a dollar in SKR would be plenty for 7 day pass."* And, same
 day: *"I do not want to collect any platform fee"* (that one is about the swap; recorded in
 `docs/SEEKER_SWAP_DESIGN.md`).
