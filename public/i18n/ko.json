@@ -3065,5 +3065,8 @@
   "To: {receiver}": "받는 주소: {receiver}",
   "You hold about {have} SKR — this pass needs {need}. Swap for SKR in this app, then come back.": "약 {have} SKR을 보유 중이에요 — 이 패스에는 {need}가 필요해요. 이 앱에서 SKR로 스왑한 다음 돌아오세요.",
   "Your payment is sent, but the pass service could not confirm it yet. Nothing new was charged — check it again in a moment.": "결제는 전송됐지만 패스 서비스가 아직 확인하지 못했어요. 새로 청구된 건 없어요 — 잠시 후 다시 확인해 주세요.",
-  "Your payment may still be landing — check it before paying again.": "결제가 아직 반영 중일 수 있어요 — 다시 결제하기 전에 먼저 확인해 주세요."
+  "Your payment may still be landing — check it before paying again.": "결제가 아직 반영 중일 수 있어요 — 다시 결제하기 전에 먼저 확인해 주세요.",
+  "A payment of {amount} SKR was sent but could not buy a pass: {reason}. Keep this signature and contact support: {sig}": "{amount} SKR 결제가 전송됐지만 패스를 받을 수 없었어요: {reason}. 이 서명을 보관하고 지원팀에 문의해 주세요: {sig}",
+  "Dismiss": "닫기",
+  "Needs attention": "확인이 필요해요"
 }

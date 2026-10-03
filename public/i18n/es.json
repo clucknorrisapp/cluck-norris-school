@@ -3065,5 +3065,8 @@
   "To: {receiver}": "Para: {receiver}",
   "You hold about {have} SKR — this pass needs {need}. Swap for SKR in this app, then come back.": "Tienes unos {have} SKR — este pase necesita {need}. Haz swap por SKR en esta app y vuelve.",
   "Your payment is sent, but the pass service could not confirm it yet. Nothing new was charged — check it again in a moment.": "Tu pago fue enviado, pero el servicio del pase aún no pudo confirmarlo. No se cobró nada nuevo — revísalo de nuevo en un momento.",
-  "Your payment may still be landing — check it before paying again.": "Tu pago puede estar aún en camino — revísalo antes de volver a pagar."
+  "Your payment may still be landing — check it before paying again.": "Tu pago puede estar aún en camino — revísalo antes de volver a pagar.",
+  "A payment of {amount} SKR was sent but could not buy a pass: {reason}. Keep this signature and contact support: {sig}": "Se envió un pago de {amount} SKR, pero no pudo comprar un pase: {reason}. Guarda esta firma y contacta con soporte: {sig}",
+  "Dismiss": "Descartar",
+  "Needs attention": "Requiere atención"
 }

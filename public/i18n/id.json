@@ -3065,5 +3065,8 @@
   "To: {receiver}": "Ke: {receiver}",
   "You hold about {have} SKR — this pass needs {need}. Swap for SKR in this app, then come back.": "Kamu memegang sekitar {have} SKR — pass ini butuh {need}. Swap ke SKR di aplikasi ini, lalu kembali.",
   "Your payment is sent, but the pass service could not confirm it yet. Nothing new was charged — check it again in a moment.": "Pembayaranmu sudah terkirim, tetapi layanan pass belum bisa mengonfirmasinya. Tidak ada tagihan baru — periksa lagi sebentar lagi.",
-  "Your payment may still be landing — check it before paying again.": "Pembayaranmu mungkin masih masuk — periksa dulu sebelum membayar lagi."
+  "Your payment may still be landing — check it before paying again.": "Pembayaranmu mungkin masih masuk — periksa dulu sebelum membayar lagi.",
+  "A payment of {amount} SKR was sent but could not buy a pass: {reason}. Keep this signature and contact support: {sig}": "Pembayaran {amount} SKR terkirim tetapi tidak bisa membeli pass: {reason}. Simpan tanda tangan ini dan hubungi dukungan: {sig}",
+  "Dismiss": "Tutup",
+  "Needs attention": "Perlu perhatian"
 }

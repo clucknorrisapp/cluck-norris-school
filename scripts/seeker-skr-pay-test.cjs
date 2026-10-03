@@ -134,6 +134,7 @@ const T22 = "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb";
   ok("an amountUi that is not the amountRaw is refused (the sheet must print what is signed)", /self-consistent/.test(mod.validateQuote(mkQuote({ amountUi: "5" })) || ""));
   ok("a non-integer / leading-zero / negative amount is refused", ["0", "012", "-5", "5.5", "abc", ""].every((a) => mod.validateQuote(mkQuote({ amountRaw: a })) !== null));
   ok("a malformed receiver is refused", mod.validateQuote(mkQuote({ receiver: "nope" })) !== null);
+  ok("a quote with no issuedAt (or expiresAt <= issuedAt) is refused — its life must be knowable", mod.validateQuote(mkQuote({ issuedAt: undefined })) !== null && mod.validateQuote(mkQuote({ issuedAt: 5, expiresAt: 5 })) !== null);
   let r = await mod.fetchQuote(async () => resp(503, { success: false, error: "skr_price_unavailable" }), PAYER);
   ok("503 skr_price_unavailable → kind 'price' (no amount is ever guessed)", r.ok === false && r.kind === "price", r);
   r = await mod.fetchQuote(async () => { throw new Error("offline"); }, PAYER);
@@ -142,6 +143,22 @@ const T22 = "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb";
   ok("a 200 whose quote fails validation → refused as 'error'", r.ok === false && r.kind === "error", r);
   r = await mod.fetchQuote(async () => resp(200, mkQuote()), PAYER);
   ok("a valid quote is returned", r.ok === true && r.quote.amountRaw === "50000000", r);
+
+  // Review of #421, P3-4: freshness is how long the quote has been HERE, never the phone's clock
+  // against the server's expiresAt (a slow phone clock saw a dead quote as fresh).
+  console.log("\n2b. quote freshness is measured from when it arrived, not against the server's clock\n");
+  {
+    const fetched = (await mod.fetchQuote(async () => resp(200, mkQuote()), PAYER)).quote;
+    ok("a quote that just arrived is fresh", mod.quoteStale(fetched) === false);
+    // A SLOW phone clock: the server's expiresAt looks 10 minutes away to the phone, but 9.5 minutes
+    // of the quote's 10-minute life have passed on the stopwatches.
+    const slowClock = { ...fetched, issuedAt: Date.now() - 600e3 * 5, expiresAt: Date.now() - 600e3 * 5 + 600e3 };   // server time far from the phone's: irrelevant
+    const aged = { ...fetched, _wall0: Date.now() - 570e3, _perf0: (typeof performance !== "undefined" ? performance.now() : 0) - 570e3 };
+    ok("9.5 of its 10 minutes elapsed → stale, whatever the phone clock says about expiresAt", mod.quoteStale({ ...aged, expiresAt: Date.now() + 3600e3 * 24, issuedAt: Date.now() + 3600e3 * 24 - 600e3 }) === true);
+    ok("the life is the server's own span (expiresAt − issuedAt), so a phone clock years off changes nothing", mod.quoteStale(slowClock) === false);
+    ok("a stopwatch that jumped (wall clock far ahead) can only make it stricter", mod.quoteStale({ ...fetched, _wall0: Date.now() - 3600e3 }) === true);
+    ok("a quote with no usable life is stale", mod.quoteStale({ ...fetched, issuedAt: 10, expiresAt: 10 }) === true);
+  }
 
   // ═══ 3. reading the payer's SKR ═════════════════════════════════════════════════════════════
   console.log("\n3. the payer's SKR — look-alikes and frozen accounts do not count\n");
@@ -245,8 +262,6 @@ const T22 = "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb";
     ok("'not visible yet' → retry, record KEPT", out.kind === "retry" && !!mod.loadRecord(st, PAYER), out);
     out = await redeem(st, async () => resp(502, undefined));
     ok("an HTML/non-JSON 502 → retry, record KEPT", out.kind === "retry" && !!mod.loadRecord(st, PAYER), out);
-    out = await redeem(st, async () => resp(401, { success: false, error: "skr quote invalid — request a new one", code: "skr_quote_invalid" }));
-    ok("an unverifiable quote is not 'definitive' → record KEPT, error shown", out.kind === "retry" && /quote invalid/.test(out.error || "") && !!mod.loadRecord(st, PAYER), out);
     out = await redeem(st, async () => resp(200, grantBody));
     ok("REOPEN: re-posting the kept record after the outage → granted, record cleared", out.kind === "granted" && mod.loadRecord(st, PAYER) === null, out);
   }
@@ -254,6 +269,28 @@ const T22 = "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb";
     const st = seeded();
     const out = await redeem(st, async () => resp(status, { success: false, error, code, definitive: true }));
     ok(`DEFINITIVE '${code}' → refused with its reason, record cleared`, out.kind === "refused" && out.error === error && out.code === code && mod.loadRecord(st, PAYER) === null, out);
+  }
+  {
+    // P3-4/6: a payment that LANDED but cannot buy a pass is never dropped silently.
+    for (const [code, error] of [["outside_window", "this payment landed after its quote expired, so it was priced on a stale number"], ["skr_quote_invalid", "skr quote invalid — request a new one"], ["multiple_payers", "more than one wallet's SKR was spent in this transaction"]]) {
+      const st = seeded();
+      const out = await redeem(st, async () => resp(code === "skr_quote_invalid" ? 401 : 200, { success: false, error, code, definitive: true }));
+      const stuck = mod.loadStuck(st, PAYER);
+      ok(`'${code}' (it landed) → active record released, but KEPT as 'needs attention' with its signature, amount and reason`,
+        out.kind === "refused" && out.stuck === true && out.sig === "S".repeat(88) && mod.loadRecord(st, PAYER) === null
+          && stuck.length === 1 && stuck[0].paySig === "S".repeat(88) && stuck[0].amountUi === "50" && stuck[0].code === code && stuck[0].error === error, { out, stuck });
+    }
+    const st = seeded();
+    const out = await redeem(st, async () => resp(200, { success: false, error: "the payment transaction failed on chain", code: "tx_failed", definitive: true }));
+    ok("a transaction that FAILED on chain moved nothing → nothing is kept as 'needs attention'", out.kind === "refused" && out.stuck === false && mod.loadStuck(st, PAYER).length === 0, out);
+    const st2 = seeded();
+    await redeem(st2, async () => resp(200, { success: false, error: "x", code: "outside_window", definitive: true }));
+    ok("a new payment's record does not erase the 'needs attention' entry (separate key)", (() => { mod.saveRecord(st2, { wallet: PAYER, paySig: "N".repeat(88), skrQuote: "q", payIntent: INTENT, at: Date.now(), amountUi: "50" }); return mod.loadStuck(st2, PAYER).length === 1 && !!mod.loadRecord(st2, PAYER); })());
+    mod.dismissStuck(st2, PAYER, "S".repeat(88));
+    ok("only the person's own Dismiss removes it", mod.loadStuck(st2, PAYER).length === 0);
+    const cap = memStorage();
+    for (let i = 0; i < 8; i++) mod.saveStuck(cap, { wallet: PAYER, paySig: "P" + i, amountUi: "1", code: "x", error: "y", at: i });
+    ok("the list is bounded (newest 5)", mod.loadStuck(cap, PAYER).length === 5 && mod.loadStuck(cap, PAYER)[4].paySig === "P7");
   }
   {
     // pay intent expiry

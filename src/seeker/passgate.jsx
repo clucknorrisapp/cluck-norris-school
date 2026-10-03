@@ -345,7 +345,7 @@ export function PassGate({ pass, wallet, tool, onUnlocked, onClose }) {
         {wallet.connected ? stuck.map((s) => (
           <div key={s.paySig} className="seeker-burn-outcome seeker-burn-outcome-failed" role="alert">
             <p className="seeker-burn-outcome-title">⚠️ {t("Needs attention")}</p>
-            <p>{tf("A payment of {amount} SKR was sent but could not buy a pass: {reason}. Your SKR is not lost — keep this signature and contact support: {sig}",
+            <p>{tf("A payment of {amount} SKR was sent but could not buy a pass: {reason}. Keep this signature and contact support: {sig}",
                    { amount: s.amountUi || "?", reason: s.error || s.code || "?", sig: s.paySig })}</p>
             <div className="seeker-burn-outcome-actions">
               <button type="button" className="seeker-btn seeker-btn-quiet" onClick={() => { dismissStuck(store(), wallet.address, s.paySig); setStuck(loadStuck(store(), wallet.address)); }}>{t("Dismiss")}</button>

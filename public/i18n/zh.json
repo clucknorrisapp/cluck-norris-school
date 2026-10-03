@@ -3065,5 +3065,8 @@
   "To: {receiver}": "收款方：{receiver}",
   "You hold about {have} SKR — this pass needs {need}. Swap for SKR in this app, then come back.": "你持有约 {have} SKR——这个通行证需要 {need}。请先在这个 App 里 swap 换取 SKR，再回来。",
   "Your payment is sent, but the pass service could not confirm it yet. Nothing new was charged — check it again in a moment.": "你的付款已发出，但通行证服务暂时无法确认。没有新的扣款——请稍后再检查。",
-  "Your payment may still be landing — check it before paying again.": "你的付款可能仍在到账中——再次付款前请先检查。"
+  "Your payment may still be landing — check it before paying again.": "你的付款可能仍在到账中——再次付款前请先检查。",
+  "A payment of {amount} SKR was sent but could not buy a pass: {reason}. Keep this signature and contact support: {sig}": "一笔 {amount} SKR 的付款已发出，但未能兑换通行证：{reason}。请保存这个签名并联系支持：{sig}",
+  "Dismiss": "忽略",
+  "Needs attention": "需要处理"
 }

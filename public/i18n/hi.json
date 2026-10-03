@@ -3065,5 +3065,8 @@
   "To: {receiver}": "प्राप्तकर्ता: {receiver}",
   "You hold about {have} SKR — this pass needs {need}. Swap for SKR in this app, then come back.": "आपके पास लगभग {have} SKR है — इस पास के लिए {need} चाहिए। इस ऐप में SKR के लिए swap करें, फिर वापस आएँ।",
   "Your payment is sent, but the pass service could not confirm it yet. Nothing new was charged — check it again in a moment.": "आपका भुगतान भेजा जा चुका है, पर पास सेवा अभी उसकी पुष्टि नहीं कर सकी। कुछ नया नहीं काटा गया — थोड़ी देर में फिर जाँचें।",
-  "Your payment may still be landing — check it before paying again.": "आपका भुगतान अभी पहुँच रहा हो सकता है — दोबारा भुगतान करने से पहले उसे जाँचें।"
+  "Your payment may still be landing — check it before paying again.": "आपका भुगतान अभी पहुँच रहा हो सकता है — दोबारा भुगतान करने से पहले उसे जाँचें।",
+  "A payment of {amount} SKR was sent but could not buy a pass: {reason}. Keep this signature and contact support: {sig}": "{amount} SKR का भुगतान भेजा गया, पर वह पास नहीं खरीद सका: {reason}। इस सिग्नेचर को संभालकर रखें और सपोर्ट से संपर्क करें: {sig}",
+  "Dismiss": "हटाएँ",
+  "Needs attention": "ध्यान देने की ज़रूरत है"
 }

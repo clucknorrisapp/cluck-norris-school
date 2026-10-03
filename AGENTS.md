@@ -410,7 +410,14 @@ in one click, or sign a message where the gate is *ownership* rather than paymen
   fee payer), the SKR rose at `SOL_UNLOCK_WALLET`, and a parsed SPL transfer between them is the
   second witness; the payment must sit inside the quote's two-sided window on CHAIN time (the quote is
   authenticated without a clock check); it shares the `"sol:" + sig` consumed-signature namespace with
-  the SOL pass. No SKR price → no quote (503) — SKR never graces; an RPC outage is `unavailable`, never
+  the SOL pass. **One payment, one pass, one payer** (review of #421): a transaction in which more than
+  one owner's SKR fell is refused for everyone, and an SKR redemption writes `"skrpayer:"+sig+":"+wallet`
+  and `"skr:"+sig` BEFORE the shared `"sol:"+sig` commit key — recovery needs that record for that wallet
+  on that leg, so a co-signer's 1-unit leg can never "recover" someone else's payment and a SOL-consumed
+  signature never recovers on the SKR leg (or the reverse). **The quote has its own price guard**
+  (`quotePriceGate`): at least 3 accepted ticks in the last 24 h and the price within 3× of their median —
+  `acceptPrice`'s single 6 h anchor lets a cold start or a re-anchoring ratchet through, which is fine for
+  the free-tier door and not for an amount to send. No SKR price → no quote (503) — SKR never graces; an RPC outage is `unavailable`, never
   a denial or a grant. The website and the store editions do not offer it (`skr-quote` is in the
   store edition's `forbidden`; the endpoint is in `SEEKER_API_RE`). Tests:
   `scripts/tool-pass-skr-test.cjs` (server end to end), `scripts/seeker-skr-pay-test.cjs` (client).
