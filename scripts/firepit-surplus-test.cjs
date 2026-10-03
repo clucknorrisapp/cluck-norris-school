@@ -90,9 +90,10 @@ const JUNK_ACCT = { // a priced token with a balance — the one row here that a
   symbol: "JUNK", name: "Junk", logo: null, priceUsd: 0.5, valueUsd: 0.5, priceKnown: true,
   rentExemptLamports: MIN_165, surplusLamports: 0, surplusEligible: false, empty: false, isNft: false,
 };
+const SCAN_SLOT = 510;   // the slot /api/burn-scan says its account list was read at (Codex r3: the proof must be no older)
 function scanFixture(overrides) {
   return Object.assign({
-    success: true, wallet: WALLET, count: 3, capped: false,
+    success: true, wallet: WALLET, slot: SCAN_SLOT, count: 3, capped: false,
     rentSolTotal: 0, valueUsdTotal: 0,
     surplusAvailable: true, surplusLamportsTotal: REAL_ACCT.surplusLamports, surplusSolTotal: REAL_ACCT.surplusLamports / 1e9,
     accounts: [REAL_ACCT, WSOL_ACCT, UNKNOWN_MIN_ACCT, JUNK_ACCT],
@@ -183,7 +184,7 @@ let stop = () => {};
       // and the chain past that slot has the account at today's minimum (the surplus is gone).
       if (c.method === "getMultipleAccounts") {
         proofReads.push(c.params);
-        if (!(c.params[1] && c.params[1].minContextSlot === TX_SLOT)) return { jsonrpc: "2.0", id: c.id, error: { code: -32602, message: "test: wrong minContextSlot" } };
+        if (!(c.params[1] && c.params[1].minContextSlot === Math.max(TX_SLOT, SCAN_SLOT))) return { jsonrpc: "2.0", id: c.id, error: { code: -32602, message: "test: wrong minContextSlot" } };
         return { jsonrpc: "2.0", id: c.id, result: { context: { slot: TX_SLOT + 20 }, value: c.params[0].map(() => ({ lamports: MIN_165, owner: TOKEN_CLASSIC, data: ["", "base64"], executable: false, rentEpoch: 0 })) } };
       }
       if (c.method === "getSignatureStatuses") return { jsonrpc: "2.0", id: c.id, result: { context: { slot: 1 }, value: [{ confirmationStatus: "confirmed", err: null, slot: TX_SLOT }] } };
@@ -320,8 +321,8 @@ let stop = () => {};
   ok("Rescan really re-reads the chain (a new scan request went out)", scanCalls > callsBefore, { callsBefore, scanCalls });
   const rowsAfterRescan = await page.$eval("#rows-surplus", (el) => el.textContent);
   ok("a lagging node's stale answer does not bring back the surplus that was just withdrawn", !/USD1/.test(rowsAfterRescan), rowsAfterRescan.slice(0, 200));
-  ok("…because the chain itself, read at our transaction's slot, said so (one proof read, that account only)",
-    proofReads.length >= 1 && proofReads.every((p) => p[0].length === 1 && p[0][0] === REAL_ACCT.tokenAccount && p[1].minContextSlot === TX_SLOT), proofReads);
+  ok("…because the chain itself, read at max(our transaction's slot, the scan's slot), said so (one proof read, that account only)",
+    proofReads.length >= 1 && proofReads.every((p) => p[0].length === 1 && p[0][0] === REAL_ACCT.tokenAccount && p[1].minContextSlot === Math.max(TX_SLOT, SCAN_SLOT)), proofReads);
 
   // Codex review of #471: address + elapsed time could not tell a lagging view from a GENUINE new
   // deposit. A deposit after the withdrawal changes the lamports, so it must be offered again even

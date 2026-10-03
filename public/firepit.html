@@ -417,6 +417,9 @@ function scanErrMsg(e){
 //      absent -> stale, hidden; closed + present -> recreated, shown; withdrawn -> the verified
 //      lamports replace the row's.
 //   3. No proof means no hiding: unknown tx slot, or no node at that slot after a few tries.
+//   4. (Codex round 3) The proof must be no older than the SCAN it overrides: the scan carries its
+//      read slot (/api/burn-scan `slot`) and the proof needs context.slot >= max(txSlot, scanSlot).
+//      An unknown scan slot is no proof at all.
 var RECENT_MS = 120000;
 var recentlyClosed = {};      // tokenAccount -> { at, amountRaw, lamports, txSlot }
 var recentlyWithdrawn = {};   // tokenAccount -> { at, priorLamports, txSlot }
@@ -438,7 +441,8 @@ async function reconcileRecent(list, opts){
     else if (w && typeof w.txSlot === "number" && a.rentLamports === w.priorLamports) sus.push({ a: a, kind: "withdrawn", txSlot: w.txSlot });
   });
   if (!sus.length) return rows;
-  var minSlot = Math.max.apply(null, sus.map(function(x){ return x.txSlot; }));
+  if (!(typeof o.scanSlot === "number" && isFinite(o.scanSlot) && Math.floor(o.scanSlot) === o.scanSlot && o.scanSlot >= 0)) return rows;   // unknown scan slot -> no proof -> hide nothing
+  var minSlot = Math.max.apply(null, [o.scanSlot].concat(sus.map(function(x){ return x.txSlot; })));
   var infos = null;
   for (var i = 0; i < 3 && !infos; i++){
     try {
@@ -468,7 +472,7 @@ async function scan(){
   setStatus($("status"), "Scanning your wallet on-chain…");
   try {
     var r = await fetchScan(wPubkey, 3);
-    accounts = await reconcileRecent(r.accounts || []);
+    accounts = await reconcileRecent(r.accounts || [], { scanSlot: r.slot });
     // Strict: a MISSING field (older server) must read the same as an explicit false (P2-3).
     surplusAvailable = r.surplusAvailable === true;
     selected = {};
@@ -501,7 +505,7 @@ async function rescanUntilClean(burnedSet){
     try {
       var r2 = await fetchScan(wPubkey, 1);   // one try per loop; the loop itself is the retry
       if (!r2 || !r2.success) continue;
-      var fresh = await reconcileRecent(r2.accounts || []);
+      var fresh = await reconcileRecent(r2.accounts || [], { scanSlot: r2.slot });
       var lingering = (r2.accounts || []).some(function(a){ return burnedSet[a.tokenAccount]; });
       if (!lingering){
         accounts = fresh; selected = {};
@@ -813,7 +817,7 @@ async function doBurn(){
     var freshScan = await fetchScan(wPubkey, 1);
     if (freshScan && freshScan.success){
       var freshById = {};
-      (await reconcileRecent(freshScan.accounts || [])).forEach(function(a){ freshById[a.tokenAccount] = a; });
+      (await reconcileRecent(freshScan.accounts || [], { scanSlot: freshScan.slot })).forEach(function(a){ freshById[a.tokenAccount] = a; });
       sel = sel.filter(function(a){
         var f = freshById[a.tokenAccount];
         if (!f || !burnable(f)) return false;
@@ -955,7 +959,7 @@ async function doSurplusReclaim(){
     var freshScan = await fetchScan(wPubkey, 1);
     if (freshScan && freshScan.success){
       var freshById = {};
-      (await reconcileRecent(freshScan.accounts || [])).forEach(function(a){ freshById[a.tokenAccount] = a; });
+      (await reconcileRecent(freshScan.accounts || [], { scanSlot: freshScan.slot })).forEach(function(a){ freshById[a.tokenAccount] = a; });
       sel = sel.filter(function(a){ var f = freshById[a.tokenAccount]; return f && f.surplusEligible; })
                .map(function(a){ return freshById[a.tokenAccount]; });
     }
@@ -1083,7 +1087,7 @@ async function rescanUntilCleanSurplus(touchedSet, requestedSol){
             actualLamports += Math.max(0, priorLamports[a.tokenAccount] - a.rentLamports);
           }
         });
-        accounts = await reconcileRecent(fresh);
+        accounts = await reconcileRecent(fresh, { scanSlot: r2.slot });
         surplusAvailable = r2.surplusAvailable === true;   // strict — see scan()'s comment (P2-3)
         render(); applyScanFoot(fresh.length, r2.capped);
         setStatus($("status"), "💧 Confirmed — " + fmtSol(actualLamports/LAMPORTS) + " actually arrived in your wallet (requested ~" + fmtSol(requestedSol) + ").", "ok");

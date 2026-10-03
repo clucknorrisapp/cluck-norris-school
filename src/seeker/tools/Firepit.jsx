@@ -214,7 +214,9 @@ function stampTxSlot(entry, sig) {
   if (!sig) return;
   try { signatureSlot(rpcFn(), sig).then((slot) => { if (slot != null) entry.txSlot = slot; }); } catch (_) { /* no RPC layer: no proof, so nothing is hidden */ }
 }
-const reconcile = (list, recent) => { let rpc = null; try { rpc = rpcFn(); } catch (_) {} return reconcileRecent(list, recent, rpc); };
+// scanSlot comes from the SAME /api/burn-scan response that produced `list` — a proof read has to be
+// no older than the scan it overrides (firepit-recent.js rule 4).
+const reconcile = (list, recent, scanSlot) => { let rpc = null; try { rpc = rpcFn(); } catch (_) {} return reconcileRecent(list, recent, rpc, { scanSlot }); };
 
 function useToggleSet(initial) {
   const [set, setSet] = React.useState(initial || (() => new Set()));
@@ -318,7 +320,7 @@ export default function FirepitPane({ wallet }) {
         setPhase("unavailable");
         return;
       }
-      const accounts = await reconcile(res.data.accounts, recentRef.current);
+      const accounts = await reconcile(res.data.accounts, recentRef.current, res.data.slot);
       if (ctrl.signal.aborted) return;
       setData({ ...res.data, accounts });
       // Pre-select the empty (rent-only) accounts, same as the desktop tool: reclaiming them is
@@ -398,7 +400,7 @@ export default function FirepitPane({ wallet }) {
     const res = await toolFetch(`/api/burn-scan?wallet=${encodeURIComponent(wallet.address)}`, { signal: ctrl.signal });
     if (res.kind === "aborted") return;
     if (!res.ok) { setConfirmPhase("error"); return; }
-    const freshAccounts = await reconcile(res.data.accounts, recentRef.current);
+    const freshAccounts = await reconcile(res.data.accounts, recentRef.current, res.data.slot);
     if (ctrl.signal.aborted) return;
     // Keep the underlying page in step with the same fresh read — never leave it showing an
     // older scan next to a sheet built from a newer one.
