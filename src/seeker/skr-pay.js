@@ -147,7 +147,10 @@ export async function paySkr({ provider, owner, quote, source, payIntent, storag
       const tx = buildSkrPayTx(web3, splTokenShim(), { payer: live, quote, source, blockhash: bh });
       const rec = { wallet: owner, paySig: null, attempt: true, skrQuote: quote.quote, payIntent, at: Date.now(),
         recentBlockhash: bh, lastValidBlockHeight: life && life.lastValidBlockHeight, amountUi: quote.amountUi,
-        amountRaw: String(quote.amountRaw), receiverAta: quote.receiverAta };
+        amountRaw: String(quote.amountRaw), receiverAta: quote.receiverAta,
+        // SERVER time (the quote's issuedAt): the only clock a chain-time search bound may come from.
+        // `at` above is the phone's clock and is used for nothing but the 8-day expiry of the record.
+        quoteIssuedAt: quote.issuedAt };
       saveRecord(storage, rec);   // throws → build throws → signSendConfirm returns "failed"; the wallet is never asked
       attempt = rec;              // only once it is really stored (a failed save must not look like an in-flight attempt)
       return tx;
@@ -263,37 +266,67 @@ export async function redeemRecord({ fetchFn, storage, wallet, refreshIntent }) 
     // Only a transaction that FAILED on chain moved nothing and has nothing to keep.
     const code = j.code || "";
     if (code !== "tx_failed") {
-      try { saveStuck(storage, { wallet, paySig: rec.paySig, amountUi: rec.amountUi || null, code, error: j.error || "", at: Date.now() }); } catch (_) { /* the refusal is still shown */ }
+      // The active record is cleared ONLY after the support entry is safely stored (review of #421
+      // round 2: a storage-exhaustion failure here used to be swallowed and the only evidence — the
+      // signature — deleted anyway). If the save fails the active record stays exactly as it is, it
+      // still carries the signature, and the caller shows the support state from it.
+      try { saveStuck(storage, { wallet, paySig: rec.paySig, amountUi: rec.amountUi || null, code, error: j.error || "", at: Date.now() }); }
+      catch (_) { return { kind: "refused", error: j.error || "", code, sig: rec.paySig, amountUi: rec.amountUi || null, stuck: false, keptActive: true }; }
     }
     clearRecord(storage, wallet);
-    return { kind: "refused", error: j.error || "", code, sig: rec.paySig, stuck: code !== "tx_failed" };
+    return { kind: "refused", error: j.error || "", code, sig: rec.paySig, amountUi: rec.amountUi || null, stuck: code !== "tx_failed" };
   }
   // Everything else — 5xx, an unavailable chain read, "not visible yet", a store that could not
   // record, a malformed body — is "not yet", and the record stays.
   return { kind: "retry", error: (j && j.error) || null, status };
 }
 
-// Did the wallet's attempt reach the chain? Looks through the payer's most recent signatures for a
-// parsed SPL TransferChecked of SKR from this wallet to the quote's receiving account for exactly the
-// quoted amount, after the attempt began. → the signature, or null. Throws on an RPC failure (the
-// caller then says "cannot tell", never "it did not happen").
+// Did the wallet's attempt reach the chain? → { sig, complete }.
+//   sig       the signature of a parsed SPL TransferChecked of SKR from this wallet to the quote's
+//             receiving account for exactly the quoted amount, or null;
+//   complete  true ONLY when the search PROVABLY covered every signature that could be the payment:
+//             it paged (getSignaturesForAddress, before=) back past the lower time bound, every
+//             candidate's details were read, and no RPC call failed. A page cap hit, a candidate
+//             whose getTransaction is null/errored/has no meta, or any RPC error means "cannot tell",
+//             and an incomplete search NEVER releases a record (review of #421 round 2: an expired
+//             blockhash proves the payment cannot land in future, not that it never landed).
+// The lower bound is SERVER time — the quote's issuedAt (a payment cannot predate the quote that
+// priced it) minus a margin — never the phone's clock (a phone 10 minutes fast skipped the real
+// payment). Throws never escape: a failure is reported as incomplete.
+const SEARCH_PAGE = 100, SEARCH_MAX_PAGES = 10, SEARCH_MAX_CANDIDATES = 150, SEARCH_MARGIN_MS = 10 * 60e3;
 async function findAttempt(rpc, rec) {
-  const sigs = await rpc("getSignaturesForAddress", [rec.wallet, { limit: 25 }]);
-  if (!Array.isArray(sigs)) throw new Error("no signature list");
-  for (const s of sigs) {
-    if (!s || s.err || !s.signature) continue;
-    if (s.blockTime && s.blockTime * 1000 < rec.at - 120e3) continue;
-    const tx = await rpc("getTransaction", [s.signature, { encoding: "jsonParsed", maxSupportedTransactionVersion: 0, commitment: "confirmed" }]);
-    if (!tx || !tx.meta || tx.meta.err) continue;
-    const ixs = ((tx.transaction && tx.transaction.message && tx.transaction.message.instructions) || []).slice();
-    for (const g of tx.meta.innerInstructions || []) ixs.push(...(g.instructions || []));
-    for (const ix of ixs) {
-      const p = ix && ix.parsed, i = p && p.info;
-      if (p && p.type === "transferChecked" && i && i.mint === SKR_MINT && i.destination === rec.receiverAta
-          && i.authority === rec.wallet && i.tokenAmount && String(i.tokenAmount.amount) === String(rec.amountRaw)) return s.signature;
+  const issued = Number(rec.quoteIssuedAt);
+  if (!Number.isFinite(issued)) return { sig: null, complete: false };      // no server-time bound recorded: cannot prove anything
+  const lowerSec = (issued - SEARCH_MARGIN_MS) / 1000;
+  let before, candidates = [], complete = false;
+  try {
+    for (let page = 0; page < SEARCH_MAX_PAGES && !complete; page++) {
+      const list = await rpc("getSignaturesForAddress", [rec.wallet, before ? { limit: SEARCH_PAGE, before } : { limit: SEARCH_PAGE }]);
+      if (!Array.isArray(list)) return { sig: null, complete: false };
+      for (const e of list) {
+        if (!e || !e.signature) return { sig: null, complete: false };
+        if (e.blockTime && e.blockTime < lowerSec) { complete = true; break; }   // newest-first: everything after this is older than the quote
+        if (!e.err) candidates.push(e.signature);
+      }
+      if (!complete && list.length < SEARCH_PAGE) complete = true;              // the wallet's history ends here
+      if (list.length) before = list[list.length - 1].signature;
     }
-  }
-  return null;
+    if (!complete) return { sig: null, complete: false };                       // page cap hit before the bound
+    if (candidates.length > SEARCH_MAX_CANDIDATES) return { sig: null, complete: false };
+    for (const sig of candidates) {
+      const tx = await rpc("getTransaction", [sig, { encoding: "jsonParsed", maxSupportedTransactionVersion: 0, commitment: "confirmed" }]);
+      if (!tx || !tx.meta) return { sig: null, complete: false };               // details unavailable → cannot rule it out
+      if (tx.meta.err) continue;
+      const ixs = ((tx.transaction && tx.transaction.message && tx.transaction.message.instructions) || []).slice();
+      for (const g of tx.meta.innerInstructions || []) ixs.push(...(g.instructions || []));
+      for (const ix of ixs) {
+        const p = ix && ix.parsed, i = p && p.info;
+        if (p && p.type === "transferChecked" && i && i.mint === SKR_MINT && i.destination === rec.receiverAta
+            && i.authority === rec.wallet && i.tokenAmount && String(i.tokenAmount.amount) === String(rec.amountRaw)) return { sig, complete: true };
+      }
+    }
+    return { sig: null, complete: true };
+  } catch (_) { return { sig: null, complete: false }; }
 }
 
 // "Check payment": redeem; if the chain has not shown it, ask whether the transaction can still
@@ -310,12 +343,14 @@ export async function checkPayment({ fetchFn, storage, wallet, rpc, refreshInten
     try {
       const [h, valid] = await Promise.all([rpc("getBlockHeight", [{ commitment: "confirmed" }]), rec.recentBlockhash ? rpc("isBlockhashValid", [rec.recentBlockhash, { commitment: "confirmed" }]) : null]);
       dead = typeof h === "number" && rec.lastValidBlockHeight != null && h > rec.lastValidBlockHeight && !!valid && valid.value === false;
-    } catch (_) { return { kind: "retry", error: null }; }
-    let found;
-    try { found = await findAttempt(rpc, rec); } catch (_) { return { kind: "retry", error: null }; }
-    if (found) { rec = { ...rec, paySig: found, attempt: false }; try { saveRecord(storage, rec); } catch (_) { /* redeem below still works from memory? no — keep the attempt */ return { kind: "retry", error: null }; } }
-    else if (dead) { clearRecord(storage, wallet); return { kind: "never-landed", error: null }; }
-    else return { kind: "retry", error: null };
+    } catch (_) { return { kind: "cannot-confirm", error: null }; }
+    const found = await findAttempt(rpc, rec);
+    if (found.sig) {
+      rec = { ...rec, paySig: found.sig, attempt: false };
+      try { saveRecord(storage, rec); } catch (_) { return { kind: "cannot-confirm", error: null }; }   // keep the attempt; try again
+    } else if (dead && found.complete) { clearRecord(storage, wallet); return { kind: "never-landed", error: null }; }
+    else if (!found.complete) return { kind: "cannot-confirm", error: null };   // incomplete search: never a release, whatever the blockhash says
+    else return { kind: "retry", error: null };                                  // searched everything, nothing yet, but it could still land
   }
   const first = await redeemRecord({ fetchFn, storage, wallet, refreshIntent });
   if (first.kind !== "retry") return first;

@@ -244,44 +244,117 @@ const T22 = "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb";
     r = await payAndRedeem({ storage: st, prov: sendOnly({ signAndSendTransaction: async () => { const e = new Error("User rejected the request."); e.code = 4001; throw e; } }), fetchImpl: async () => resp(200, grantBody) });
     ok("send-only wallet declines → 'declined', the attempt is cleared", r.res.status === "declined" && mod.loadRecord(st, PAYER) === null, r);
   }
-  console.log("\n4c. resolving an ATTEMPT (no signature yet) with Check payment\n");
+  console.log("\n4c. resolving an ATTEMPT (no signature yet): only a PROVABLY complete search releases it (Codex, #421 round 2)\n");
   {
-    const mkAttempt = (over = {}) => { const st = memStorage(); mod.saveRecord(st, { wallet: PAYER, paySig: null, attempt: true, skrQuote: "q.t", payIntent: INTENT, at: Date.now(), recentBlockhash: randHash(), lastValidBlockHeight: 1000, amountUi: "50", amountRaw: "50000000", receiverAta: quote.receiverAta, ...over }); return st; };
-    const FOUND = "F".repeat(88);
+    const ISSUED = Date.now();                         // the quote's SERVER issuedAt
+    const sec = (ms) => Math.floor(ms / 1000);
+    const mkAttempt = (over = {}, storage) => { const st = storage || memStorage(); mod.saveRecord(st, { wallet: PAYER, paySig: null, attempt: true, skrQuote: "q.t", payIntent: INTENT, at: Date.now(), recentBlockhash: randHash(), lastValidBlockHeight: 1000, amountUi: "50", amountRaw: "50000000", receiverAta: quote.receiverAta, quoteIssuedAt: ISSUED, ...over }); return st; };
+    const PAY = "F".repeat(88);
     const ixOf = (o = {}) => ({ parsed: { type: "transferChecked", info: { mint: SKR_MINT, destination: quote.receiverAta, authority: PAYER, tokenAmount: { amount: "50000000" }, ...o } } });
-    const chainRpc = (opts) => async (method, params) => {
-      if (method === "getBlockHeight") return opts.height;
-      if (method === "isBlockhashValid") return { value: opts.valid };
-      if (method === "getSignaturesForAddress") { if (opts.sigsThrow) throw new Error("rpc"); return opts.sigs || []; }
-      if (method === "getTransaction") return opts.txs[params[0]] || null;
-      throw new Error("unexpected " + method);
+    const txOf = (ix) => ({ meta: { err: null, innerInstructions: [] }, transaction: { message: { instructions: [ix] } } });
+    const noise = (n, base = 100) => Array.from({ length: n }, (_, i) => ({ signature: "N" + i + "x".repeat(60), err: null, blockTime: sec(ISSUED) + base + (n - i) }));   // newest first
+    const old = (n) => Array.from({ length: n }, (_, i) => ({ signature: "O" + i + "x".repeat(60), err: null, blockTime: sec(ISSUED) - 3600 - i }));   // an hour before the quote
+    // A chain whose getSignaturesForAddress honours limit + before, like the real one.
+    const chain = (o) => {
+      const calls = { sigs: 0, txs: 0 };
+      const rpcFn2 = async (method, params) => {
+        if (method === "getBlockHeight") return o.height;
+        if (method === "isBlockhashValid") return { value: o.valid };
+        if (method === "getSignaturesForAddress") {
+          calls.sigs++; if (o.sigsThrowOnPage && calls.sigs === o.sigsThrowOnPage) throw new Error("rpc"); if (o.sigsThrow) throw new Error("rpc");
+          const cfg = params[1] || {}; const i = cfg.before ? o.sigs.findIndex((e) => e.signature === cfg.before) + 1 : 0;
+          return o.sigs.slice(i, i + (cfg.limit || 1000));
+        }
+        if (method === "getTransaction") { calls.txs++; if (o.txThrow && o.txThrow === params[0]) throw new Error("rpc"); return Object.prototype.hasOwnProperty.call(o.txs || {}, params[0]) ? o.txs[params[0]] : txOf({ parsed: { type: "transfer", info: {} } }); }
+        throw new Error("unexpected " + method);
+      };
+      rpcFn2.calls = calls; return rpcFn2;
     };
-    const tx = (ix) => ({ meta: { err: null, innerInstructions: [] }, transaction: { message: { instructions: [ix] } } });
+    const payEntry = (extra = 0) => ({ signature: PAY, err: null, blockTime: sec(ISSUED) + 20 + extra });
     const nf = async () => resp(200, grantBody);
+    const kept = (st) => !!mod.loadRecord(st, PAYER);
     let st = mkAttempt();
     ok("an attempt cannot be redeemed (no signature) → retry, nothing posted", (await mod.redeemRecord({ fetchFn: async () => { throw new Error("must not post"); }, storage: st, wallet: PAYER })).kind === "retry");
-    // found on chain → signature recorded → redeemed
+
     let posted = null;
-    let out = await mod.checkPayment({ fetchFn: async (u, o) => { posted = JSON.parse(o.body); return resp(200, grantBody); }, storage: st, wallet: PAYER,
-      rpc: chainRpc({ height: 100, valid: true, sigs: [{ signature: FOUND, err: null, blockTime: Math.floor(Date.now() / 1000) }], txs: { [FOUND]: tx(ixOf()) } }) });
-    ok("the chain search finds the wallet's payment (right mint, right account, right amount, authority = the wallet) → redeemed with THAT signature", out.kind === "granted" && posted && posted.paySig === FOUND, { out, posted });
+    let out = await mod.checkPayment({ fetchFn: async (u, o) => { posted = JSON.parse(o.body); return resp(200, grantBody); }, storage: st, wallet: PAYER, rpc: chain({ height: 100, valid: true, sigs: [payEntry()], txs: { [PAY]: txOf(ixOf()) } }) });
+    ok("the search finds the wallet's payment (mint, account, exact amount, authority = the wallet) → redeemed with THAT signature", out.kind === "granted" && posted && posted.paySig === PAY, { out, posted });
+
     for (const [label, ix] of [["another amount", ixOf({ tokenAmount: { amount: "49999999" } })], ["another destination", ixOf({ destination: "SomeOtherAccount1111111111111111111111111111" })], ["another authority", ixOf({ authority: web3.Keypair.generate().publicKey.toBase58() })], ["another mint", ixOf({ mint: web3.Keypair.generate().publicKey.toBase58() })]]) {
       st = mkAttempt();
-      out = await mod.checkPayment({ fetchFn: nf, storage: st, wallet: PAYER, rpc: chainRpc({ height: 100, valid: true, sigs: [{ signature: FOUND, err: null, blockTime: Math.floor(Date.now() / 1000) }], txs: { [FOUND]: tx(ix) } }) });
-      ok("a lookalike transaction (" + label + ") is not taken for the payment; blockhash still live → KEPT", out.kind === "retry" && !!mod.loadRecord(st, PAYER), out);
+      out = await mod.checkPayment({ fetchFn: nf, storage: st, wallet: PAYER, rpc: chain({ height: 100, valid: true, sigs: [payEntry(), ...old(3)], txs: { [PAY]: txOf(ix) } }) });
+      ok("a lookalike transaction (" + label + ") is not taken for the payment; blockhash still live → KEPT", out.kind === "retry" && kept(st), out);
     }
+
+    // ── P2: the search must be COMPLETE before anything is released ──
     st = mkAttempt();
-    out = await mod.checkPayment({ fetchFn: nf, storage: st, wallet: PAYER, rpc: chainRpc({ height: 5000, valid: false, sigs: [], txs: {} }) });
-    ok("nothing on chain AND the blockhash proven dead → 'never-landed', attempt cleared", out.kind === "never-landed" && mod.loadRecord(st, PAYER) === null, out);
+    out = await mod.checkPayment({ fetchFn: nf, storage: st, wallet: PAYER, rpc: chain({ height: 5000, valid: false, sigs: [...noise(3), ...old(5)], txs: {} }) });
+    ok("searched back past the quote's time bound, nothing there, blockhash proven dead → 'never-landed' (the ONE release)", out.kind === "never-landed" && !kept(st), out);
+
     st = mkAttempt();
-    out = await mod.checkPayment({ fetchFn: nf, storage: st, wallet: PAYER, rpc: chainRpc({ height: 5000, valid: true, sigs: [], txs: {} }) });
-    ok("nothing found but the blockhash is still valid → KEPT", out.kind === "retry" && !!mod.loadRecord(st, PAYER), out);
+    const deep = [...noise(119), payEntry(), ...old(5)];     // the payment is the 120th newest — beyond the first page of 100
+    out = await mod.checkPayment({ fetchFn: nf, storage: st, wallet: PAYER, rpc: chain({ height: 5000, valid: false, sigs: deep, txs: { [PAY]: txOf(ixOf()) } }) });
+    ok("PAYMENT BEYOND THE FIRST PAGE (blockhash dead) → found by paging, redeemed, NOT released as never-landed", out.kind === "granted", out);
+
     st = mkAttempt();
-    out = await mod.checkPayment({ fetchFn: nf, storage: st, wallet: PAYER, rpc: chainRpc({ height: 5000, valid: false, sigsThrow: true, txs: {} }) });
-    ok("the search itself fails (RPC) → 'cannot tell' → KEPT, never 'it did not happen'", out.kind === "retry" && !!mod.loadRecord(st, PAYER), out);
+    out = await mod.checkPayment({ fetchFn: nf, storage: st, wallet: PAYER, rpc: chain({ height: 5000, valid: false, sigs: noise(1200), txs: {} }) });
+    ok("the page cap is hit before the time bound (busy wallet) → 'cannot-confirm', record KEPT — never never-landed", out.kind === "cannot-confirm" && kept(st), out);
+
     st = mkAttempt();
-    out = await mod.checkPayment({ fetchFn: nf, storage: st, wallet: PAYER, rpc: chainRpc({ height: 5000, valid: false, sigs: [{ signature: FOUND, err: null, blockTime: Math.floor(Date.now() / 1000) }], txs: { [FOUND]: tx(ixOf()) } }) });
-    ok("dead blockhash but the payment IS on chain → found and redeemed, not released", out.kind === "granted", out);
+    out = await mod.checkPayment({ fetchFn: nf, storage: st, wallet: PAYER, rpc: chain({ height: 5000, valid: false, sigs: [payEntry(), ...old(3)], txs: { [PAY]: null } }) });
+    ok("getTransaction is NULL for the real payment (blockhash dead) → 'cannot-confirm', KEPT", out.kind === "cannot-confirm" && kept(st), out);
+    st = mkAttempt();
+    out = await mod.checkPayment({ fetchFn: nf, storage: st, wallet: PAYER, rpc: chain({ height: 5000, valid: false, sigs: [payEntry(), ...old(3)], txs: { [PAY]: { meta: null } } }) });
+    ok("a candidate with no meta is also 'cannot-confirm', KEPT", out.kind === "cannot-confirm" && kept(st), out);
+    st = mkAttempt();
+    out = await mod.checkPayment({ fetchFn: nf, storage: st, wallet: PAYER, rpc: chain({ height: 5000, valid: false, sigs: [payEntry(), ...old(3)], txThrow: PAY, txs: {} }) });
+    ok("getTransaction ERRORS mid-search → 'cannot-confirm', KEPT", out.kind === "cannot-confirm" && kept(st), out);
+    st = mkAttempt();
+    out = await mod.checkPayment({ fetchFn: nf, storage: st, wallet: PAYER, rpc: chain({ height: 5000, valid: false, sigs: [...noise(150), ...old(3)], sigsThrowOnPage: 2, txs: {} }) });
+    ok("getSignaturesForAddress ERRORS on page 2 → 'cannot-confirm', KEPT", out.kind === "cannot-confirm" && kept(st), out);
+    st = mkAttempt();
+    out = await mod.checkPayment({ fetchFn: nf, storage: st, wallet: PAYER, rpc: async (m) => { throw new Error("rpc down"); } });
+    ok("every RPC call failing → 'cannot-confirm', KEPT", out.kind === "cannot-confirm" && kept(st), out);
+    st = mkAttempt({ quoteIssuedAt: undefined });
+    out = await mod.checkPayment({ fetchFn: nf, storage: st, wallet: PAYER, rpc: chain({ height: 5000, valid: false, sigs: old(3), txs: {} }) });
+    ok("an attempt with no server-time bound recorded can prove nothing → 'cannot-confirm', KEPT", out.kind === "cannot-confirm" && kept(st), out);
+    st = mkAttempt();
+    out = await mod.checkPayment({ fetchFn: nf, storage: st, wallet: PAYER, rpc: chain({ height: 5000, valid: true, sigs: old(3), txs: {} }) });
+    ok("searched everything, nothing, but the blockhash is still valid (it could still land) → KEPT, retry", out.kind === "retry" && kept(st), out);
+    st = mkAttempt();
+    out = await mod.checkPayment({ fetchFn: nf, storage: st, wallet: PAYER, rpc: chain({ height: 100, valid: false, sigs: old(3), txs: {} }) });
+    ok("height not past the limit → KEPT even if isBlockhashValid says false", out.kind === "retry" && kept(st), out);
+
+    // ── P2: no device timestamp is a chain-time bound ──
+    for (const skew of [+10 * 60e3, -10 * 60e3, +60 * 60e3, -60 * 60e3]) {
+      st = mkAttempt({ at: Date.now() + skew });          // the PHONE's clock: wrong by `skew`
+      out = await mod.checkPayment({ fetchFn: nf, storage: st, wallet: PAYER, rpc: chain({ height: 5000, valid: false, sigs: [payEntry(), ...old(3)], txs: { [PAY]: txOf(ixOf()) } }) });
+      ok("phone clock " + (skew > 0 ? "+" : "") + skew / 60e3 + " min off → the real payment is still found and redeemed (blockhash dead)", out.kind === "granted", out);
+    }
+    {
+      const src = fs.readFileSync(path.join(ROOT, "src", "seeker", "skr-pay.js"), "utf8");
+      const fn = src.slice(src.indexOf("async function findAttempt"), src.indexOf("// \"Check payment\""));
+      ok("source: findAttempt never reads rec.at or Date.now() (the phone's clock)", !/rec\.at\b|Date\.now\(/.test(fn));
+    }
+
+    // ── P2: the support entry is stored BEFORE the active record is cleared ──
+    {
+      const refuse = (code) => async () => resp(200, { success: false, error: "this payment landed after its quote expired", code, definitive: true });
+      const base = memStorage(); let breakStuck = true;
+      const stBroken = { ...base, setItem: (k, v) => { if (breakStuck && k.startsWith("clkn_seeker_skrstuck:")) throw new Error("QuotaExceededError"); return base.setItem(k, v); }, getItem: base.getItem, removeItem: base.removeItem };
+      mod.saveRecord(stBroken, { wallet: PAYER, paySig: "S".repeat(88), skrQuote: "q.t", payIntent: INTENT, at: Date.now(), amountUi: "50" });
+      let o = await mod.redeemRecord({ fetchFn: refuse("outside_window"), storage: stBroken, wallet: PAYER });
+      const act = mod.loadRecord(stBroken, PAYER);
+      ok("saveStuck throws (storage exhausted) → the ACTIVE record is NOT cleared and still carries the signature", o.kind === "refused" && o.keptActive === true && o.sig === "S".repeat(88) && act && act.paySig === "S".repeat(88) && mod.loadStuck(stBroken, PAYER).length === 0, { o, act });
+      breakStuck = false;
+      o = await mod.redeemRecord({ fetchFn: refuse("outside_window"), storage: stBroken, wallet: PAYER });
+      ok("…and once storage works, the same refusal stores the support entry FIRST and then clears the active record", o.kind === "refused" && !o.keptActive && mod.loadRecord(stBroken, PAYER) === null && mod.loadStuck(stBroken, PAYER).length === 1, o);
+      const order = []; const base2 = memStorage();
+      const stOrder = { setItem: (k, v) => { order.push(k.startsWith("clkn_seeker_skrstuck:") ? "stuck-saved" : "record-saved"); return base2.setItem(k, v); }, getItem: base2.getItem, removeItem: (k) => { order.push("record-cleared"); return base2.removeItem(k); } };
+      mod.saveRecord(stOrder, { wallet: PAYER, paySig: "T".repeat(88), skrQuote: "q.t", payIntent: INTENT, at: Date.now(), amountUi: "50" }); order.length = 0;
+      await mod.redeemRecord({ fetchFn: refuse("skr_quote_invalid"), storage: stOrder, wallet: PAYER });
+      ok("write order on a definitive refusal: support entry saved, THEN the active record cleared", order.join(",") === "stuck-saved,record-cleared", order);
+    }
   }
 
   // ═══ 5. the four outcomes stay apart ═══════════════════════════════════════════════════════

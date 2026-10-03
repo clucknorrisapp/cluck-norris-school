@@ -3068,5 +3068,6 @@
   "Your payment may still be landing — check it before paying again.": "Ödemen hâlâ ulaşıyor olabilir — tekrar ödemeden önce kontrol et.",
   "A payment of {amount} SKR was sent but could not buy a pass: {reason}. Keep this signature and contact support: {sig}": "{amount} SKR tutarında bir ödeme gönderildi ama geçiş satın alamadı: {reason}. Bu imzayı sakla ve destekle iletişime geç: {sig}",
   "Dismiss": "Kapat",
-  "Needs attention": "Dikkat gerekiyor"
+  "Needs attention": "Dikkat gerekiyor",
+  "We can't tell yet whether this payment went through. If SKR left your wallet, look in your wallet's history and contact support.": "Bu ödemenin gerçekleşip gerçekleşmediğini henüz bilemiyoruz. SKR cüzdanından çıktıysa cüzdanının geçmişine bak ve destekle iletişime geç."
 }

@@ -3068,5 +3068,6 @@
   "Your payment may still be landing — check it before paying again.": "Il tuo pagamento potrebbe essere ancora in arrivo — controllalo prima di pagare di nuovo.",
   "A payment of {amount} SKR was sent but could not buy a pass: {reason}. Keep this signature and contact support: {sig}": "È stato inviato un pagamento di {amount} SKR, ma non ha potuto acquistare un pass: {reason}. Conserva questa firma e contatta il supporto: {sig}",
   "Dismiss": "Ignora",
-  "Needs attention": "Richiede attenzione"
+  "Needs attention": "Richiede attenzione",
+  "We can't tell yet whether this payment went through. If SKR left your wallet, look in your wallet's history and contact support.": "Non possiamo ancora sapere se questo pagamento è andato a buon fine. Se SKR è uscito dal tuo wallet, controlla la cronologia del wallet e contatta il supporto."
 }

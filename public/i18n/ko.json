@@ -3068,5 +3068,6 @@
   "Your payment may still be landing — check it before paying again.": "결제가 아직 반영 중일 수 있어요 — 다시 결제하기 전에 먼저 확인해 주세요.",
   "A payment of {amount} SKR was sent but could not buy a pass: {reason}. Keep this signature and contact support: {sig}": "{amount} SKR 결제가 전송됐지만 패스를 받을 수 없었어요: {reason}. 이 서명을 보관하고 지원팀에 문의해 주세요: {sig}",
   "Dismiss": "닫기",
-  "Needs attention": "확인이 필요해요"
+  "Needs attention": "확인이 필요해요",
+  "We can't tell yet whether this payment went through. If SKR left your wallet, look in your wallet's history and contact support.": "이 결제가 완료됐는지 아직 확인할 수 없어요. SKR이 지갑에서 빠져나갔다면 지갑 내역을 확인하고 지원팀에 문의해 주세요."
 }

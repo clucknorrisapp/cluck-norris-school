@@ -3068,5 +3068,6 @@
   "Your payment may still be landing — check it before paying again.": "Thanh toán của bạn có thể vẫn đang được ghi nhận — hãy kiểm tra trước khi trả lần nữa.",
   "A payment of {amount} SKR was sent but could not buy a pass: {reason}. Keep this signature and contact support: {sig}": "Khoản thanh toán {amount} SKR đã được gửi nhưng không mua được pass: {reason}. Hãy giữ chữ ký này và liên hệ hỗ trợ: {sig}",
   "Dismiss": "Đóng",
-  "Needs attention": "Cần chú ý"
+  "Needs attention": "Cần chú ý",
+  "We can't tell yet whether this payment went through. If SKR left your wallet, look in your wallet's history and contact support.": "Hiện chưa thể biết khoản thanh toán này đã thành công hay chưa. Nếu SKR đã rời khỏi ví của bạn, hãy xem lịch sử ví và liên hệ hỗ trợ."
 }

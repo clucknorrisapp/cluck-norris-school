@@ -3068,5 +3068,6 @@
   "Your payment may still be landing — check it before paying again.": "Pembayaranmu mungkin masih masuk — periksa dulu sebelum membayar lagi.",
   "A payment of {amount} SKR was sent but could not buy a pass: {reason}. Keep this signature and contact support: {sig}": "Pembayaran {amount} SKR terkirim tetapi tidak bisa membeli pass: {reason}. Simpan tanda tangan ini dan hubungi dukungan: {sig}",
   "Dismiss": "Tutup",
-  "Needs attention": "Perlu perhatian"
+  "Needs attention": "Perlu perhatian",
+  "We can't tell yet whether this payment went through. If SKR left your wallet, look in your wallet's history and contact support.": "Kami belum bisa memastikan apakah pembayaran ini berhasil. Jika SKR keluar dari dompetmu, lihat riwayat dompetmu dan hubungi dukungan."
 }

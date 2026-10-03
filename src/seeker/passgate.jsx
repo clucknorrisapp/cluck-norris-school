@@ -161,6 +161,15 @@ export function PassGate({ pass, wallet, tool, onUnlocked, onClose }) {
       if (g) g.grant(out.days, "paid-skr", out.pass);
       setPayNote({ tone: "ok", text: tf("Paid — every heavy tool is unlocked for {days} days.", { days: out.days }) });
       onUnlocked();
+    } else if (out.kind === "refused" && out.keptActive) {
+      // The support entry could not be stored (storage full?), so the active record was NOT cleared:
+      // it still carries the signature. Show the support state straight from this answer.
+      setRec(loadRecord(store(), wallet.address));
+      setPayNote({ tone: "err", text: tf("A payment of {amount} SKR was sent but could not buy a pass: {reason}. Keep this signature and contact support: {sig}", { amount: out.amountUi || "?", reason: out.error || out.code || "?", sig: out.sig }) });
+    } else if (out.kind === "cannot-confirm") {
+      // The search for a payment we could not see was not complete (or an RPC call failed): kept, never released.
+      setRec(loadRecord(store(), wallet.address));
+      setPayNote({ tone: "warn", text: t("We can't tell yet whether this payment went through. If SKR left your wallet, look in your wallet's history and contact support.") });
     } else if (out.kind === "refused") {
       setRec(null);
       setStuck(loadStuck(store(), wallet.address));   // a payment that landed is kept, with its signature
