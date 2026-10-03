@@ -31,13 +31,24 @@
 // And checkPendingSwap is handed the REAL lastValidBlockHeight that came with the blockhash
 // (runRevoke returns it); with none, the send can never be judged expired.
 //
+// ⚠️ Codex round 3, P2 — the record used to be written only after the send came back `unconfirmed`,
+// so for the whole confirmation window (and any transport throw) nothing was persisted and a
+// remount offered Revoke again. Written at SIGN time was still too late for a wallet that signs and
+// sends in one operation, so it is now written BEFORE THE WALLET IS ASKED (sign.js `beforeSign`),
+// with `sig: null`; the signature is filled in when the wallet returns it (`onSigned`). If it
+// cannot be saved the wallet is never asked (fail closed). A `sig: null` record blocks Revoke and
+// shows the watching card exactly like a known signature; it can only be released by the blockhash
+// being proven dead (checkUnsignedPending) followed by the delegate re-read, or by the 10-minute
+// "stop watching" hatch. A record is cleared on a definitive outcome (landed / failed / declined)
+// or the existing proven-dead path.
+//
 // The list on the confirm sheet IS the list that gets signed: revoke.js builds the instructions
 // from the same `batch` the sheet rendered, so a person approving "these 3" signs those 3.
 import React from "react";
 import { t, tf, useI18nReady } from "./i18n.js";
 import { Confirm, Loading } from "./pane.jsx";
 import { shortAddr } from "./addr.js";
-import { rpcFn, checkPendingSwap } from "./sign.js";
+import { rpcFn, checkPendingSwap, checkUnsignedPending } from "./sign.js";
 import { planRevoke, runRevoke, verifyRevoked, MAX_REVOKE_PER_TX, loadRevokePending, saveRevokePending, clearRevokePending, REVOKE_PENDING_ESCAPE_MS } from "./revoke.js";
 
 // Which scanned accounts may NOT be offered for revoking right now — "all" while a send is
@@ -115,12 +126,25 @@ export default function CheckupRevoke({ wallet, approvals, scannedAddress, onDon
     if (busy || !n) return;
     setBusy(true);
     setOutcome(null);
-    const res = await runRevoke({ provider: wallet.provider, owner: wallet.address, batch: plan.batch });
+    // Codex round 3, P2: the pending record is written BEFORE the wallet is asked (sig: null), so a
+    // wallet that signs-and-sends in one step has still left it behind, and a save that fails means
+    // the wallet is never asked. The signature is filled in once the wallet returns it.
+    let startedAt = Date.now();
+    const res = await runRevoke({
+      provider: wallet.provider,
+      owner: wallet.address,
+      batch: plan.batch,
+      beforeSign: (rec) => saveRevokePending({ ...rec, sig: null, wallet: wallet.address, at: startedAt }),
+      onSigned: (rec) => saveRevokePending({ ...rec, wallet: wallet.address, at: startedAt }),
+    });
     await settle(res);
   }
 
   async function settle(res) {
     const base = { n: res.accounts ? res.accounts.length : n, accounts: res.accounts || [], recentBlockhash: res.recentBlockhash || null, lastValidBlockHeight: typeof res.lastValidBlockHeight === "number" ? res.lastValidBlockHeight : null };
+    // A definitive answer (landed; failed/refused so nothing landed; declined in the wallet) retires
+    // the record written before the prompt. Unconfirmed keeps it, below.
+    if (res.status === "sent" || res.status === "failed" || res.status === "declined") clearRevokePending(wallet.address);
     if (res.status === "sent") {
       setOutcome({ ...base, status: "sent", sig: res.sig, verifying: true });
       const v = await verifyRevoked(rpcFn(), base.accounts.map((a) => a.tokenAccount));
@@ -128,7 +152,10 @@ export default function CheckupRevoke({ wallet, approvals, scannedAddress, onDon
       if (typeof onDone === "function") onDone();       // rescan: the list above must show the new truth
     } else if (res.status === "unconfirmed") {
       // Persist BEFORE showing it, so a rescan / tab switch / reload from this moment on restores it.
-      const rec = { sig: res.sig, accounts: base.accounts, recentBlockhash: base.recentBlockhash, lastValidBlockHeight: base.lastValidBlockHeight, wallet: wallet.address, at: Date.now() };
+      // Already saved at signing; re-save (keeping the original start time) as a belt for the
+      // signAndSendTransaction path, where sign.js cannot stop a broadcast that already happened.
+      const prev = loadRevokePending(wallet.address);
+      const rec = { sig: res.sig, accounts: base.accounts, recentBlockhash: base.recentBlockhash, lastValidBlockHeight: base.lastValidBlockHeight, wallet: wallet.address, at: prev && prev.sig === res.sig ? prev.at : Date.now() };
       saveRevokePending(rec);
       setOutcome({ ...base, status: "unconfirmed", sig: res.sig, wallet: rec.wallet, at: rec.at });
     } else if (res.status === "declined") {
@@ -151,7 +178,12 @@ export default function CheckupRevoke({ wallet, approvals, scannedAddress, onDon
     if (!outcome || outcome.status !== "unconfirmed" || outcome.checking) return;
     setOutcome((o) => ({ ...o, checking: true }));
     try {
-      const r = await checkPendingSwap(rpcFn(), { signature: outcome.sig, lastValidBlockHeight: outcome.lastValidBlockHeight == null ? null : outcome.lastValidBlockHeight, recentBlockhash: outcome.recentBlockhash });
+      const lv = outcome.lastValidBlockHeight == null ? null : outcome.lastValidBlockHeight;
+      // No signature yet (the record was written before the wallet prompt): nothing to look up, only the
+      // transaction's own lifetime can release it — see sign.js checkUnsignedPending.
+      const r = outcome.sig
+        ? await checkPendingSwap(rpcFn(), { signature: outcome.sig, lastValidBlockHeight: lv, recentBlockhash: outcome.recentBlockhash })
+        : await checkUnsignedPending(rpcFn(), { lastValidBlockHeight: lv, recentBlockhash: outcome.recentBlockhash });
       if (r.status === "sent") {
         clearRevokePending(outcome.wallet || walletAddr);
         setOutcome((o) => ({ ...o, status: "sent", checking: false, verifying: true }));
@@ -224,13 +256,16 @@ export default function CheckupRevoke({ wallet, approvals, scannedAddress, onDon
             </>
           ) : outcome.status === "unconfirmed" ? (
             <>
-              <p className="seeker-revoke-outcome-title">{t("Unconfirmed")}</p>
-              <p>{t("This was submitted but had no on-chain status after 30 seconds. It may still land — check before signing again.")}</p>
+              <p className="seeker-revoke-outcome-title">{outcome.sig ? t("Unconfirmed") : t("Revoking…")}</p>
+              {/* No signature yet = the wallet prompt may still be open (or was closed with the app).
+                  Deliberately reuses existing strings only: a new key needs nine translations and a
+                  store-edition exclusion (seeker-build-test). */}
+              {outcome.sig ? <p>{t("This was submitted but had no on-chain status after 30 seconds. It may still land — check before signing again.")}</p> : null}
               {outcome.sig ? <p className="seeker-checkup-mono seeker-revoke-sig">{shortAddr(outcome.sig)}</p> : null}
               <button type="button" className="seeker-btn seeker-btn-quiet" disabled={outcome.checking} onClick={recheck}>{outcome.checking ? t("Checking…") : t("Check status")}</button>
               {outcome.at && Date.now() - outcome.at >= REVOKE_PENDING_ESCAPE_MS ? (
                 <div className="seeker-swap-pending-escape">
-                  <p>{t("This is taking longer than usual to confirm. Your signature above is the real record — check it on Solscan, or stop watching here.")}</p>
+                  {outcome.sig ? <p>{t("This is taking longer than usual to confirm. Your signature above is the real record — check it on Solscan, or stop watching here.")}</p> : null}
                   <button type="button" className="seeker-btn seeker-btn-quiet seeker-revoke-stopwatch" onClick={stopWatching}>{t("Stop watching")}</button>
                 </div>
               ) : null}

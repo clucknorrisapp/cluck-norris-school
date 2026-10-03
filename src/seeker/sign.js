@@ -236,6 +236,27 @@ export async function checkPendingSwap(rpc, { signature, lastValidBlockHeight, r
   }
 }
 
+// The recheck for a pending record that has NO signature (Revoke writes its record before it asks
+// the wallet to sign — see beforeSign above — so a close/crash mid-prompt leaves `sig: null`). With
+// no signature there is nothing to look up, so the only thing that can ever release it is the
+// transaction's own lifetime ending: the node's block height past `lastValidBlockHeight` AND an
+// explicit `isBlockhashValid` value === false for the blockhash it was built against (anything
+// else — an error, a malformed answer, `true` — stays pending). "expired" proves nothing NEW can
+// land, NOT that nothing did: the caller must re-read the accounts and offer only what the chain
+// still shows.
+export async function checkUnsignedPending(rpc, { lastValidBlockHeight, recentBlockhash }) {
+  try {
+    if (!recentBlockhash || typeof lastValidBlockHeight !== "number") return { status: "pending" };
+    const height = await rpc("getBlockHeight", [{ commitment: "confirmed" }]);
+    if (typeof height !== "number" || height <= lastValidBlockHeight) return { status: "pending" };
+    const validRes = await rpc("isBlockhashValid", [recentBlockhash, { commitment: "confirmed" }]);
+    if (!validRes || validRes.value !== false) return { status: "pending" };
+    return { status: "expired" };
+  } catch (_) {
+    return { status: "pending" };
+  }
+}
+
 // A declined prompt is not shaped the same way by every provider. Every wallet in
 // public/cluck-wallet.js's registry (Phantom-shaped or Wallet-Standard-shimmed) throws with one
 // of these two vocabularies on a decline; anything else is a genuine failure, not a decline —
@@ -397,7 +418,14 @@ export async function submitSigned(rpc, realTx, opts) {
 // cannot un-send it, so that path keeps the swallow-and-continue behaviour unchanged; the
 // signature is still real and confirmable even without a recovery record.
 const RECOVERY_SAVE_ERROR = "Could not save the recovery record — nothing was sent. Free some storage and try again.";
-export async function signSendConfirm({ provider, owner, build, coSign, skipPreflight, onSigned, requireOnSigned }) {
+// ⚠️ Codex round 3 (re-review), P2 — `beforeSign({ blockhash, lastValidBlockHeight })`: runs AFTER the
+// transaction is built and BEFORE the wallet is asked for anything. `onSigned` is not early enough
+// for a wallet that signs-and-sends in one operation (signAndSendTransaction, MWA
+// signAndSendTransactions): it has already broadcast by the time any post-sign callback can run. A
+// caller that must have a recovery record in storage before ANY chance of a broadcast writes it
+// here; a throw or `false` returns a `failed` WITHOUT the wallet ever being asked. Absent → no
+// change for any other caller.
+export async function signSendConfirm({ provider, owner, build, coSign, skipPreflight, onSigned, requireOnSigned, beforeSign }) {
   const CW = typeof window !== "undefined" ? window.CluckWallet : null;
   const web3 = typeof window !== "undefined" ? window.solanaWeb3 : null;
   if (!CW || !web3) return { status: "failed", error: "Wallet layer did not load." };
@@ -424,6 +452,11 @@ export async function signSendConfirm({ provider, owner, build, coSign, skipPref
     const mb = messageBytes(tx);
     if (!mb) return { status: "failed", error: "Could not read the transaction to sign." };
     approved = Uint8Array.from(mb);
+    if (typeof beforeSign === "function") {
+      let beforeOk = true;
+      try { beforeOk = beforeSign({ blockhash, lastValidBlockHeight: bhInfo.lastValidBlockHeight }) !== false; } catch (_) { beforeOk = false; }
+      if (!beforeOk) return { status: "failed", error: RECOVERY_SAVE_ERROR };   // the wallet was never asked
+    }
   } catch (e) {
     return { status: "failed", error: (e && e.message) || String(e) };
   }
