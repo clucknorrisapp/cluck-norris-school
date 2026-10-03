@@ -17,7 +17,11 @@
 > the wallet is never asked. "Check payment" searches the chain for an attempt and releases a record
 > as never-landed only when the blockhash is proven dead AND the search was provably complete (paged
 > back past a SERVER-time bound — the quote's `issuedAt` minus a margin, never the phone's clock — with
-> every candidate read and no RPC failure; anything less is "cannot confirm", kept); the support entry
+> every candidate read and no RPC failure; anything less is "cannot confirm", kept — and the search runs
+> at commitment `confirmed` with `minContextSlot` = the slot of the response that proved the expiry, so
+> a lagging node errors instead of returning a stale empty list; a candidate must carry the attempt's
+> own saved blockhash, and a refused search-found candidate never ends an attempt whose blockhash is
+> still valid); the support entry
 > is stored BEFORE a refused payment's active record is cleared; (8) after
 > the adversarial review of #421: one payer per transaction (more than one owner's SKR falling is
 > refused for everyone), an atomic LEG CLAIM (`sigStore.claimLeg`, one durable entry
