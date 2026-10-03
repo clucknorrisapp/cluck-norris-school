@@ -248,24 +248,27 @@ const T22 = "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb";
   {
     const ISSUED = Date.now();                         // the quote's SERVER issuedAt
     const sec = (ms) => Math.floor(ms / 1000);
-    const mkAttempt = (over = {}, storage) => { const st = storage || memStorage(); mod.saveRecord(st, { wallet: PAYER, paySig: null, attempt: true, skrQuote: "q.t", payIntent: INTENT, at: Date.now(), recentBlockhash: randHash(), lastValidBlockHeight: 1000, amountUi: "50", amountRaw: "50000000", receiverAta: quote.receiverAta, quoteIssuedAt: ISSUED, ...over }); return st; };
+    const ATT_BH = randHash();                         // the blockhash the attempt's transaction was built with
+    const mkAttempt = (over = {}, storage) => { const st = storage || memStorage(); mod.saveRecord(st, { wallet: PAYER, paySig: null, attempt: true, skrQuote: "q.t", payIntent: INTENT, at: Date.now(), recentBlockhash: ATT_BH, lastValidBlockHeight: 1000, amountUi: "50", amountRaw: "50000000", receiverAta: quote.receiverAta, quoteIssuedAt: ISSUED, ...over }); return st; };
     const PAY = "F".repeat(88);
     const ixOf = (o = {}) => ({ parsed: { type: "transferChecked", info: { mint: SKR_MINT, destination: quote.receiverAta, authority: PAYER, tokenAmount: { amount: "50000000" }, ...o } } });
-    const txOf = (ix) => ({ meta: { err: null, innerInstructions: [] }, transaction: { message: { instructions: [ix] } } });
+    const txOf = (ix, bh = ATT_BH) => ({ meta: { err: null, innerInstructions: [] }, transaction: { message: { recentBlockhash: bh, instructions: [ix] } } });
     const noise = (n, base = 100) => Array.from({ length: n }, (_, i) => ({ signature: "N" + i + "x".repeat(60), err: null, blockTime: sec(ISSUED) + base + (n - i) }));   // newest first
     const old = (n) => Array.from({ length: n }, (_, i) => ({ signature: "O" + i + "x".repeat(60), err: null, blockTime: sec(ISSUED) - 3600 - i }));   // an hour before the quote
     // A chain whose getSignaturesForAddress honours limit + before, like the real one.
     const chain = (o) => {
-      const calls = { sigs: 0, txs: 0 };
+      const calls = { sigs: 0, txs: 0, log: [] };
       const rpcFn2 = async (method, params) => {
         if (method === "getBlockHeight") return o.height;
-        if (method === "isBlockhashValid") return { value: o.valid };
+        if (method === "isBlockhashValid") return o.noContext ? { value: o.valid } : { context: { slot: o.slot === undefined ? 5000 : o.slot }, value: o.valid };
         if (method === "getSignaturesForAddress") {
-          calls.sigs++; if (o.sigsThrowOnPage && calls.sigs === o.sigsThrowOnPage) throw new Error("rpc"); if (o.sigsThrow) throw new Error("rpc");
+          calls.sigs++; calls.log.push({ method, cfg: params[1] });
+          // A node that has not reached minContextSlot answers an error (-32016) until it has.
+          if (params[1] && params[1].minContextSlot !== undefined && o.nodeSlot !== undefined && o.nodeSlot < params[1].minContextSlot) { const e = new Error("Minimum context slot has not been reached"); e.rpcError = true; throw e; } if (o.sigsThrowOnPage && calls.sigs >= o.sigsThrowOnPage) throw new Error("rpc"); if (o.sigsThrow) throw new Error("rpc");
           const cfg = params[1] || {}; const i = cfg.before ? o.sigs.findIndex((e) => e.signature === cfg.before) + 1 : 0;
           return o.sigs.slice(i, i + (cfg.limit || 1000));
         }
-        if (method === "getTransaction") { calls.txs++; if (o.txThrow && o.txThrow === params[0]) throw new Error("rpc"); return Object.prototype.hasOwnProperty.call(o.txs || {}, params[0]) ? o.txs[params[0]] : txOf({ parsed: { type: "transfer", info: {} } }); }
+        if (method === "getTransaction") { calls.txs++; calls.log.push({ method, cfg: params[1] }); if (o.txThrow && o.txThrow === params[0]) throw new Error("rpc"); return Object.prototype.hasOwnProperty.call(o.txs || {}, params[0]) ? o.txs[params[0]] : txOf({ parsed: { type: "transfer", info: {} } }); }
         throw new Error("unexpected " + method);
       };
       rpcFn2.calls = calls; return rpcFn2;
@@ -324,6 +327,69 @@ const T22 = "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb";
     st = mkAttempt();
     out = await mod.checkPayment({ fetchFn: nf, storage: st, wallet: PAYER, rpc: chain({ height: 100, valid: false, sigs: old(3), txs: {} }) });
     ok("height not past the limit → KEPT even if isBlockhashValid says false", out.kind === "retry" && kept(st), out);
+
+    // ── P2-1 (round 3): never-landed needs a search at a view at least as new as the expiry proof ──
+    st = mkAttempt();
+    out = await mod.checkPayment({ fetchFn: nf, storage: st, wallet: PAYER, rpc: chain({ height: 5000, valid: false, slot: 5000, nodeSlot: 4990, sigs: [], txs: {} }) });
+    ok("LAGGING HISTORY (the node is behind the slot that proved the blockhash dead; its list is empty) → 'cannot-confirm', record KEPT — the user can NOT pay again", out.kind === "cannot-confirm" && kept(st), out);
+    st = mkAttempt();
+    out = await mod.checkPayment({ fetchFn: nf, storage: st, wallet: PAYER, rpc: chain({ height: 5000, valid: false, slot: 5000, nodeSlot: 5000, sigs: [], txs: {} }) });
+    ok("a caught-up node, complete search, no match → 'never-landed' (the one release)", out.kind === "never-landed" && !kept(st), out);
+    {
+      st = mkAttempt(); const c = chain({ height: 5000, valid: false, slot: 5000, nodeSlot: 6000, sigs: [...noise(150), ...old(3)], txs: {} });
+      await mod.checkPayment({ fetchFn: nf, storage: st, wallet: PAYER, rpc: c });
+      const hist = c.calls.log.filter((l) => l.method === "getSignaturesForAddress"), txs = c.calls.log.filter((l) => l.method === "getTransaction");
+      ok("EVERY history page is asked at commitment 'confirmed' with minContextSlot = the slot that proved the expiry", hist.length >= 2 && hist.every((l) => l.cfg.commitment === "confirmed" && l.cfg.minContextSlot === 5000), hist.map((l) => l.cfg));
+      ok("…and every getTransaction at commitment 'confirmed'", txs.length > 0 && txs.every((l) => l.cfg.commitment === "confirmed"), txs.map((l) => l.cfg));
+    }
+    st = mkAttempt();
+    out = await mod.checkPayment({ fetchFn: nf, storage: st, wallet: PAYER, rpc: chain({ height: 5000, valid: false, noContext: true, sigs: [], txs: {} }) });
+    ok("an expiry answer that does not say which slot it was read at is no proof → not released ('retry', KEPT)", out.kind !== "never-landed" && kept(st), out);
+    {
+      st = mkAttempt(); const c = chain({ height: 100, valid: true, sigs: old(2), txs: {} });
+      await mod.checkPayment({ fetchFn: nf, storage: st, wallet: PAYER, rpc: c });
+      ok("blockhash still valid: still searched at 'confirmed' (no slot bound to meet yet)", c.calls.log.filter((l) => l.method === "getSignaturesForAddress").every((l) => l.cfg.commitment === "confirmed" && l.cfg.minContextSlot === undefined));
+    }
+    st = mkAttempt();
+    {
+      let n = 0; const flaky = chain({ height: 5000, valid: false, slot: 5000, sigs: [payEntry(), ...old(3)], txs: { [PAY]: txOf(ixOf()) } });
+      const wrapped = async (m, p) => { if (m === "getSignaturesForAddress" && n++ < 2) { const e = new Error("Minimum context slot has not been reached"); e.rpcError = true; throw e; } return flaky(m, p); };
+      out = await mod.checkPayment({ fetchFn: nf, storage: st, wallet: PAYER, rpc: wrapped });
+      ok("a node that catches up within a couple of tries is retried, not given up on → payment found and redeemed", out.kind === "granted", out);
+    }
+
+    // ── P2-2 (round 3): a candidate must be THIS attempt's transaction ──
+    {
+      const OTHER_BH = randHash();
+      const OLDER = "E".repeat(88);
+      st = mkAttempt(); let posted2 = false;
+      const older = { signature: OLDER, err: null, blockTime: sec(ISSUED) - 300 };    // 5 min before the quote, within the search window
+      out = await mod.checkPayment({ fetchFn: async () => { posted2 = true; return resp(200, grantBody); }, storage: st, wallet: PAYER, rpc: chain({ height: 100, valid: true, sigs: [older, ...old(2)], txs: { [OLDER]: txOf(ixOf(), OTHER_BH) } }) });
+      ok("an IDENTICAL older transfer with a DIFFERENT blockhash is skipped: nothing redeemed, the attempt SURVIVES (its blockhash is still valid)", out.kind === "retry" && !posted2 && kept(st) && mod.loadRecord(st, PAYER).attempt === true, out);
+      st = mkAttempt(); posted = null;
+      out = await mod.checkPayment({ fetchFn: async (u, o) => { posted = JSON.parse(o.body); return resp(200, grantBody); }, storage: st, wallet: PAYER, rpc: chain({ height: 100, valid: true, sigs: [payEntry(), older, ...old(2)], txs: { [PAY]: txOf(ixOf()), [OLDER]: txOf(ixOf(), OTHER_BH) } }) });
+      ok("with both present, the transaction with the attempt's blockhash is the one found and redeemed", out.kind === "granted" && posted.paySig === PAY, { out, posted });
+      st = mkAttempt();
+      out = await mod.checkPayment({ fetchFn: nf, storage: st, wallet: PAYER, rpc: chain({ height: 5000, valid: false, slot: 5000, sigs: [older, ...old(2)], txs: { [OLDER]: txOf(ixOf(), OTHER_BH) } }) });
+      ok("an older lookalike never counts as the payment, even after expiry: nothing matches → 'never-landed' (and it was NOT redeemed)", out.kind === "never-landed", out);
+      st = mkAttempt({ recentBlockhash: undefined });
+      out = await mod.checkPayment({ fetchFn: nf, storage: st, wallet: PAYER, rpc: chain({ height: 5000, valid: false, slot: 5000, sigs: [payEntry(), ...old(2)], txs: { [PAY]: txOf(ixOf()) } }) });
+      ok("an attempt with no saved blockhash cannot match anything → 'cannot-confirm', KEPT", out.kind === "cannot-confirm" && kept(st), out);
+    }
+    {
+      // A candidate found by SEARCH that the server refuses definitively, while the attempt's
+      // blockhash can still produce the real transaction: the attempt is NOT deleted.
+      const refuse = async () => resp(200, { success: false, error: "this payment landed after its quote expired", code: "outside_window", definitive: true });
+      st = mkAttempt();
+      let r1 = await mod.checkPayment({ fetchFn: refuse, storage: st, wallet: PAYER, rpc: chain({ height: 100, valid: true, sigs: [payEntry(), ...old(2)], txs: { [PAY]: txOf(ixOf()) } }) });
+      const att = mod.loadRecord(st, PAYER);
+      ok("search-found candidate refused while the blockhash is VALID → evidence kept, the ATTEMPT restored and still watching", r1.kind === "refused" && r1.watching === true && att && att.attempt === true && att.paySig === null && att.ignoreSigs.includes(PAY) && mod.loadStuck(st, PAYER).some((x) => x.paySig === PAY), { r1, att });
+      const r2 = await mod.checkPayment({ fetchFn: refuse, storage: st, wallet: PAYER, rpc: chain({ height: 100, valid: true, sigs: [payEntry(), ...old(2)], txs: { [PAY]: txOf(ixOf()) } }) });
+      ok("…and that candidate is ignored on the next check (no loop of refusals)", r2.kind === "retry" && kept(st), r2);
+      st = mkAttempt();
+      r1 = await mod.checkPayment({ fetchFn: refuse, storage: st, wallet: PAYER, rpc: chain({ height: 5000, valid: false, slot: 5000, sigs: [payEntry(), ...old(2)], txs: { [PAY]: txOf(ixOf()) } }) });
+      ok("the same refusal once the blockhash is proven dead (nothing else can land) → released to the support list as before", r1.kind === "refused" && !r1.watching && !kept(st) && mod.loadStuck(st, PAYER).some((x) => x.paySig === PAY), r1);
+    }
 
     // ── P2: no device timestamp is a chain-time bound ──
     for (const skew of [+10 * 60e3, -10 * 60e3, +60 * 60e3, -60 * 60e3]) {

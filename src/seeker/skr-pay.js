@@ -293,20 +293,42 @@ export async function redeemRecord({ fetchFn, storage, wallet, refreshIntent }) 
 // The lower bound is SERVER time — the quote's issuedAt (a payment cannot predate the quote that
 // priced it) minus a margin — never the phone's clock (a phone 10 minutes fast skipped the real
 // payment). Throws never escape: a failure is reported as incomplete.
-const SEARCH_PAGE = 100, SEARCH_MAX_PAGES = 10, SEARCH_MAX_CANDIDATES = 150, SEARCH_MARGIN_MS = 10 * 60e3;
-async function findAttempt(rpc, rec) {
+const SEARCH_PAGE = 100, SEARCH_MAX_PAGES = 10, SEARCH_MAX_CANDIDATES = 150, SEARCH_MARGIN_MS = 10 * 60e3, SEARCH_RETRIES = 3;
+// One search call, retried a couple of times: a node that has not caught up to `minContextSlot` answers
+// an error (-32016) until it does, and a brief lag must not be mistaken for a failed search.
+async function searchCall(rpc, method, params) {
+  let last;
+  for (let i = 0; i < SEARCH_RETRIES; i++) {
+    try { return await rpc(method, params); } catch (e) { last = e; await new Promise((r) => setTimeout(r, 700)); }
+  }
+  throw last;
+}
+// `proofSlot` — the context slot of the response that proved the blockhash dead (null if it is not
+// dead yet). Every search call runs at commitment `confirmed` (the same view the expiry proof used —
+// the RPC default is often `finalized`, which can omit a payment that landed just before expiry), and
+// the history pages carry `minContextSlot: proofSlot`, so a node whose view is OLDER than the expiry
+// proof errors instead of answering with a stale, empty list. getTransaction has no minContextSlot;
+// it is only asked about signatures that slot-bounded list returned, and a null answer is incomplete.
+//
+// A candidate matches only if it is THIS attempt's transaction: its message's recentBlockhash equals
+// the blockhash saved on the attempt before the wallet was asked (Codex, #421 round 3: an identical
+// older transfer with a different blockhash was selected and the current attempt deleted). Signatures
+// the attempt has already decided to ignore are skipped.
+async function findAttempt(rpc, rec, proofSlot) {
   const issued = Number(rec.quoteIssuedAt);
-  if (!Number.isFinite(issued)) return { sig: null, complete: false };      // no server-time bound recorded: cannot prove anything
+  if (!Number.isFinite(issued) || !rec.recentBlockhash) return { sig: null, complete: false };   // no server-time bound / no blockhash to match: cannot prove anything
   const lowerSec = (issued - SEARCH_MARGIN_MS) / 1000;
+  const ignore = new Set(Array.isArray(rec.ignoreSigs) ? rec.ignoreSigs : []);
+  const histCfg = (before) => ({ limit: SEARCH_PAGE, commitment: "confirmed", ...(Number.isFinite(proofSlot) ? { minContextSlot: proofSlot } : {}), ...(before ? { before } : {}) });
   let before, candidates = [], complete = false;
   try {
     for (let page = 0; page < SEARCH_MAX_PAGES && !complete; page++) {
-      const list = await rpc("getSignaturesForAddress", [rec.wallet, before ? { limit: SEARCH_PAGE, before } : { limit: SEARCH_PAGE }]);
+      const list = await searchCall(rpc, "getSignaturesForAddress", [rec.wallet, histCfg(before)]);
       if (!Array.isArray(list)) return { sig: null, complete: false };
       for (const e of list) {
         if (!e || !e.signature) return { sig: null, complete: false };
         if (e.blockTime && e.blockTime < lowerSec) { complete = true; break; }   // newest-first: everything after this is older than the quote
-        if (!e.err) candidates.push(e.signature);
+        if (!e.err && !ignore.has(e.signature)) candidates.push(e.signature);
       }
       if (!complete && list.length < SEARCH_PAGE) complete = true;              // the wallet's history ends here
       if (list.length) before = list[list.length - 1].signature;
@@ -314,10 +336,12 @@ async function findAttempt(rpc, rec) {
     if (!complete) return { sig: null, complete: false };                       // page cap hit before the bound
     if (candidates.length > SEARCH_MAX_CANDIDATES) return { sig: null, complete: false };
     for (const sig of candidates) {
-      const tx = await rpc("getTransaction", [sig, { encoding: "jsonParsed", maxSupportedTransactionVersion: 0, commitment: "confirmed" }]);
+      const tx = await searchCall(rpc, "getTransaction", [sig, { encoding: "jsonParsed", maxSupportedTransactionVersion: 0, commitment: "confirmed" }]);
       if (!tx || !tx.meta) return { sig: null, complete: false };               // details unavailable → cannot rule it out
       if (tx.meta.err) continue;
-      const ixs = ((tx.transaction && tx.transaction.message && tx.transaction.message.instructions) || []).slice();
+      const msg = (tx.transaction && tx.transaction.message) || {};
+      if (msg.recentBlockhash !== rec.recentBlockhash) continue;                // not THIS attempt's transaction
+      const ixs = (msg.instructions || []).slice();
       for (const g of tx.meta.innerInstructions || []) ixs.push(...(g.instructions || []));
       for (const ix of ixs) {
         const p = ix && ix.parsed, i = p && p.info;
@@ -338,21 +362,37 @@ async function findAttempt(rpc, rec) {
 //   → redeemRecord's kinds, plus { kind:"never-landed" }
 export async function checkPayment({ fetchFn, storage, wallet, rpc, refreshIntent }) {
   let rec = loadRecord(storage, wallet);
+  let first = null;
   if (rec && !rec.paySig) {
-    let dead = false;
+    let dead = false, proofSlot = null;
     try {
       const [h, valid] = await Promise.all([rpc("getBlockHeight", [{ commitment: "confirmed" }]), rec.recentBlockhash ? rpc("isBlockhashValid", [rec.recentBlockhash, { commitment: "confirmed" }]) : null]);
       dead = typeof h === "number" && rec.lastValidBlockHeight != null && h > rec.lastValidBlockHeight && !!valid && valid.value === false;
+      // The view that proved the expiry. A release needs a search at a view at least this new; a
+      // response that does not say which slot it was read at cannot be used as proof at all.
+      proofSlot = valid && valid.context && Number.isFinite(valid.context.slot) ? valid.context.slot : null;
+      if (dead && proofSlot == null) dead = false;
     } catch (_) { return { kind: "cannot-confirm", error: null }; }
-    const found = await findAttempt(rpc, rec);
+    const found = await findAttempt(rpc, rec, dead ? proofSlot : null);
     if (found.sig) {
+      const attempt = rec;
       rec = { ...rec, paySig: found.sig, attempt: false };
       try { saveRecord(storage, rec); } catch (_) { return { kind: "cannot-confirm", error: null }; }   // keep the attempt; try again
+      first = await redeemRecord({ fetchFn, storage, wallet, refreshIntent });
+      // A refusal of a candidate found by SEARCH (not the signature the wallet handed back) must not
+      // end the attempt while its blockhash can still produce the real transaction: the refusal is
+      // kept as evidence (redeemRecord stored the support entry), the attempt is restored to keep
+      // watching, and that candidate is ignored from now on.
+      if (first.kind === "refused" && !dead && !first.keptActive) {
+        try { saveRecord(storage, { ...attempt, ignoreSigs: [...(Array.isArray(attempt.ignoreSigs) ? attempt.ignoreSigs : []), found.sig] }); } catch (_) { /* evidence is already in the support list */ }
+        return { ...first, watching: true };
+      }
+      if (first.kind !== "retry") return first;
     } else if (dead && found.complete) { clearRecord(storage, wallet); return { kind: "never-landed", error: null }; }
     else if (!found.complete) return { kind: "cannot-confirm", error: null };   // incomplete search: never a release, whatever the blockhash says
     else return { kind: "retry", error: null };                                  // searched everything, nothing yet, but it could still land
   }
-  const first = await redeemRecord({ fetchFn, storage, wallet, refreshIntent });
+  if (!first) first = await redeemRecord({ fetchFn, storage, wallet, refreshIntent });
   if (first.kind !== "retry") return first;
   rec = loadRecord(storage, wallet);
   if (!rec) return first;
