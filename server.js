@@ -20028,7 +20028,7 @@ app.use(nqRouter);
 // AHOY: PumpFunPirates — a game built for the Pump Fun Pirates community (2026-10-02). Unlisted
 // at /ahoy-quest/, noindex; static game + a read-only holder API (pirates/routes.js). Mounted
 // before the React catch-all and the /api 404 so its routes win.
-app.use(require("./pirates/routes")({ getUsdPrice: (m) => orderbook.getUsdPrice(m) }));
+app.use(require("./pirates/routes")({ getUsdPrice: (m) => orderbook.getUsdPrice(m), sessionSecret: process.env.AHOY_SESSION_SECRET || (process.env.PREMIUM_ACCESS_KEY ? "ahoy:" + process.env.PREMIUM_ACCESS_KEY : null) }));
 
 // Gated dry-run / manual-fire of the Normie Quest playtest digest (the twice-daily auto-DM).
 // Dry by default (returns the preview it WOULD send); &send=1 actually DMs the operator chat;

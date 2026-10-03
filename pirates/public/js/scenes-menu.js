@@ -229,16 +229,32 @@ AHOY.HolderPanel = {
     layer.add(status);
     const showState = () => {
       const s = AHOY.Gate.state();
+      const short = s.wallet ? `Wallet ${s.wallet.slice(0, 4)}…${s.wallet.slice(-4)}` : "";
       if (s.demo) status.setText("PREVIEW: holder content unlocked for demonstration — no wallet was checked.");
+      else if (AHOY.Gate.mode() === "offline") status.setText("The holder check is temporarily unavailable — free seas only for now." + (short ? ` (${short} will be re-checked.)` : "") + " Try again in a moment.");
+      else if (AHOY.Gate.pending()) status.setText(`${short} — ` + (s.unavailable ? "the holder check is temporarily unavailable, so holder seas stay locked for now. Try again in a moment." : "checking your holdings…"));
       else if (s.wallet) status.setText(`Wallet ${s.wallet.slice(0, 4)}…${s.wallet.slice(-4)} · ${Math.floor(s.ahoy).toLocaleString()} AHOY` + (s.usd ? ` (~$${s.usd.toFixed(2)})` : "") + ` · ${s.nfts.length} Pirate NFT${s.nfts.length === 1 ? "" : "s"} · tier: ${s.tier.toUpperCase()}` + (s.unavailable ? " · price feed down, try again soon" : ""));
       else status.setText(AHOY.Gate.mode() === "live" ? "Connect a wallet to check your holdings. You sign one message — no transaction, nothing is sent." : "This is the preview build. Holder checks run on the live game.");
     };
     showState();
     const close = () => { layer.destroy(); onChange && onChange(); };
-    if (AHOY.Gate.mode() === "live") {
-      const btn = UI.button(scene, 640, 500, st.wallet ? "RE-CHECK WALLET" : "CONNECT WALLET", async () => {
-        status.setText("Waiting for your wallet…");
-        try { await AHOY.Gate.connectAndVerify(); showState(); AHOY.Audio.play("good"); AHOY.loadNftTextures(scene); }
+    if (AHOY.Gate.mode() === "offline") {
+      // The live site, but the gate could not be reached: free seas only, retry offered. Never demo.
+      const btn = UI.button(scene, 640, 500, "TRY AGAIN", async () => {
+        status.setText("Trying again…");
+        try { await AHOY.Gate.recheck(); } catch (_) {}
+        layer.destroy(); AHOY.HolderPanel.open(scene, onChange);
+      }, { w: 340, h: 68, size: 36, fill: 0x2e7d32 });
+      layer.add(btn);
+    } else if (AHOY.Gate.mode() === "live") {
+      const retry = AHOY.Gate.pending();
+      const btn = UI.button(scene, 640, 500, retry ? "TRY AGAIN" : st.wallet ? "RE-CHECK WALLET" : "CONNECT WALLET", async () => {
+        status.setText(retry ? "Checking…" : "Waiting for your wallet…");
+        try {
+          if (retry) { await AHOY.Gate.recheck(); if (AHOY.Gate.pending() && AHOY.Gate.state().unavailable) { showState(); return; } if (!AHOY.Gate.state().wallet) { layer.destroy(); AHOY.HolderPanel.open(scene, onChange); return; } }
+          else await AHOY.Gate.connectAndVerify();
+          showState(); AHOY.Audio.play("good"); AHOY.loadNftTextures(scene);
+        }
         catch (e) { status.setText(String((e && e.message) || e)); AHOY.Audio.play("bad"); }
       }, { w: 340, h: 68, size: 36, fill: 0x2e7d32 });
       layer.add(btn);

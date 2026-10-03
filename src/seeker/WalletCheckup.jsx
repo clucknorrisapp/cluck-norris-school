@@ -134,16 +134,26 @@ export default function WalletCheckupPane({ address, gate, revoke, footer }) {
   const wasOfflineRef = React.useRef(!online);
   const abortRef = React.useRef(null);
 
-  const scan = React.useCallback((address, signal) => {
+  // `background` — the refresh a revoke asks for after its own chain re-read (Codex on #458, P2).
+  // A normal scan swaps in the loading screen, which UNMOUNTS the revoke slot and with it the
+  // result the person was just promised (cleared / still approved / couldn't read). A background
+  // scan keeps the current result on screen and swaps in the new list when it arrives; if it
+  // fails, the list stays as it was — the revoke result above it is the fresher truth, and the
+  // manual Rescan button is still there.
+  const scan = React.useCallback((address, signal, background) => {
     if (!address) return;
     if (!isOnline()) {
-      setState({ phase: "error", kind: "offline", data: null, retrySec: 0, errMsg: null });
+      if (!background) setState({ phase: "error", kind: "offline", data: null, retrySec: 0, errMsg: null });
       return;
     }
-    setState({ phase: "loading", kind: null, data: null, retrySec: 0, errMsg: null });
+    if (!background) setState({ phase: "loading", kind: null, data: null, retrySec: 0, errMsg: null });
     fetch(`/api/wallet-checkup?wallet=${encodeURIComponent(address)}`, { signal })
       .then(async (res) => {
         const body = await res.json().catch(() => null);
+        if (background) {
+          if (res.ok && body && body.success === true) setState({ phase: "ok", kind: null, data: body, retrySec: 0, errMsg: null });
+          return;
+        }
         if (res.status === 429) {
           const retrySec = Number((body && (body.retryAfterSec || body.retryAfter)) || 0);
           setState({ phase: "error", kind: "rate", data: null, retrySec, errMsg: null });
@@ -167,6 +177,7 @@ export default function WalletCheckupPane({ address, gate, revoke, footer }) {
       })
       .catch((e) => {
         if (e && e.name === "AbortError") return;
+        if (background) return;
         setState({ phase: "error", kind: isOnline() ? "unavailable" : "offline", data: null, retrySec: 0, errMsg: null });
       });
   }, []);
@@ -325,7 +336,7 @@ export default function WalletCheckupPane({ address, gate, revoke, footer }) {
           <div data-clkn-avoid-kids="1">
             {approvals.map((a) => <ApprovalRow key={a.tokenAccount} a={a} />)}
           </div>
-          {typeof revoke === "function" ? revoke({ approvals, address, rescan: () => scan(address) }) : (
+          {typeof revoke === "function" ? null : (
             <p className="seeker-checkup-revokenote">
               {t("Revoking needs a wallet signature — not available in this app yet.")}{" "}
               <a href={WEBSITE_CHECKUP_URL} target="_blank" rel="noreferrer">{t("Revoke on the website")}</a>
@@ -333,6 +344,11 @@ export default function WalletCheckupPane({ address, gate, revoke, footer }) {
           )}
         </div>
       ) : null}
+      {/* The revoke slot lives OUTSIDE the approvals section on purpose: once a revoke clears the
+          last approval the section disappears, and a slot inside it would unmount with it and take
+          the result the person was promised along. The slot renders nothing when it has no list
+          and no result. The refresh it asks for is a background one (see `scan`). */}
+      {typeof revoke === "function" ? revoke({ approvals, address, rescan: () => scan(address, abortRef.current && abortRef.current.signal, true) }) : null}
 
       {risky.length ? (
         <div className="seeker-checkup-section">

@@ -185,7 +185,8 @@ function statusEntry(result) {
 // blockhash; it says nothing about whether THIS signature already landed (the same principle
 // `statusOutcome`'s own note documents for `processed`). `isBlockhashValid` is the DIRECT check —
 // "is the exact blockhash this transaction carries still live" — so `expired` now requires BOTH:
-// a well-formed null status AND a confirmed-dead blockhash. No `recentBlockhash` passed at all
+// a well-formed null status AND a blockhash the node explicitly reported dead (`value === false`;
+// any other validity answer, malformed or unknown, stays `pending`). No `recentBlockhash` passed at all
 // (an older persisted record, or a caller that never had one) means that second half can never be
 // proven — this NEVER calls such a record `expired` on height alone anymore; it stays `pending`
 // forever, which is exactly why `Swap.jsx`'s `PendingCard` grows its own manual "check on
@@ -221,11 +222,15 @@ export async function checkPendingSwap(rpc, { signature, lastValidBlockHeight, r
     if (!recentBlockhash) return { status: "pending" };
     try {
       const validRes = await rpc("isBlockhashValid", [recentBlockhash, { commitment: "confirmed" }]);
-      if (validRes && validRes.value === true) return { status: "pending" }; // the blockhash could still land — not expired
+      // ⚠️ Codex round 2 on the Revoke flow, P2 — ONLY an explicit `value === false` is the node
+      // saying "that blockhash is dead". `true` is live, and `{}`, `null`, `{value:null}`, a
+      // missing `value` or any other shape is the ABSENCE of an answer, exactly like the malformed
+      // status responses above — never read as expiry. Anything but a literal false stays pending.
+      if (!validRes || validRes.value !== false) return { status: "pending" };
     } catch (_) {
       return { status: "pending" }; // an RPC read failure is not an on-chain answer either way
     }
-    return { status: "expired" }; // well-formed null status AND a confirmed-dead blockhash
+    return { status: "expired" }; // well-formed null status AND an explicitly confirmed-dead blockhash
   } catch (_) {
     return { status: "pending" };
   }
@@ -265,11 +270,19 @@ export function splTokenShim() {
   return s;
 }
 
-export async function latestBlockhash(rpc) {
+// The blockhash AND the last block height it is valid through, from the SAME getLatestBlockhash
+// answer — a caller that judges expiry later (Revoke) needs the pair the transaction was really
+// built against, never a height from some other call. `lastValidBlockHeight` is null when the
+// node did not return a usable number; callers must then treat expiry as unprovable (pending).
+export async function latestBlockhashInfo(rpc) {
   const bh = await rpc("getLatestBlockhash", [{ commitment: "confirmed" }]);
   const h = bh && bh.value && bh.value.blockhash;
   if (!h) throw new Error("Could not fetch a recent blockhash.");
-  return h;
+  const lv = bh.value.lastValidBlockHeight;
+  return { blockhash: h, lastValidBlockHeight: typeof lv === "number" && isFinite(lv) && lv >= 0 ? lv : null };
+}
+export async function latestBlockhash(rpc) {
+  return (await latestBlockhashInfo(rpc)).blockhash;
 }
 
 // ⚠️ (5) A SUBMIT THAT THREW IS NOT PROOF THAT NOTHING LANDED — and this is the ONE place that
@@ -394,8 +407,11 @@ export async function signSendConfirm({ provider, owner, build, coSign, skipPref
   let tx, live, approved;
   try {
     live = assertSameAccount(provider, owner);          // (3)
-    const blockhash = await latestBlockhash(rpc);
-    tx = build(web3, blockhash, live);
+    const bhInfo = await latestBlockhashInfo(rpc);
+    const blockhash = bhInfo.blockhash;
+    // build's 4th argument is the lifetime that came with this blockhash (see latestBlockhashInfo);
+    // existing builders that take three arguments are unaffected.
+    tx = build(web3, blockhash, live, { lastValidBlockHeight: bhInfo.lastValidBlockHeight });
     if (!tx) return { status: "failed", error: "Nothing to sign." };
     // ⚠️ Codex round 27 P1: this MUST be an independent COPY, taken BEFORE the wallet ever sees
     // `tx`, and never re-read off `tx` after signing. A wallet whose signTransaction() mutates the
@@ -503,5 +519,19 @@ export async function signSendConfirm({ provider, owner, build, coSign, skipPref
     return landed ? { status: "sent", sig } : { status: "unconfirmed", sig };
   } catch (e) {
     return { status: "failed", sig, error: (e && e.message) || String(e) };
+  }
+}
+
+// The slot a signature LANDED in, or null when that can't be read — from the chain's own
+// getSignatureStatuses entry (searching history, since this is asked after confirmation). Firepit
+// uses it as proof of "when" for a Rescan (Codex review of #473); this file stays the one place
+// that calls getSignatureStatuses.
+export async function signatureSlot(rpc, signature) {
+  try {
+    const r = await rpc("getSignatureStatuses", [[signature], { searchTransactionHistory: true }]);
+    const s = r && Array.isArray(r.value) ? r.value[0] : null;
+    return s && !s.err && Number.isSafeInteger(s.slot) ? s.slot : null;
+  } catch (_) {
+    return null;
   }
 }

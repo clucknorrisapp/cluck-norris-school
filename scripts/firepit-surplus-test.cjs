@@ -144,11 +144,17 @@ let stop = () => {};
   let capturedSendTxB64 = null;
   let sentTransaction = false;
   let laggingNode = false;   // when true, the scan answers as an RPC node that has not seen the withdrawal yet
+  const proofReads = [];
+  let laggingDeposit = 0;     // lamports a NEW deposit added after the withdrawal (Codex review of #471)
+  const TX_SLOT = 500;        // the slot getSignatureStatuses says the withdrawal landed in
   await page.route("**/api/burn-scan**", async (route) => {
     scanCalls++;
     // After a "confirmed" send, the account the test reclaims from must read back with its
     // surplus gone — this is what proves the page re-reads reality rather than trusting the ask.
-    if (laggingNode) return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(scanFixture()) });
+    if (laggingNode) {
+      const acct = laggingDeposit ? Object.assign({}, REAL_ACCT, { rentLamports: REAL_ACCT.rentLamports + laggingDeposit, surplusLamports: REAL_ACCT.surplusLamports + laggingDeposit }) : REAL_ACCT;
+      return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(scanFixture({ accounts: [acct, WSOL_ACCT, UNKNOWN_MIN_ACCT, JUNK_ACCT] })) });
+    }
     if (sentTransaction) {
       const closed = Object.assign({}, REAL_ACCT, { rentLamports: MIN_165, surplusLamports: 0, surplusEligible: false });
       return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(scanFixture({ accounts: [closed, WSOL_ACCT, UNKNOWN_MIN_ACCT, JUNK_ACCT] })) });
@@ -173,7 +179,14 @@ let stop = () => {};
         sentTransaction = true;
         return { jsonrpc: "2.0", id: c.id, result: "FAKESIG11111111111111111111111111111111111111111111111111" };
       }
-      if (c.method === "getSignatureStatuses") return { jsonrpc: "2.0", id: c.id, result: { context: { slot: 1 }, value: [{ confirmationStatus: "confirmed", err: null }] } };
+      // The proof read (Codex review of #473): it must ask at minContextSlot = the tx's own slot,
+      // and the chain past that slot has the account at today's minimum (the surplus is gone).
+      if (c.method === "getMultipleAccounts") {
+        proofReads.push(c.params);
+        if (!(c.params[1] && c.params[1].minContextSlot === TX_SLOT)) return { jsonrpc: "2.0", id: c.id, error: { code: -32602, message: "test: wrong minContextSlot" } };
+        return { jsonrpc: "2.0", id: c.id, result: { context: { slot: TX_SLOT + 20 }, value: c.params[0].map(() => ({ lamports: MIN_165, owner: TOKEN_CLASSIC, data: ["", "base64"], executable: false, rentEpoch: 0 })) } };
+      }
+      if (c.method === "getSignatureStatuses") return { jsonrpc: "2.0", id: c.id, result: { context: { slot: 1 }, value: [{ confirmationStatus: "confirmed", err: null, slot: TX_SLOT }] } };
       return { jsonrpc: "2.0", id: c.id, result: null };
     });
     return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(Array.isArray(body) ? results : results[0]) });
@@ -307,6 +320,19 @@ let stop = () => {};
   ok("Rescan really re-reads the chain (a new scan request went out)", scanCalls > callsBefore, { callsBefore, scanCalls });
   const rowsAfterRescan = await page.$eval("#rows-surplus", (el) => el.textContent);
   ok("a lagging node's stale answer does not bring back the surplus that was just withdrawn", !/USD1/.test(rowsAfterRescan), rowsAfterRescan.slice(0, 200));
+  ok("…because the chain itself, read at our transaction's slot, said so (one proof read, that account only)",
+    proofReads.length >= 1 && proofReads.every((p) => p[0].length === 1 && p[0][0] === REAL_ACCT.tokenAccount && p[1].minContextSlot === TX_SLOT), proofReads);
+
+  // Codex review of #471: address + elapsed time could not tell a lagging view from a GENUINE new
+  // deposit. A deposit after the withdrawal changes the lamports, so it must be offered again even
+  // while the node is still below our slot.
+  laggingDeposit = 50000;
+  const callsBefore2 = scanCalls;
+  await page.click("#rescan");
+  for (let i = 0; i < 50 && scanCalls === callsBefore2; i++) await new Promise((r) => setTimeout(r, 100));
+  await new Promise((r) => setTimeout(r, 400));
+  const rowsAfterDeposit = await page.$eval("#rows-surplus", (el) => el.textContent);
+  ok("a genuine new deposit after the withdrawal IS offered, even from a lagging node", /USD1/.test(rowsAfterDeposit), rowsAfterDeposit.slice(0, 200));
 
   await ctx.close();
   await browser.close();

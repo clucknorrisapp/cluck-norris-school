@@ -23,7 +23,7 @@ const VENDOR = path.join(__dirname, "..", "..", "public", "vendor");
   const page = await browser.newPage({ viewport: { width: W, height: H }, hasTouch: true, isMobile: true });
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
-  await page.goto(`http://127.0.0.1:${server.address().port}/`, { waitUntil: "load" });
+  await page.goto(`http://127.0.0.1:${server.address().port}/?preview=1`, { waitUntil: "load" });
   await page.waitForFunction(() => window.__AHOY_GAME && window.__AHOY_GAME.scene.isActive("Title"), null, { timeout: 30000 });
   await page.evaluate(() => { AHOY.Gate.demoUnlock && AHOY.Gate.demoUnlock(); AHOY.Save.set({ seenControls: true }); });
   fs.mkdirSync(out, { recursive: true });

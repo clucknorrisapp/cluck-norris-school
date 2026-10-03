@@ -102,7 +102,7 @@ function toInstruction(web3, d) {
 
 // Build + sign + submit + confirm ONE batch through the shared seam. Returns signSendConfirm's
 // own result ({status: sent|failed|unconfirmed|declined, sig?, error?}) plus the accounts it
-// was built for, so the caller can re-read exactly those.
+// was built for, so the caller can re-read exactly those, and the `recentBlockhash` it carried.
 //
 // `owner` is the address the LIST was scanned for. sign.js re-reads the wallet's live account
 // right before building and hands build() that live address; if it is not the scanned owner the
@@ -112,10 +112,18 @@ function toInstruction(web3, d) {
 export async function runRevoke({ provider, owner, batch }) {
   const accounts = (batch || []).map((r) => revocable(r)).filter(Boolean);
   if (!accounts.length) return { status: "failed", error: "Nothing to revoke.", accounts: [] };
+  // The blockhash the transaction was built against, kept so an UNCONFIRMED send can later be
+  // judged expired (sign.js checkPendingSwap: no status AND a dead blockhash) instead of guessed.
+  // `lastValidBlockHeight` is the lifetime that came with THAT blockhash (getLatestBlockhash);
+  // null when the node gave none, which means expiry can never be proven (always pending).
+  let recentBlockhash = null;
+  let lastValidBlockHeight = null;
   const res = await signSendConfirm({
     provider,
     owner,
-    build: (web3, blockhash, live) => {
+    build: (web3, blockhash, live, meta) => {
+      recentBlockhash = blockhash;
+      lastValidBlockHeight = meta && typeof meta.lastValidBlockHeight === "number" ? meta.lastValidBlockHeight : null;
       if (live !== owner) throw new Error("Your wallet switched accounts — reconnect and rescan.");
       const { Transaction, PublicKey } = web3;
       const tx = new Transaction();
@@ -125,7 +133,80 @@ export async function runRevoke({ provider, owner, batch }) {
       return tx;
     },
   });
-  return { ...res, accounts };
+  return { ...res, accounts, recentBlockhash, lastValidBlockHeight };
+}
+
+// ── The unresolved send, remembered OUTSIDE the component (Codex round 2 on Revoke, P2) ─────────
+// A send that came back `unconfirmed` is the one record that stops a second Revoke being offered
+// (and a second fee being paid) for accounts whose first transaction may still land. Held only in
+// CheckupRevoke's React state it died with the component: the ordinary Rescan swaps the pane for
+// its loading screen, leaving the Checkup tab unmounts it, and an app reload loses it — each one
+// restored the same approvals with a fresh Revoke button. So it is persisted, keyed by wallet
+// address (Swap's pattern, src/seeker/tools/Swap.jsx loadPending/savePending), and restored on
+// mount. It is cleared only when the send is RESOLVED (landed, failed on chain, or expired by
+// sign.js's strict rule) or dismissed through the 10-minute "stop watching" escape hatch.
+//
+// Record: { sig, accounts:[{tokenAccount, program, mint, delegate}], recentBlockhash,
+//           lastValidBlockHeight, wallet, at }. Every storage touch is try/catch: storage that is
+// full or unavailable must never break the pane (it simply falls back to in-memory only).
+export const REVOKE_PENDING_KEY = "clkn_seeker_revoke_pending";
+// Same figure as Swap's PENDING_MANUAL_ESCAPE_MS: a record checkPendingSwap can never resolve
+// (no recentBlockhash/lastValidBlockHeight, or a node that never answers) must not lock the
+// accounts forever; the signature stays visible and is the real record.
+export const REVOKE_PENDING_ESCAPE_MS = 10 * 60 * 1000;
+
+function pendingStore() {
+  try { return typeof window !== "undefined" && window.localStorage ? window.localStorage : null; } catch (_) { return null; }
+}
+function readPendingMap() {
+  try {
+    const st = pendingStore();
+    const raw = st && st.getItem(REVOKE_PENDING_KEY);
+    const m = raw ? JSON.parse(raw) : null;
+    return m && typeof m === "object" && !Array.isArray(m) ? m : {};
+  } catch (_) { return {}; }
+}
+function writePendingMap(m) {
+  try {
+    const st = pendingStore();
+    if (!st) return false;
+    if (Object.keys(m).length) st.setItem(REVOKE_PENDING_KEY, JSON.stringify(m));
+    else st.removeItem(REVOKE_PENDING_KEY);
+    return true;
+  } catch (_) { return false; }
+}
+export function loadRevokePending(wallet) {
+  if (!wallet) return null;
+  const rec = readPendingMap()[wallet];
+  if (!rec || typeof rec !== "object" || !rec.sig || rec.wallet !== wallet || !Array.isArray(rec.accounts) || !rec.accounts.length) return null;
+  return {
+    sig: String(rec.sig),
+    accounts: rec.accounts.map((a) => revocable(a)).filter(Boolean),
+    recentBlockhash: rec.recentBlockhash || null,
+    lastValidBlockHeight: typeof rec.lastValidBlockHeight === "number" ? rec.lastValidBlockHeight : null,
+    wallet,
+    at: typeof rec.at === "number" ? rec.at : Date.now(),
+  };
+}
+export function saveRevokePending(rec) {
+  if (!rec || !rec.wallet || !rec.sig) return false;
+  const m = readPendingMap();
+  m[rec.wallet] = {
+    sig: rec.sig,
+    accounts: (rec.accounts || []).map((a) => ({ tokenAccount: a.tokenAccount, program: a.program, mint: a.mint || null, delegate: a.delegate || null })),
+    recentBlockhash: rec.recentBlockhash || null,
+    lastValidBlockHeight: typeof rec.lastValidBlockHeight === "number" ? rec.lastValidBlockHeight : null,
+    wallet: rec.wallet,
+    at: typeof rec.at === "number" ? rec.at : Date.now(),
+  };
+  return writePendingMap(m);
+}
+export function clearRevokePending(wallet) {
+  if (!wallet) return;
+  const m = readPendingMap();
+  if (!(wallet in m)) return;
+  delete m[wallet];
+  writePendingMap(m);
 }
 
 // The empirical half. Re-reads each token account and reports, per account, what the chain says

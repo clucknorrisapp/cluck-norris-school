@@ -60,8 +60,9 @@ import { t, tf, useI18nReady } from "../i18n.js";
 import { Pane, Loading, Empty, Unavailable, Refused, Confirm, toolFetch, useOnline } from "../pane.jsx";
 import { NeedsWallet } from "../needswallet.jsx";
 import { shortAddr } from "../addr.js";
-import { signSendConfirm, splTokenShim } from "../sign.js";
+import { signSendConfirm, splTokenShim, rpcFn, signatureSlot } from "../sign.js";
 import "./tools.css";
+import { reconcileRecent } from "./firepit-recent.js";
 
 // Closing a wrapped-SOL account UNWRAPS it back to the owner — it is not a burn, and its value
 // is never counted as "destroyed" (matches public/firepit.html's isNativeSol()).
@@ -207,21 +208,13 @@ function SurplusRow({ a, checked, onToggle }) {
   );
 }
 
-// Accounts this session WATCHED close (and surpluses it watched withdraw). An RPC node can lag a
-// few seconds behind the confirmation we saw, so a Rescan in that window must not bring a closed
-// account back or re-offer a surplus already taken (owner report 2026-10-02: "after you burn a
-// token, Rescan doesn't actually rescan — you have to disconnect and reconnect"). The server also
-// reads at "confirmed" now; this covers the node-to-node lag that remains.
-const RECENT_MS = 120000;
-function applyRecent(list, recent) {
-  const now = Date.now();
-  return (list || []).filter((a) => { const t = recent.closed[a.tokenAccount]; return !(t && now - t < RECENT_MS); })
-    .map((a) => {
-      const w = recent.withdrawn[a.tokenAccount];
-      if (w && now - w.at < RECENT_MS && (Number(a.rentLamports) || 0) >= w.prior) return { ...a, surplusLamports: 0, surplusEligible: false };
-      return a;
-    });
+// Rows this session watched close / withdraw — see ./firepit-recent.js for the rule. Each record
+// carries the slot its transaction LANDED in, read once from the chain after confirmation.
+function stampTxSlot(entry, sig) {
+  if (!sig) return;
+  try { signatureSlot(rpcFn(), sig).then((slot) => { if (slot != null) entry.txSlot = slot; }); } catch (_) { /* no RPC layer: no proof, so nothing is hidden */ }
 }
+const reconcile = (list, recent) => { let rpc = null; try { rpc = rpcFn(); } catch (_) {} return reconcileRecent(list, recent, rpc); };
 
 function useToggleSet(initial) {
   const [set, setSet] = React.useState(initial || (() => new Set()));
@@ -309,7 +302,7 @@ export default function FirepitPane({ wallet }) {
     try { abortRef.current && abortRef.current.abort(); } catch (_) {}
     const ctrl = new AbortController();
     abortRef.current = ctrl;
-    toolFetch(`/api/burn-scan?wallet=${encodeURIComponent(address)}`, { signal: ctrl.signal }).then((res) => {
+    toolFetch(`/api/burn-scan?wallet=${encodeURIComponent(address)}`, { signal: ctrl.signal }).then(async (res) => {
       if (res.kind === "aborted") return;
       if (!res.ok) {
         // A 4xx here is the wallet address itself, not the chain — ListingCheckup/ProjectBurn's
@@ -325,7 +318,8 @@ export default function FirepitPane({ wallet }) {
         setPhase("unavailable");
         return;
       }
-      const accounts = applyRecent(res.data.accounts, recentRef.current);
+      const accounts = await reconcile(res.data.accounts, recentRef.current);
+      if (ctrl.signal.aborted) return;
       setData({ ...res.data, accounts });
       // Pre-select the empty (rent-only) accounts, same as the desktop tool: reclaiming them is
       // risk-free, so the total is meaningful the moment the scan lands. Nothing that could
@@ -404,7 +398,8 @@ export default function FirepitPane({ wallet }) {
     const res = await toolFetch(`/api/burn-scan?wallet=${encodeURIComponent(wallet.address)}`, { signal: ctrl.signal });
     if (res.kind === "aborted") return;
     if (!res.ok) { setConfirmPhase("error"); return; }
-    const freshAccounts = applyRecent(res.data.accounts, recentRef.current);
+    const freshAccounts = await reconcile(res.data.accounts, recentRef.current);
+    if (ctrl.signal.aborted) return;
     // Keep the underlying page in step with the same fresh read — never leave it showing an
     // older scan next to a sheet built from a newer one.
     setData({ ...res.data, accounts: freshAccounts });
@@ -542,12 +537,13 @@ export default function FirepitPane({ wallet }) {
     // Only act on rows we watched actually land (status "sent") — an unconfirmed or failed row is
     // untouched on-chain and must stay in the list so Rescan can re-check it truthfully.
     const sentIds = new Set();
-    collected.forEach(({ chunk, status }) => { if (status === "sent") chunk.forEach((a) => sentIds.add(a.tokenAccount)); });
+    const sigById = {};
+    collected.forEach(({ chunk, status, sig }) => { if (status === "sent") chunk.forEach((a) => { sentIds.add(a.tokenAccount); sigById[a.tokenAccount] = sig; }); });
     const nowMs = Date.now();
     sel.forEach((a) => {
       if (!sentIds.has(a.tokenAccount)) return;
-      if (kind === "surplus") recentRef.current.withdrawn[a.tokenAccount] = { at: nowMs, prior: Number(a.rentLamports) || 0 };
-      else recentRef.current.closed[a.tokenAccount] = nowMs;
+      if (kind === "surplus") stampTxSlot(recentRef.current.withdrawn[a.tokenAccount] = { at: nowMs, prior: Number(a.rentLamports) || 0, txSlot: null }, sigById[a.tokenAccount]);
+      else stampTxSlot(recentRef.current.closed[a.tokenAccount] = { at: nowMs, amountRaw: a.amountRaw, lamports: Number(a.rentLamports) || 0, txSlot: null }, sigById[a.tokenAccount]);
     });
     if (sentIds.size) {
       if (kind === "surplus") {
