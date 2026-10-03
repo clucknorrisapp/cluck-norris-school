@@ -10725,6 +10725,10 @@ app.get("/api/verify-sol-payment", async (req, res) => {
     // A payment already claimed as a Lock-to-Earn platform month lands in this same wallet
     // (deep dive P1-051, the sibling of the tools-pass check in lib/tool-pass-redeem.js).
     if (sigStore.has("hub-access:" + sig) || require("./lib/hub/access").sigUsedInRegistry(hubStore.readRegistry(kv) || {}, sig)) return res.status(200).json({ success: false, error: "This payment was already used for a platform-access month." });
+    // The leg claim comes first (lib/tool-pass-redeem.js claimSolLeg): this route shares the "sol:"
+    // key with the SOL and SKR pass legs, so it must not consume a signature one of them owns.
+    const legClaim = require("./lib/tool-pass-redeem").claimSolLeg(sigStore, sig, v.payer);
+    if (!legClaim.ok) return res.status(200).json({ success: false, error: legClaim.error });
     if (!sigStore.add("sol:" + sig)) {
       return res.status(200).json({ success: false, error: "This payment was already redeemed — each transfer unlocks once." });
     }

@@ -20,7 +20,7 @@ const { PublicKey, Keypair } = require("@solana/web3.js");
 const splToken = require("@solana/spl-token");
 
 const SKR = require("../lib/tool-pass-skr");
-const { redeemPaidPass, DAY_MS } = require("../lib/tool-pass-redeem");
+const { redeemPaidPass, claimSolLeg, DAY_MS } = require("../lib/tool-pass-redeem");
 const TERMS = require("../lib/tool-pass-terms");
 const { SKR_MINT } = require("../lib/tool-pass-qualify");
 
@@ -211,14 +211,20 @@ console.log("\nA4. RPC trouble is `unavailable` — never a grant, never a denia
   const SIG = "7".repeat(88);
   const QUOTE = SKR.verifySkrQuote({ secret: KEY, token: SKR.issueSkrQuote({ secret: KEY, wallet: W, amountRaw: "50000000", now: NOW - 60e3 }).token, wallet: W });   // iat = NOW − 1 min
   const skrV = (over = {}) => ({ ok: true, kind: "skr", payer: W, amountRaw: "50000000", blockTimeMs: NOW - 30e3, ...over });
-  const fakeSigStore = () => { const set = new Set(); let failing = false; return { add: (s) => { if (!s || set.has(s) || failing) return false; set.add(s); return true; }, has: (s) => set.has(s), size: () => set.size, fail: (v) => { failing = v; } }; };
+  // A fake with the real semantics: add() is test-and-set, `fail` makes every write fail closed,
+  // `failSol` fails ONLY the shared "sol:" commit key (a crash between the leg claim and the commit),
+  // `failLeg` fails only the leg claim. claimLeg/getLeg mirror lib/sigstore.js.
+  const fakeSigStore = () => { const set = new Set(), legs = new Map(); let failing = false, failSol = false, failLeg = false;
+    return { add: (s) => { if (!s || set.has(s) || failing || (failSol && s.startsWith("sol:"))) return false; set.add(s); return true; }, has: (s) => set.has(s), size: () => set.size,
+      claimLeg: (sig, kind, w) => { const e = legs.get(sig); if (e) return { ok: true, claimed: false, leg: e }; if (failing || failLeg) return { ok: false }; const leg = { kind, wallet: w }; legs.set(sig, leg); return { ok: true, claimed: true, leg }; },
+      getLeg: (sig) => legs.get(sig) || null, legs, fail: (v) => { failing = v; }, failSol: (v) => { failSol = v; }, failLeg: (v) => { failLeg = v; } }; };
   const fakeKv = () => { const m = new Map(); return { get: (k, d) => (m.has(k) ? m.get(k) : d), set: (k, v) => m.set(k, v), raw: m }; };
   const run = (a) => redeemPaidPass({ paySig: SIG, wallet: W, verified: skrV(), now: NOW, quote: QUOTE, ...a });
   {
     const s = fakeSigStore(), kv = fakeKv();
     const a = run({ sigStore: s, kv });
     ok("exact quoted amount is honoured; the term is the schedule's days from the BLOCK time", a.ok && a.recovered === false && a.kind === "skr" && a.termDays === 7 && a.expiresAt === NOW - 30e3 + 7 * DAY_MS, a);
-    ok("consumed in the SAME namespace the SOL pass uses ('sol:' + sig)", s.has("sol:" + SIG) && s.has("skr:" + SIG) && s.has("skrpayer:" + SIG + ":" + W) && s.size() === 3);
+    ok("consumed in the SAME namespace the SOL pass uses ('sol:' + sig), with the leg claimed {skr, payer}", s.has("sol:" + SIG) && s.getLeg(SIG) && s.getLeg(SIG).kind === "skr" && s.getLeg(SIG).wallet === W && s.size() === 1);
     const audit = kv.raw.get("toolPassPaid:" + SIG);
     ok("audit line records kind, paid amount and the quote's amount", audit && audit.kind === "skr" && audit.amountRaw === "50000000" && audit.quoteAmountRaw === "50000000", audit);
     ok("an overpayment is honoured too", run({ sigStore: fakeSigStore(), verified: skrV({ amountRaw: "99999999" }) }).ok === true);
@@ -266,7 +272,7 @@ console.log("\nA4. RPC trouble is `unavailable` — never a grant, never a denia
     ok("RECOVERY with no quote after consumption: same payer, same expiry, recovered:true", later.ok && later.recovered === true && later.expiresAt === a.expiresAt, later);
     ok("…and a different wallet is still refused", !run({ sigStore: s, quote: null, wallet: pk() }).ok);
     const again = run({ sigStore: s, quote: null, verified: skrV({ amountRaw: "1" }), now: NOW + 7200e3 });
-    ok("recovery never re-extends: still the one pass (one shared key, one leg marker, one payer record)", again.ok && again.expiresAt === a.expiresAt && s.size() === 3, again);
+    ok("recovery never re-extends: still the one pass (one shared key, one leg claim)", again.ok && again.expiresAt === a.expiresAt && s.size() === 1, again);
   }
   {
     const s = fakeSigStore(); s.add("hub-access:" + SIG);
@@ -297,19 +303,19 @@ console.log("\nA4. RPC trouble is `unavailable` — never a grant, never a denia
     // that is already consumed, only the RECORDED payer recovers it.
     const W1 = pk(), W2 = pk(), s = fakeSigStore();
     const a = run({ sigStore: s, wallet: W1, verified: skrV({ payer: W1 }), quote: QUOTE });
-    ok("setup: the real payer redeems", a.ok && a.recovered === false && s.has("skrpayer:" + SIG + ":" + W1) && s.has("skr:" + SIG) && s.has("sol:" + SIG), a);
+    ok("setup: the real payer redeems", a.ok && a.recovered === false && s.getLeg(SIG).wallet === W1 && s.has("sol:" + SIG), a);
     const b = run({ sigStore: s, wallet: W2, verified: skrV({ payer: W2, amountRaw: "1" }), quote: null });
     ok("another wallet (verified as 'payer' with a 1-unit leg) 'recovering' the consumed signature → refused, not recovered", !b.ok && b.code === "already_redeemed" && b.status === 409 && b.definitive === true, b);
     const b2 = run({ sigStore: s, wallet: W2, verified: skrV({ payer: W2 }), quote: QUOTE });
     ok("…even holding a quote of its own for that amount", !b2.ok && b2.code === "already_redeemed", b2);
     ok("the recorded payer still recovers (same expiry)", run({ sigStore: s, wallet: W1, verified: skrV({ payer: W1 }), quote: null }).recovered === true);
-    ok("exactly one signature consumed, one payer record", s.size() === 3);
+    ok("exactly one signature consumed, one leg claim", s.size() === 1 && s.legs.size === 1);
   }
   {
     // Cross-kind. A SOL-consumed signature never recovers on the SKR leg; an SKR-consumed one never on the SOL leg.
     const s = fakeSigStore(), cur = TERMS.current(NOW);
     const sol = redeemPaidPass({ paySig: SIG, wallet: W, verified: { ok: true, lamports: cur.lamports, payer: W, blockTimeMs: NOW - 30e3 }, sigStore: s, now: NOW });
-    ok("setup: a SOL-pass redemption consumes the signature", sol.ok && s.has("sol:" + SIG) && !s.has("skr:" + SIG), sol);
+    ok("setup: a SOL-pass redemption consumes the signature", sol.ok && s.has("sol:" + SIG) && s.getLeg(SIG).kind === "sol", sol);
     const co = pk();
     const viaSkr = run({ sigStore: s, wallet: co, verified: skrV({ payer: co, amountRaw: "1" }), quote: null });
     ok("a co-signer's 1-unit SKR leg cannot recover a SOL-consumed signature (no SKR checks were ever run on it)", !viaSkr.ok && viaSkr.code === "already_redeemed", viaSkr);
@@ -321,19 +327,95 @@ console.log("\nA4. RPC trouble is `unavailable` — never a grant, never a denia
     ok("an SKR-consumed signature is refused on the SOL leg", !solAfter.ok && solAfter.code === "already_redeemed", solAfter);
     ok("the SOL leg still recovers its own signature (unchanged)", redeemPaidPass({ paySig: SIG, wallet: W, verified: { ok: true, lamports: cur.lamports, payer: W, blockTimeMs: NOW - 30e3 }, sigStore: s, now: NOW + 1000 }).recovered === true);
   }
+  console.log("\nB3. the leg claim is the FIRST, atomic write — crash between writes, kind switched on retry (Codex, #421 round 2)\n");
   {
-    // The payer record and leg marker are written BEFORE the shared key (the commit point): a store
-    // that dies after them leaves the signature unconsumed, and the same payer simply redeems again.
-    const writes = [], set = new Set();
-    const s = { add: (k) => { if (set.has(k)) return false; if (k.startsWith("sol:")) return false; set.add(k); writes.push(k); return true; }, has: (k) => set.has(k) };
-    const r = run({ sigStore: s });
-    ok("a store that cannot write the shared key → 503, signature NOT consumed", !r.ok && r.status === 503 && !set.has("sol:" + SIG), r);
-    ok("the payer record and leg marker were written first, shared key last (it is the commit point)", writes.length === 2 && writes[0].startsWith("skrpayer:") && writes[1].startsWith("skr:"), writes);
-    s.add = (k) => { if (set.has(k)) return false; set.add(k); return true; };
-    const r2 = run({ sigStore: s });
-    ok("…and the same payer redeems on retry", r2.ok && r2.recovered === false, r2);
-    let dead = true; const s3 = { add: (k) => (dead ? false : true), has: () => false };
-    ok("a store that cannot record the payer record → 503, nothing consumed", run({ sigStore: s3 }).status === 503);
+    const cur = TERMS.current(NOW);
+    const X = pk(), Y = pk();                       // ONE transaction: X paid in SOL, Y paid in SKR
+    const solV = { ok: true, lamports: cur.lamports, payer: X, blockTimeMs: NOW - 30e3 };
+    const solRedeem = (s, w = X) => redeemPaidPass({ paySig: SIG, wallet: w, verified: { ...solV, payer: w }, sigStore: s, now: NOW });
+    const skrRedeem = (s, w = Y, o = {}) => redeemPaidPass({ paySig: SIG, wallet: w, verified: skrV({ payer: w }), sigStore: s, quote: QUOTE, now: NOW, ...o });
+    // The Codex repro, exactly: Y's SKR redemption fails before the commit → X gets a SOL pass → Y recovers an SKR pass.
+    {
+      const s = fakeSigStore();
+      s.failSol(true);
+      const y1 = skrRedeem(s);
+      ok("repro step 1: Y's SKR redemption fails at the commit (503) — nothing consumed", !y1.ok && y1.status === 503 && !s.has("sol:" + SIG), y1);
+      ok("…but the signature is CLAIMED for {skr, Y} (the first write)", s.getLeg(SIG) && s.getLeg(SIG).kind === "skr" && s.getLeg(SIG).wallet === Y);
+      s.failSol(false);
+      const x = solRedeem(s);
+      ok("repro step 2: X's SOL redemption of the SAME signature is REFUSED (the claim belongs to the SKR leg)", !x.ok && x.code === "already_redeemed" && x.status === 409 && !s.has("sol:" + SIG), x);
+      const y2 = skrRedeem(s);
+      ok("repro step 3: Y finishes its own redemption once — one pass, one consumption", y2.ok && y2.recovered === false && s.has("sol:" + SIG), y2);
+      ok("…and X still cannot touch it afterwards", !solRedeem(s).ok);
+      ok("…and Y recovering is the same pass", skrRedeem(s, Y, { quote: null }).recovered === true);
+    }
+    // The mirror: SOL-partial, then SKR.
+    {
+      const s = fakeSigStore();
+      s.failSol(true);
+      const x1 = solRedeem(s);
+      ok("SOL-partial: X's SOL redemption fails at the commit (503)", !x1.ok && x1.status === 503 && s.getLeg(SIG).kind === "sol", x1);
+      s.failSol(false);
+      const y = skrRedeem(s);
+      ok("…then Y's SKR redemption of the same signature is REFUSED", !y.ok && y.code === "already_redeemed" && !s.has("sol:" + SIG), y);
+      const x2 = solRedeem(s);
+      ok("…and X completes its own SOL redemption", x2.ok && x2.recovered === false && s.has("sol:" + SIG), x2);
+    }
+    // The same wallet switching KIND on retry is refused too (a partial SKR claim does not become a SOL one).
+    {
+      const s = fakeSigStore();
+      s.failSol(true); skrRedeem(s, X, { verified: skrV({ payer: X }) }); s.failSol(false);
+      const sw = solRedeem(s, X);
+      ok("the SAME wallet retrying as the other KIND is refused (a claim is kind + wallet)", !sw.ok && sw.code === "already_redeemed", sw);
+    }
+    // A store that cannot record the claim: nothing claimed, nothing consumed, both can still redeem later.
+    {
+      const s = fakeSigStore();
+      s.failLeg(true);
+      const a = skrRedeem(s), b = solRedeem(s);
+      ok("a store that cannot record the claim → 503 for both legs, nothing claimed, nothing consumed", !a.ok && a.status === 503 && !b.ok && b.status === 503 && s.legs.size === 0 && s.size() === 0, { a, b });
+      s.failLeg(false);
+      ok("…and once it is back the first to arrive owns it", skrRedeem(s).ok === true && !solRedeem(s).ok);
+    }
+    // The claim is written before ANYTHING else, and a refusal writes nothing at all.
+    {
+      const order = []; const s = fakeSigStore(); const ac = s.claimLeg, ad = s.add;
+      s.claimLeg = (...a) => { order.push("claim"); return ac(...a); }; s.add = (k) => { order.push("add:" + k.split(":")[0]); return ad(k); };
+      skrRedeem(s);
+      ok("write order: leg claim first, the shared commit key last", order.join(",") === "claim,add:sol", order);
+      const s2 = fakeSigStore(); let wrote = 0; const ac2 = s2.claimLeg, ad2 = s2.add;
+      s2.claimLeg = (...a) => { wrote++; return ac2(...a); }; s2.add = (k) => { wrote++; return ad2(k); };
+      redeemPaidPass({ paySig: SIG, wallet: Y, verified: skrV({ payer: Y, amountRaw: "1" }), sigStore: s2, quote: QUOTE, now: NOW });
+      ok("a refused redemption (amount too low) writes NOTHING — no claim to be left behind", wrote === 0, wrote);
+    }
+    // A store with no leg support is refused, never silently treated as unclaimed.
+    ok("a sig store without claimLeg → 503 (fail closed), nothing consumed", (() => { const s = { add: () => true, has: () => false }; const r = skrRedeem(s); return !r.ok && r.status === 503; })());
+    // The public GET /api/verify-sol-payment shares the claim.
+    {
+      const s = fakeSigStore();
+      ok("verify-sol-payment's claim: first caller owns it as {sol, payer}", claimSolLeg(s, SIG, X).ok === true && s.getLeg(SIG).kind === "sol");
+      ok("…the same payer again is fine", claimSolLeg(s, SIG, X).ok === true);
+      ok("…a signature already claimed for the SKR leg is refused there", (() => { const s2 = fakeSigStore(); s2.claimLeg(SIG, "skr", Y); return claimSolLeg(s2, SIG, X).ok === false; })());
+      ok("…and no payer (unattributable) is refused", claimSolLeg(fakeSigStore(), SIG, null).ok === false);
+      const src = fs.readFileSync(path.join(__dirname, "..", "server.js"), "utf8");
+      const route = src.slice(src.indexOf('app.get("/api/verify-sol-payment"'), src.indexOf('app.get("/api/verify-sol-payment"') + 3500);
+      ok("server.js: the endpoint claims the leg BEFORE it consumes the signature", route.includes("claimSolLeg(") && route.indexOf("claimSolLeg(") < route.indexOf('sigStore.add("sol:" + sig)'));
+    }
+  }
+  console.log("\nB4. the REAL lib/sigstore.js leg claim — atomic, durable, survives a restart\n");
+  {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "sigstore-leg-"));
+    const load = () => { process.env.DATA_DIR = dir; const f = require.resolve("../lib/sigstore"); delete require.cache[f]; return require("../lib/sigstore"); };
+    let st = load();
+    const a = st.claimLeg(SIG, "skr", W);
+    ok("the first claim wins", a.ok && a.claimed === true && st.getLeg(SIG).wallet === W);
+    const b = st.claimLeg(SIG, "sol", pk());
+    ok("a second claim (another kind / wallet) does not displace it — it is handed the owner", b.ok && b.claimed === false && b.leg.kind === "skr" && b.leg.wallet === W);
+    ok("a claim is one durable entry in the same consumed-signature array", JSON.parse(fs.readFileSync(path.join(dir, "consumed-signatures.json"), "utf8")).filter((k) => k.startsWith("leg:")).length === 1);
+    st = load();
+    ok("RESTART: the claim is reloaded and still excludes the other kind", st.getLeg(SIG) && st.getLeg(SIG).kind === "skr" && st.claimLeg(SIG, "sol", W).leg.kind === "skr");
+    ok("a bad claim (pipe in a field / missing wallet) is refused", st.claimLeg("x|y", "sol", W).ok === false && st.claimLeg(SIG + "z", "sol", "").ok === false);
+    fs.rmSync(dir, { recursive: true, force: true });
   }
   {
     const s = fakeSigStore(); s.fail(true);
