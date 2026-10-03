@@ -373,6 +373,14 @@ jobs:
       # store), and the REAL server booted against a stub JSON-RPC node with a real ed25519 wallet
       # (wrong mint / destination / short / other payer / expired / forged quote / replay / RPC
       # outage / stale price). No outside network.
+      # The CLIENT half: instruction bytes diffed against @solana/spl-token (classic + Token-2022),
+      # the quote validated before signing, the recovery record written AFTER the wallet signs and
+      # BEFORE submission and before any redemption (a record that cannot be stored stops the
+      # broadcast), landed/failed/unconfirmed/declined kept apart, retryable refusals keeping the
+      # record and definitive ones clearing it with their reason, and "Check payment" releasing a
+      # payment only when the node proves its blockhash dead. Driven through the REAL signing seam.
+      - name: Seeker app — SKR pass payment client (record-before-submit, outcomes, redemption)
+        run: node scripts/seeker-skr-pay-test.cjs
       - name: Tools pass — terms schedule is append-only, the SKR term sits on a new entry
         run: node scripts/tool-pass-terms-test.cjs
       - name: Tools pass — SKR payment (quote, on-chain evidence, redemption, server end to end)
