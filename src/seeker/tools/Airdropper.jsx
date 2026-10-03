@@ -66,18 +66,9 @@ import "./tools.css";
 const ADDR_RE = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
 const MAX_RECIPIENTS = 2000;     // a phone paste, not a spreadsheet job — see the note at parse()
 const RECORD_CHUNK = 100;        // the server's own per-call row cap is higher; this keeps posts small
-// The receipt sign-in token, per wallet, 23h (the server issues 24h). localStorage so a drop
-// resumed after the OS backgrounded the app does not prompt again mid-run.
-const RECEIPT_SESSION_KEY = "clkn_seeker_receipt_session";
-function readReceiptSession(address) {
-  try { const d = JSON.parse(localStorage.getItem(RECEIPT_SESSION_KEY) || "null"); return d && d.wallet === address && d.exp > Date.now() && d.pass ? d.pass : null; } catch (_) { return null; }
-}
-function writeReceiptSession(address, pass) {
-  try { localStorage.setItem(RECEIPT_SESSION_KEY, JSON.stringify({ wallet: address, pass, exp: Date.now() + 23 * 3600e3 })); } catch (_) {}
-}
-function forgetReceiptSession(address) {
-  try { const d = JSON.parse(localStorage.getItem(RECEIPT_SESSION_KEY) || "null"); if (!d || d.wallet === address) localStorage.removeItem(RECEIPT_SESSION_KEY); } catch (_) {}
-}
+// The receipt sign-in token lives in ../receipt-session.js (moved 2026-09-29 so the Checkup's
+// "Disconnect & clean up" card can forget it too — same key, same helpers).
+import { readReceiptSession, writeReceiptSession, forgetReceiptSession } from "../receipt-session.js";
 
 function plan() { try { return (typeof window !== "undefined" && window.CluckAirdropPlan) || null; } catch (_) { return null; } }
 function engine() { try { return (typeof window !== "undefined" && window.CluckAirdrop) || null; } catch (_) { return null; } }

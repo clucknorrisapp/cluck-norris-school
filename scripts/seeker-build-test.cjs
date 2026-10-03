@@ -575,7 +575,14 @@ function buildVariant(cwd, variant) {
            && !/^\s*export function isUserRejection\(/m.test(rs),
          "reclaim-sign.js still defines its own confirmSignature/isUserRejection");
       ok("and its batch path still diffs the wallet's returned message bytes",
-         /if \(!sameBytes\(messageBytes\(txs\[i\]\), messageBytes\(realTx\)\)\)/.test(rs));
+         /if \(!sameBytes\(approvedBytes\[i\], messageBytes\(realTx\)\)\)/.test(rs));
+      // Codex round 27 P1: the diff must be against an INDEPENDENT COPY taken BEFORE the wallet
+      // is ever called — re-reading messageBytes(txs[i]) AFTER signing let a wallet that mutates
+      // the same object in place diff against itself. Assert the fix positively (the copy exists,
+      // taken pre-sign) rather than just re-pinning whatever string is currently there.
+      ok("⚠️ the approved bytes are captured as an independent COPY before signAllTransactions is ever called",
+         /const approvedBytes = txs\.map\(\(tx\) => Uint8Array\.from\(messageBytes\(tx\)\)\)/.test(rs)
+           && rs.indexOf("const approvedBytes") < rs.indexOf("signAllTransactions(txs)"));
     }
     ok("no file re-declares confirmSignature / isUserRejection / signSendConfirm / assertSameAccount", redeclared.length === 0, redeclared.join(", "));
     // The ordering itself, positively: a negative regex would pass against the broken code.
@@ -590,7 +597,13 @@ function buildVariant(cwd, variant) {
       ok("sign.js re-reads the LIVE public key before anything is built for signing",
          /export function assertSameAccount\(/.test(seam) && /live !== expected/.test(seam));
       ok("and diffs the wallet's returned message bytes against what it built",
-         /if \(!sameBytes\(messageBytes\(tx\), messageBytes\(realTx\)\)\)/.test(seam));
+         /if \(!sameBytes\(approved, messageBytes\(realTx\)\)\)/.test(seam));
+      // Codex round 27 P1: same requirement as reclaim-sign.js above — the diff must be against
+      // an independent byte COPY captured before provider.signTransaction is ever called, never a
+      // live re-read of `tx` (which the wallet may have mutated in place by the time it returns).
+      ok("⚠️ the approved bytes are captured as an independent COPY before provider.signTransaction is ever called",
+         /const mb = messageBytes\(tx\);[\s\S]{0,200}?approved = Uint8Array\.from\(mb\)/.test(seam)
+           && seam.indexOf("approved = Uint8Array.from(mb)") < seam.indexOf("provider.signTransaction(tx)"));
     }
   }
 
@@ -604,7 +617,7 @@ function buildVariant(cwd, variant) {
   // different one for everybody who does not read English. Asserted against the GENERATED key
   // list, so a new pane's copy fails here until it is translated, instead of shipping in English
   // and being noticed by a user.
-  for (const lang of ["es", "zh", "hi", "it", "pt", "vi"]) {
+  for (const lang of ["es", "zh", "hi", "it", "pt", "vi", "ko", "tr", "id"]) {
     const dict = JSON.parse(fs.readFileSync(path.join(ROOT, "public", "i18n", `${lang}.json`), "utf8"));
     const missing = NEW_KEYS.filter((k) => !Object.prototype.hasOwnProperty.call(dict, k));
     ok(`${lang}.json carries all ${NEW_KEYS.length} of the app's strings`, missing.length === 0,

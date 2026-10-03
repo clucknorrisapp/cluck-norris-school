@@ -15,7 +15,7 @@
 //     LP Lab, the next lesson (or the completion screen) for the Incubator;
 //   · nothing throws.
 //
-// 16 belt lessons + 7 Incubator + 14 LP Lab = 37 quizzes, every question in each.
+// 21 belt lessons + 7 Incubator + 15 LP Lab = 43 quizzes, every question in each.
 //
 // Usage: node scripts/quiz-walk-test.cjs [--no-build] [--limit=N]
 //        (builds dist/ unless told not to; --limit walks only the first N quizzes per course)

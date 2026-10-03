@@ -31,9 +31,12 @@
 // right next to it, so a partial scan never reads as a full pass.
 //
 // Guardrail before power: approvals are a real thing a first-timer could act on, but revoking
-// needs a wallet signature and that is OUT OF SCOPE tonight (CLAUDE.md: "PLAN != EXECUTE for
-// money" / no signing path here). This pane shows the finding and points to the website's own
-// /wallet-checkup, which already has the revoke flow — it never builds or signs a transaction.
+// needs a wallet signature and THIS FILE never builds or signs one — it is shared with the
+// education-only Play/iOS edition, whose build refuses the wallet layer's global by name. Since
+// 2026-09-29 the FULL edition passes two render props: `revoke({approvals, address, rescan})`,
+// rendered in place of the "Revoke on the website" note (src/seeker/CheckupRevoke.jsx, the
+// signing control), and `footer`, rendered after the results (src/seeker/Disconnect.jsx, the
+// "Disconnect & clean up" card). The education edition passes neither and keeps the note.
 //
 // Offline is first-class, same posture as Ask Cluck: `navigator.onLine` is checked before every
 // scan (skips the fetch entirely) and the pane listens for the browser's `online` event to
@@ -123,7 +126,7 @@ function RiskyRow({ r }) {
   );
 }
 
-export default function WalletCheckupPane({ address, gate }) {
+export default function WalletCheckupPane({ address, gate, revoke, footer }) {
   useI18nReady();
   // phase: idle | loading | ok | error. kind (error only): offline | rate | refused | unavailable.
   const [state, setState] = React.useState({ phase: "idle", kind: null, data: null, retrySec: 0, errMsg: null });
@@ -131,16 +134,26 @@ export default function WalletCheckupPane({ address, gate }) {
   const wasOfflineRef = React.useRef(!online);
   const abortRef = React.useRef(null);
 
-  const scan = React.useCallback((address, signal) => {
+  // `background` — the refresh a revoke asks for after its own chain re-read (Codex on #458, P2).
+  // A normal scan swaps in the loading screen, which UNMOUNTS the revoke slot and with it the
+  // result the person was just promised (cleared / still approved / couldn't read). A background
+  // scan keeps the current result on screen and swaps in the new list when it arrives; if it
+  // fails, the list stays as it was — the revoke result above it is the fresher truth, and the
+  // manual Rescan button is still there.
+  const scan = React.useCallback((address, signal, background) => {
     if (!address) return;
     if (!isOnline()) {
-      setState({ phase: "error", kind: "offline", data: null, retrySec: 0, errMsg: null });
+      if (!background) setState({ phase: "error", kind: "offline", data: null, retrySec: 0, errMsg: null });
       return;
     }
-    setState({ phase: "loading", kind: null, data: null, retrySec: 0, errMsg: null });
+    if (!background) setState({ phase: "loading", kind: null, data: null, retrySec: 0, errMsg: null });
     fetch(`/api/wallet-checkup?wallet=${encodeURIComponent(address)}`, { signal })
       .then(async (res) => {
         const body = await res.json().catch(() => null);
+        if (background) {
+          if (res.ok && body && body.success === true) setState({ phase: "ok", kind: null, data: body, retrySec: 0, errMsg: null });
+          return;
+        }
         if (res.status === 429) {
           const retrySec = Number((body && (body.retryAfterSec || body.retryAfter)) || 0);
           setState({ phase: "error", kind: "rate", data: null, retrySec, errMsg: null });
@@ -164,6 +177,7 @@ export default function WalletCheckupPane({ address, gate }) {
       })
       .catch((e) => {
         if (e && e.name === "AbortError") return;
+        if (background) return;
         setState({ phase: "error", kind: isOnline() ? "unavailable" : "offline", data: null, retrySec: 0, errMsg: null });
       });
   }, []);
@@ -322,12 +336,19 @@ export default function WalletCheckupPane({ address, gate }) {
           <div data-clkn-avoid-kids="1">
             {approvals.map((a) => <ApprovalRow key={a.tokenAccount} a={a} />)}
           </div>
-          <p className="seeker-checkup-revokenote">
-            {t("Revoking needs a wallet signature — not available in this app yet.")}{" "}
-            <a href={WEBSITE_CHECKUP_URL} target="_blank" rel="noreferrer">{t("Revoke on the website")}</a>
-          </p>
+          {typeof revoke === "function" ? null : (
+            <p className="seeker-checkup-revokenote">
+              {t("Revoking needs a wallet signature — not available in this app yet.")}{" "}
+              <a href={WEBSITE_CHECKUP_URL} target="_blank" rel="noreferrer">{t("Revoke on the website")}</a>
+            </p>
+          )}
         </div>
       ) : null}
+      {/* The revoke slot lives OUTSIDE the approvals section on purpose: once a revoke clears the
+          last approval the section disappears, and a slot inside it would unmount with it and take
+          the result the person was promised along. The slot renders nothing when it has no list
+          and no result. The refresh it asks for is a background one (see `scan`). */}
+      {typeof revoke === "function" ? revoke({ approvals, address, rescan: () => scan(address, abortRef.current && abortRef.current.signal, true) }) : null}
 
       {risky.length ? (
         <div className="seeker-checkup-section">
@@ -344,6 +365,7 @@ export default function WalletCheckupPane({ address, gate }) {
       <button type="button" className="seeker-checkup-rescanbtn" onClick={() => scan(address)}>
         {t("Rescan")}
       </button>
+      {footer || null}
     </div>
   );
 }

@@ -60,6 +60,13 @@ const CALL = /\btf?\(\s*("(?:[^"\\]|\\.)*")\s*[,)]/g;
 const TABLES = [
   { file: path.join(SRC, "tools", "registry.js"), re: /\b(?:title|blurb):\s*("(?:[^"\\]|\\.)*")/g },
   { file: path.join(SRC, "passgate.jsx"), re: /^\s{2}[a-z]+:\s*("(?:[^"\\]|\\.)*"),?$/gm },
+  // swap-simulate.js (PR #420, round 34): the pre-sign gate's refusal REASONS are data in the
+  // pure module — `{ ok:false, reason: "…" }` — and Swap.jsx renders them through t(). They used
+  // to be t("…") literals in the pane; moving the caller into the pure module took them out of
+  // this scan and three of them silently lost their six translations in a develop merge. Only a
+  // whole literal followed by `,` or `}` counts — a prefix concatenated with runtime data
+  // ("would fail on-chain: " + err) is not a key t() could ever match.
+  { file: path.join(SRC, "swap-simulate.js"), re: /\breason:\s*("(?:[^"\\]|\\.)*")\s*[,}]/g },
 ];
 
 // ⚠️ AND THE PROPS THE SHARED COMPONENTS TRANSLATE THEMSELVES. pane.jsx's STRING RULE is that a

@@ -8,6 +8,9 @@
 # by hand (Actions → store-edition-release → Run workflow) with the variant, the version and the
 # exact main commit to build: the release step then creates the tag at that commit itself.
 #
+# The SEEKER edition (the full, wallet-carrying Seeker app bundle — store-edition/seeker-edition.json)
+# publishes the same way as store-seeker-v<version>; its version comes from seeker-edition.json.
+#
 # The version must equal store-edition/store-edition.json → version, or the job stops before
 # publishing: the pinned digest must never describe a bundle built from a different version than
 # the one in the file name. A manual run also refuses a ref that is not on main.
@@ -17,12 +20,13 @@ on:
     tags:
       - "store-google-v*"
       - "store-ios-v*"
+      - "store-seeker-v*"
   workflow_dispatch:
     inputs:
       variant:
         description: "store variant"
         type: choice
-        options: [google, ios]
+        options: [google, ios, seeker]
         required: true
       version:
         description: "version (must equal store-edition.json)"
@@ -56,19 +60,24 @@ jobs:
             VARIANT="${TAG#store-}"; VARIANT="${VARIANT%%-v*}"
             VERSION="${TAG##*-v}"
           fi
-          FILEV=$(node -p "require('./store-edition/store-edition.json').version")
-          if [ "$VERSION" != "$FILEV" ]; then echo "version $VERSION != store-edition.json version $FILEV"; exit 1; fi
+          CFG=store-edition.json; [ "$VARIANT" = "seeker" ] && CFG=seeker-edition.json
+          FILEV=$(node -p "require('./store-edition/$CFG').version")
+          if [ "$VERSION" != "$FILEV" ]; then echo "version $VERSION != $CFG version $FILEV"; exit 1; fi
           echo "variant=$VARIANT" >> "$GITHUB_OUTPUT"; echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "tag=store-$VARIANT-v$VERSION" >> "$GITHUB_OUTPUT"; echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
       - name: Build + verify the store edition
         run: node scripts/build-store-edition.mjs "${{ steps.tag.outputs.variant }}"
+      # The re-check is the EDUCATION edition's content scan (no wallet, no signing); the Seeker
+      # edition legitimately ships both, so it would refuse a correct bundle. The seeker build's
+      # own verification runs inside build-store-edition.mjs above.
       - name: Independent re-check of the published bundle
+        if: steps.tag.outputs.variant != 'seeker'
         run: node scripts/store-edition-test.cjs --no-server "${{ steps.tag.outputs.variant }}"
       - name: Release notes
         id: notes
         run: |
           M=release/store-edition-${{ steps.tag.outputs.variant }}-${{ steps.tag.outputs.version }}.json
-          { echo "body<<EOF"; echo "Store edition \`${{ steps.tag.outputs.variant }}\` v${{ steps.tag.outputs.version }} — the education-only bundle for the app wrapper."; echo; echo '```json'; cat "$M"; echo '```'; echo; echo "Pin in the wrapper's store-edition.lock: version, url of the .tgz below, sha256, sourceCommit. Extract with \`tar -xzf <file> -C dist --strip-components=1\`."; echo "EOF"; } >> "$GITHUB_OUTPUT"
+          { echo "body<<EOF"; if [ "${{ steps.tag.outputs.variant }}" = "seeker" ]; then echo "Seeker edition v${{ steps.tag.outputs.version }} — the full Seeker app bundle for the wrapper's seeker target."; else echo "Store edition \`${{ steps.tag.outputs.variant }}\` v${{ steps.tag.outputs.version }} — the education-only bundle for the app wrapper."; fi; echo; echo '```json'; cat "$M"; echo '```'; echo; echo "Pin in the wrapper's store-edition.lock: version, url of the .tgz below, sha256, sourceCommit. Extract with \`tar -xzf <file> -C dist --strip-components=1\`."; echo "EOF"; } >> "$GITHUB_OUTPUT"
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.tag.outputs.tag }}

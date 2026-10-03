@@ -245,6 +245,16 @@ jobs:
       # No live RPC, no real signing anywhere in this file — fixtures and a fake bridge only.
       - name: Seeker app — Rent Reclaim SIGNING path (byte-identical instruction, mutation-tested destination check, batching, idempotency, unavailable, rejection)
         run: node scripts/seeker-reclaim-sign-test.cjs
+      # Revoke approvals from the Seeker app (src/seeker/revoke.js + CheckupRevoke.jsx + Disconnect.jsx,
+      # 2026-09-29) — THIS SIGNS WITH THE PERSON'S WALLET. The Revoke instruction is built on the
+      # device as bytes and diffed against @solana/spl-token for both token programs; the signing
+      # path is sign.js's seam and nothing else; "revoked" is RE-READ from the chain per account
+      # (cleared / still delegated / unreadable — never a failed read counted as cleared); a batch is
+      # capped and de-duplicated; a switched wallet account is refused before signing; the shared
+      # WalletCheckup.jsx and the education edition never gain a signing reference (the Play/iOS
+      # build refuses "CluckWallet"). No live RPC, no real wallet — a fake window and rpc only.
+      - name: Seeker app — Revoke approvals + Disconnect (byte-identical Revoke, chain re-read, seam-only signing, edition isolation)
+        run: node scripts/seeker-revoke-test.cjs
       # The Airdropper's PLANNING decisions (public/airdrop-plan.js) — THIS MOVES USER FUNDS IN
       # BULK, and everything here happens before the wallet is asked to sign, which is the last
       # point at which a mistake is still free. Two sections exist because the desktop parser gets
@@ -311,6 +321,42 @@ jobs:
       # allow-list covers, then boots server.js and sends the webview's own preflight per endpoint.
       - name: Seeker app — CORS for every endpoint it calls (inventory + live preflight)
         run: node scripts/seeker-cors-test.cjs
+      # The Seeker in-app swap — Part A, the signing seam's versioned-transaction (v0) support.
+      # Jupiter's swap endpoint always returns a v0 tx (address lookup tables); the seam previously
+      # only worked for legacy Transactions. messageBytes/signatureOf/asTransaction now branch
+      # correctly on v0 vs legacy, pinned against real @solana/web3.js transactions built in Node
+      # (no network, no real wallet) — every asTransaction input shape a wallet can hand back, for
+      # both v0 and legacy originals, plus a negative (an altered v0 message fails the byte diff)
+      # and byte-for-byte pins that the legacy path is unchanged.
+      - name: Seeker app — swap signing seam (v0 VersionedTransaction support)
+        run: node scripts/seeker-sign-versioned-test.cjs
+      # The Seeker in-app swap — fix round (PR #420) P2-1: "the transaction is never checked
+      # against the quote." src/seeker/swap-verify.js is the CLIENT-SIDE structural verifier run
+      # immediately before signing: fee payer is the live connected account, exactly one required
+      # signature, every instruction's program id on an allowlist (program ids are static keys on
+      # a v0 tx), and the Jupiter route instruction's own trailing bytes (in_amount/
+      # quoted_out_amount/slippage_bps/platform_fee_bps) match the quote the person was shown.
+      # Driven against the REAL recorded fixture (scripts/fixtures/seeker-swap/swap.json, decoded
+      # with real @solana/web3.js) and mutated copies — wrong fee payer, altered quote amounts, an
+      # extra unrecognised-program instruction, a non-zero platform fee — each proven refused.
+      - name: Seeker app — swap client-side structural verifier (transaction vs quote)
+        run: node scripts/seeker-swap-verify-test.cjs
+      # The Seeker in-app swap — Part B, the server-side Jupiter proxy (docs/SEEKER_SWAP_DESIGN.md).
+      # Three public relays, no admin key, nothing server-signed. Pins: the mint allowlist (SKR from
+      # lib/tool-pass-qualify.js, CLKN/SKR decimals read from the chain and never hardcoded);
+      # amount/slippage/mint validation on the quote route; the 60s quoteId store and its 409 on an
+      # unknown/expired id; the tx route echoing amounts from the STORED quote, never the request's;
+      # an upstream failure answering 502 with no fabricated quote/transaction; and that no platform
+      # fee field is ever sent (owner, 2026-09-24: "I do not want to collect any platform fee").
+      # Fix round additions: a quote whose own inputMint/outputMint/swapMode/slippageBps disagree
+      # with the request -> 502 quote_mismatch, never stored; a non-null simulationError on
+      # Jupiter's own swap response -> 502 swap_unavailable with detail, never a swapTransaction;
+      # no wildcard Access-Control-Allow-Origin on any of the three routes (the restricted,
+      # origin-echoed SEEKER_API_RE header is what answers instead); and the quote route's own
+      # 30/min-per-IP floor. Boots the real server.js against local stubs for both Jupiter and the
+      # chain RPC — no live network call in CI.
+      - name: Seeker app — swap server proxy (config/quote/tx, allowlist, quoteId, no platform fee)
+        run: node scripts/seeker-swap-test.cjs
       - name: Buy-comp entries (every $N buy = horses)
         run: node scripts/buycomp-entries-test.cjs
       # The paid tools pass: consuming the payment signature is the ONLY durable write, and the
@@ -381,6 +427,12 @@ jobs:
       # the burn watcher (lib/sig-cursor.js) — pure, so this runs standalone with no server boot.
       - name: signature cursor walk (buy/burn watchers' shared fresh-since-cursor logic)
         run: node scripts/sig-cursor-test.cjs
+      # LP scanner pre-flight flags (lib/token-risk.js): the pure mint classifier on fixtures shaped like
+      # real jsonParsed mint accounts (Token-2022 transfer fee by epoch, scaled-UI multiplier by time,
+      # issuer keys, pre-IPO wrapper, unverified mint) plus the ranking filter (blocked rows -> excluded,
+      # includeRisky puts them back). Offline; no RPC.
+      - name: LP scanner pre-flight flags (token-risk classifier + ranking filter)
+        run: node scripts/token-risk-test.cjs
       # Room policy (owner, 2026-09-17): the Cluck bot never posts in the OnlyRose room. Pure checks
       # on lib/telegram-rooms plus source assertions that every Telegram sender consults it and that
       # no direct send exists outside the audited functions.
@@ -917,6 +969,14 @@ jobs:
       - name: Firepit — surplus rent, rendered (stubbed RPC, real signature, byte-checked tx)
         if: steps.gate.outputs.run == 'true'
         run: node scripts/firepit-surplus-test.cjs
+      # Seeker Revoke, rendered (Codex on #458): an unresolved send offers no second revoke, and
+      # the post-revoke refresh keeps the chain re-read on screen. node-check runs the same script
+      # without Chromium, where this section skips; here the browser is required.
+      - name: Seeker app — Revoke, rendered (no second revoke while unresolved; re-read stays on screen)
+        if: steps.gate.outputs.run == 'true'
+        env:
+          REVOKE_RENDER_REQUIRED: "1"
+        run: node scripts/seeker-revoke-test.cjs
       # The Seeker app, actually booted. seeker-build-test.cjs (node-check) proves the TARBALL is
       # well formed but never opens it, so an app that builds clean and renders a blank screen
       # would ship green — the same class of break the Normie Quest visual gate exists for. This
