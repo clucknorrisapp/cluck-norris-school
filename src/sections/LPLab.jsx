@@ -1,7 +1,22 @@
 // LP Lab — lessons + calculators (~2,800 lines) — lazy-loaded section.
-import { useState, useMemo, Component } from "react";
+import { useState, useMemo, useEffect, useRef, Component } from "react";
 import { LOGO_B64, COLW, READ, AskCluck } from "../shared.jsx";
 import { STORE } from "../edition.js";
+import { revealQuizResult, revealUnderClear } from "../shared/scrollReveal.js";
+import WebLessonStepper from "../shared/WebLessonStepper.jsx";
+import { clearStep } from "../shared/lessonSteps.js";
+
+// Same clearance rule as src/App.jsx's own quiz screens (kept local rather than imported from
+// App.jsx to avoid a circular import — App.jsx lazy-loads this section, not the other way round).
+// See the "quiz auto-scroll" comment near the top of App.jsx for what these two elements are.
+function quizTopClearY() {
+  let y = 0;
+  const bar = document.getElementById("cluck-nav-bar");
+  if (bar) y = Math.max(y, bar.getBoundingClientRect().bottom);
+  const header = document.querySelector("[data-cluck-top-clear]");
+  if (header) y = Math.max(y, header.getBoundingClientRect().bottom);
+  return y;
+}
 // The worked-example token. The website and the Seeker app teach with CLKN; the Google Play /
 // iOS edition is education-only and names no token of ours (store-edition v1.1.0, Codex on
 // #391: "CLKN promotion still renders in the education bundle"), so its examples use a
@@ -461,17 +476,17 @@ The more volume a pool generates, the more fees LPs collect. This is why volume 
         body: `Every protocol offers different fee tiers for different types of pairs. Choosing the right fee tier matters.
 
 RAYDIUM:
-• Standard pools: AMM v4 is 0.25% fixed; the current CPMM type offers 0.25% / 1% / 2% / 4%
+• Standard pools: AMM v4 is 0.25% fixed; the current CPMM type offers 0.25% / 0.3% / 0.5% / 1% / 1.5% / 2% / 2.5% / 4%
 • CLMM concentrated pools: 18 tiers from 0.01% up to 4% (0.01 / 0.02 / 0.03 / 0.04 / 0.05 / 0.1 / 0.15 / 0.16 / 0.18 / 0.2 / 0.25 / 0.4 / 0.6 / 0.8 / 1 / 2 / 3 / 4%)
 • Use 0.01% for stable pairs, 0.25% for standard, 1% for exotic/volatile
 
 ORCA WHIRLPOOLS:
 • 0.01% / 0.02% / 0.04% / 0.05% / 0.16% / 0.3% / 0.65% / 1% / 2%
 • Similar logic — stable pairs use low tiers, volatile pairs use high tiers
-${STORE ? "• A pool's own page shows which tier it runs on" : "• The 0.02% tier is the one CLKN's own CLKN/SOL Orca pool runs on — its CLKN/BTC and CLKN/JUP pools run on 0.30%"}
+${STORE ? "• A pool's own page shows which tier it runs on" : "• The 0.02% tier is the one CLKN's own Orca pools run on — CLKN/SOL, CLKN/USDC and CLKN/JUP"}
 
 METEORA:
-• DAMM: Dynamic fees that adjust automatically to market volatility
+• DAMM v2: a base fee that can run on a schedule (starting high at launch and decaying over time or with market cap), plus optional dynamic fees that rise with volatility
 • DLMM: base fee (fixed by the pool's bin step) + a variable fee that rises automatically with volatility. Fees are distributed per bin a swap crosses, but the RATE is pool-wide
 • Dynamic fees are one of Meteora's strongest features for LPs
 
@@ -759,7 +774,7 @@ TICK SPACING per fee tier:
 Higher fee tier = coarser spacing = wider minimum range. The exact numbers are set per pool and DIFFER by protocol — do not memorise one table and assume it travels.
 
 Uniswap v3: 0.01% → 1 · 0.05% → 10 · 0.3% → 60 · 1% → 200
-Raydium CLMM: 0.01% → 1 · 0.05% → 10 · 0.25% → 60 · 1% → 120
+Raydium CLMM: 0.01–0.05% → 1 · 0.1–0.2% → 10 · 0.25–0.8% → 60 · 1–4% → 120
 Orca: 0.01% → 1 · 0.02% → 2 · 0.04% → 4 · 0.05% → 8 · 0.3% → 64
 
 Lower fee tiers allow finer price ranges. When you set a range, you define a lower and upper tick. Your liquidity distributes uniformly across every tick in between — all earning fees proportionally when price passes through them.`
@@ -1077,7 +1092,7 @@ If you have a full-time job and check your phone twice a day, a fully active str
 BEST PASSIVE POSITIONS:
 
 FULL RANGE on correlated pairs:
-SOL/jitoSOL, BTC/cbBTC, stablecoin pairs. Near-zero IL. Fees accumulate without intervention. Check monthly to compound fees back in.
+SOL/jitoSOL, WBTC/cbBTC, stablecoin pairs. Near-zero IL. Fees accumulate without intervention. Check monthly to compound fees back in.
 
 WIDE CONCENTRATED on major pairs:
 SOL/USDC with a ±50% range. Stays in range through most normal market movement. Check weekly. Rebalance only if price breaks out of range significantly.
@@ -1323,7 +1338,7 @@ Match the width to two things: your conviction about where price is going, and t
 
 THE CORRELATION SPECTRUM:
 • Identical-peg pairs (USDC/USDT): the two assets are designed to track each other — IL is minimal, the main risk is one of them de-pegging
-• Correlated pairs (SOL/jitoSOL, BTC/cbBTC): move together most of the time — low IL, occasional divergence
+• Correlated pairs (SOL/jitoSOL, WBTC/cbBTC): move together most of the time — low IL, occasional divergence
 • Major-vs-stable (SOL/USDC): one volatile leg — IL is real and scales with how far SOL moves from your entry
 • Volatile-vs-volatile or new-token pairs: both legs move independently and violently — maximum IL, maximum risk
 
@@ -2061,6 +2076,147 @@ Complexity has to earn its place. Make it prove it.`
       }
     ],
     cluckVerdict: "One position forces you to be right about the future. A ladder lets you be approximately right and still get paid. But it is not free and it is not automatic — it costs rent, attention and headline APR, and it only wins if you judge the whole book honestly. Complexity has to earn its keep."
+  }
+  ,
+  {
+    id: 15,
+    title: "Check the Token Before You LP It",
+    icon: "🛫",
+    tagline: "Every trap was on-chain or on the issuer's page. Nobody looked.",
+    cluckHook: "A liquidity position is a bet on the pool. It is also a bet on the token underneath it, and most of the ways a token can hurt you are written down before you deposit a cent: on the mint, on the issuer's page, in the pool's own numbers. Ten minutes of reading. Do the reading.",
+    sections: [
+      {
+        heading: "Is It Temporary?",
+        body: `Most tokens are meant to exist forever. Some are not. A WRAPPER token is a stand-in for something else, such as a claim on an asset or a pre-listing share, and it comes with a conversion date or an expiry attached.
+
+EXAMPLE: a pre-IPO wrapper token. The issuer's page says holders must swap it for the real thing before a deadline "or the tokens expire worthless". You LP the pair. The deadline passes. A pool does not know a deadline exists, and if the price sinks, your position quietly rebalances into the wrapper, the one asset you least want to hold.
+
+READ FIRST:
+• The issuer's token page and terms, not the pool page
+• Is there a conversion date, an expiry, a redemption window?
+• What happens to holders who miss it?
+
+THE MARKET TELLS YOU TOO: a wrapper trading at a steady discount to what it converts into is the market saying the conversion is not clean. Fees, delays, restrictions, or plain doubt that it will happen. A steady discount is rarely free money.
+
+Hard Knocks Rule: if the token has a deadline, your position has the same deadline. Put it in your calendar before you deposit, not after.`
+      },
+      {
+        heading: "Transfer Fees (Token-2022)",
+        body: `A Token-2022 mint can charge a percentage on every transfer. It is written on the mint, so you can read it before you deposit: open the mint on an explorer and look at the extensions.
+
+WHO PAYS:
+• Traders pay it on their swaps of that token
+• YOU pay it on the deposit, on the withdrawal, and on every rebalance (a rebalance is a withdrawal plus a deposit)
+
+EXAMPLE: a token with a 3% transfer fee. You deposit $1,000 of it and the pool receives $970. You withdraw that and get back about $941. No trade happened, no fee was earned, and about $59 is already gone, before impermanent loss. That is why a 1-3% fee makes day-to-day LP management nearly impossible: every adjustment is a tax.
+
+One more thing to read: the rate is set by a fee authority and can be changed, after a short delay. Check today's rate and who is allowed to move it.
+
+THE WORK-AROUND, if you must: deposit only the fee-free side. A USDC-only range set below the current price holds none of the fee token when you deposit, so you pay nothing going in. If price falls into your range, traders sell the fee token into it, and you pay the fee once, on whatever you hold when you withdraw. Many payments become one.`
+      },
+      {
+        heading: "Display Multipliers (Scaled UI Amount)",
+        body: `Another Token-2022 extension lets the issuer set a MULTIPLIER on what wallets and apps DISPLAY. The raw on-chain amount does not change; the multiplier is applied on the screen, like a stock split. At 5x, a wallet holding 100 raw tokens shows 500.
+
+THE PROBLEM: pool math runs on the raw amount. Your wallet, an explorer, a pool page and a range calculator can each show a different number for the same thing, off by exactly the multiplier.
+
+EXAMPLE: one screen shows a price of $10 per token. The pool, pricing the raw amount, is trading at $50. A range built around $10 sits nowhere near the market.
+
+THE TELL-TALE: bin arrays. On a bin-based pool, only the stretch of price near where the pool actually trades has its bin arrays created on-chain. A range far from the live price needs NEW bin arrays, and that rent is NOT refundable when you close. A correct range right next to the live price usually costs close to nothing that you cannot get back.
+
+So if the app quotes a real non-refundable cost for a range that should be sitting next to price, stop. Either the price you used is wrong or the range is. Take the price from the pool's own page, compare it to what your wallet shows, and check the mint's extensions for a scaled amount before you sign anything.`
+      },
+      {
+        heading: "Issuer Keys",
+        body: `Some tokens have an issuer who can still act after launch. On Token-2022 these powers are recorded on the mint:
+
+• PERMANENT DELEGATE: can move or burn tokens out of any account holding them
+• PAUSE: can stop all transfers, so nobody can swap, deposit or withdraw
+• FREEZE: can freeze individual accounts
+• MINT: can create new supply
+
+EXAMPLE: a regulated stock token. The issuer has legal duties that require these controls, so having them is normal and is not a scam signal by itself. It is a different risk: you are now trusting the issuer on top of the pool. If they pause the token, your position cannot be withdrawn until they unpause it.
+
+READ THE TERMS FOR:
+• Jurisdiction limits. Some tokens are not available to U.S. persons, and being able to buy one on a DEX does not change what the terms say you may hold.
+• An "administrative controls" clause. That is the plain-language list of what the issuer reserves the right to do. Read it as a menu of things that may happen to your position.
+
+The question is not "does it have keys". It is who holds them, why, and whether you are comfortable with that.`
+      },
+      {
+        heading: "Pool Checks",
+        body: `A clean token can still sit in a bad pool. Three questions, all answerable from the pool's page and its recent transactions:
+
+1. WHAT ARE FEES PAID IN? Some pools take fees in both tokens, some in the quote token only. Quote-only is the cleanest: your fees arrive in something stable and you never have to move the odd token, especially one with a transfer fee.
+
+2. WHO ARE THE LPs? If one wallet holds nearly all the liquidity, that wallet is a single point of failure. If it leaves, you ARE the pool: every trade hits your position, the price impact for traders gets ugly, and the depth you were counting on was one wallet's mood.
+
+3. WHERE DOES THE VOLUME COME FROM? If most of it is one wallet trading back and forth, it can stop tomorrow, and your fees stop with it. Real volume is messy: many wallets, many sizes.
+
+EXAMPLE: a pool with $2M of liquidity looks deep until you see one wallet supplies 95% of it. That is a $100K pool with a $1.9M mood.`
+      },
+      {
+        heading: "Copycats",
+        body: `Anyone can create a token with the same name, ticker and logo as a real one. On a token list they sit next to each other.
+
+EXAMPLE: you search a ticker and get five results. One is the real token: deep pool, and the issuer's own page links its mint. The other four have a few hundred holders and a $0 market cap, waiting for someone to click the wrong row. LP into a lookalike and you have put real USDC next to a token nobody will ever buy.
+
+CHECK THE MINT ADDRESS, NOT THE NAME:
+• Copy the mint from the issuer's own page or verified account
+• Compare the WHOLE address, not just the first and last few characters. Lookalike addresses are ground to match those
+• Then open the pool and confirm the token inside it has that exact mint
+
+The name is a label anyone can type. The mint is the identity.`
+      },
+      {
+        heading: "The Checklist On One Screen",
+        body: `Six checks before you deposit. If you cannot answer one, you are not ready to deposit. You are ready to read.`,
+        table: {
+          headers: ["Check", "Where to look", "Walk away if"],
+          rows: [
+            ["Temporary?", "Issuer's token page and terms", "A deadline you cannot meet, or a steady discount to what it converts into"],
+            ["Transfer fee", "Mint page, extensions", "Any fee big enough to tax your rebalances"],
+            ["Display multiplier", "Mint page vs the pool page vs your wallet", "Numbers that differ by a round multiple, or a range that wants new bin arrays"],
+            ["Issuer keys", "Mint page and the issuer's terms", "Keys you did not expect, or terms that exclude you"],
+            ["Pool", "Pool page, LP list, recent transactions", "One LP, one trader, or fees in the odd token"],
+            ["Mint address", "Issuer's own page vs the pool", "Any mismatch at all"],
+          ]
+        }
+      }
+    ],
+    quiz: [
+      {
+        q: "A token's issuer page says holders must convert it before a set date \"or it expires worthless\". The pool has been open for weeks and the price sits steadily below what the token converts into. What is the sensible read?",
+        options: ["The discount is free money that closes by itself once the deadline arrives, so holding is safe", "The deadline is your position's deadline too, and a steady discount suggests the conversion is not clean", "Fees earned before the deadline will cover it, provided the range is tight enough to capture them", "The deadline binds holders only, so a liquidity provider can safely ignore it and stay in the pool"],
+        correct: 1,
+        explanation: "A pool has no idea a deadline exists. If the price sinks, your position rebalances into the wrapper, and after the deadline that is a token nobody can redeem. A steady discount is the market pricing in a conversion that is not clean. Read the issuer's terms first and treat the date as your own."
+      },
+      {
+        q: "A token charges a 2% transfer fee. You deposit $1,000 of it into a pool and later withdraw it, with no trades in between. About how much do you get back?",
+        options: ["Roughly $1,000, since transfer fees only hit traders", "Roughly $960, since the fee applies going in and again coming out", "Roughly $980, since the fee applies once, on the way out", "Roughly $1,020, since the fee is paid back to liquidity providers"],
+        correct: 1,
+        explanation: "A deposit is a transfer and a withdrawal is a transfer, so the fee is taken twice: $1,000 becomes about $980 in the pool and about $960 back in your wallet. Every rebalance repeats it. If you must LP such a token, deposit only the fee-free side so you pay once, on what you hold when you withdraw."
+      },
+      {
+        q: "You build a range from a price on one screen. The app says it must create new bin arrays, a cost you cannot get back, even though the range sits right next to the price you saw. What do you check first?",
+        options: ["Whether the token has a display multiplier and what price the pool itself trades at", "Whether the pool's fee tier is high enough to pay back the extra rent", "Whether widening the range would make the extra rent go away entirely", "Whether switching to a curve shape would spread the range over fewer bin arrays"],
+        correct: 0,
+        explanation: "Bin arrays only exist near where the pool really trades, so a correct range next to the live price costs almost nothing you cannot get back. A big non-refundable cost means the range is far from the pool's real price. A display multiplier makes screens disagree by exactly that factor while the pool prices the raw amount."
+      },
+      {
+        q: "A regulated stock token you are considering has a permanent delegate and a pause authority, both held by the issuer. How should you read that?",
+        options: ["Normal for a regulated issuer, but you trust the issuer on top of the pool, so read their terms", "A sure sign of a scam, so walk away from any token that carries keys like these", "Harmless to an LP, since a pool's contract shields its vaults from anything the issuer does", "Only relevant to people holding it in a wallet, so an LP can safely ignore all of it"],
+        correct: 0,
+        explanation: "Those controls are what regulation asks of a stock token, so they are not a scam signal on their own. But they are real power: a pause stops your withdrawal and a permanent delegate can move tokens out of any account, a pool's vault included. Read who holds the keys and what the terms let them do."
+      },
+      {
+        q: "One wallet supplies about 95% of a pool's liquidity and another wallet trades most of its volume. What is the risk you take on by depositing?",
+        options: ["Both wallets are single points of failure: the LP leaving makes you the pool, the trader stopping ends the fees", "The volume proves real demand, and one large LP is a sign the pool is well backed and safe to join", "A single large LP means the token must be a scam, so you should avoid every pool it appears in", "Nothing to check here, since the makeup of a pool matters far less than the token's price chart"],
+        correct: 0,
+        explanation: "Headline liquidity and volume can each be one wallet's decision. If the big LP withdraws, your position takes every trade against a thin book. If the one trader stops, the fees you were counting on stop too. Look at who the LPs are and where the volume comes from, not just the totals."
+      }
+    ],
+    cluckVerdict: "A pool is only as good as the token in it and the wallets holding it up. Six checks, ten minutes: is it temporary, what does a transfer cost, do the numbers agree, who holds the keys, who else is in the pool, and is this even the real mint. Wallet Checkup will read the transfer-fee, permanent-delegate, transfer-hook and frozen-by-default flags, plus live freeze and mint authorities, on tokens your wallet already holds. It does not read the issuer's terms, display multipliers or who is in the pool. That part is still you, with the mint page and the pool page open."
   }
 
 ];
@@ -2946,7 +3102,6 @@ function TierAllocationBuilder() {
 
 function LPLessonView({ lesson, onBack, onComplete }) {
   const [phase, setPhase] = useState("content"); // content | quiz | result
-  const [openSection, setOpenSection] = useState(0);
   const [qi, setQi] = useState(0);
   const [sel, setSel] = useState(null);
   const [showExp, setShowExp] = useState(false);
@@ -2969,10 +3124,14 @@ function LPLessonView({ lesson, onBack, onComplete }) {
   // Price impact calculator
   const shallowPool = 10000;
   const deepPool = 500000;
+  // poolSize is the pool's TVL, labelled as such ("$10,000 TVL"), so each side holds HALF of it.
+  // It used to be taken as each side's reserve, which modelled a $20K pool and showed half the real
+  // impact (0.99% on $100 where Lesson 1 correctly says ~2%) — found in the 2026-09-25 LP Lab check.
   const calcImpact = (poolSize, trade) => {
-    const k = poolSize * poolSize;
-    const newPool = poolSize + trade;
-    const out = poolSize - k / newPool;
+    const side = poolSize / 2;
+    const k = side * side;
+    const newPool = side + trade;
+    const out = side - k / newPool;
     const impact = ((trade - out) / trade) * 100;
     return Math.max(0, impact).toFixed(2);
   };
@@ -2996,10 +3155,50 @@ function LPLessonView({ lesson, onBack, onComplete }) {
     }
   }
 
+  // Quiz auto-scroll refs — see the "quiz auto-scroll" comment near the top of App.jsx; same
+  // behaviour, same shared helper (src/shared/scrollReveal.js).
+  const quizHeadRef = useRef(null);
+  const explainRef = useRef(null);
+  const nextBtnRef = useRef(null);
+  const resultRef = useRef(null);
+
+  useEffect(() => {
+    if (phase !== "quiz" || sel === null) return;
+    let raf1 = requestAnimationFrame(() => {
+      raf1 = requestAnimationFrame(() => {
+        if (!explainRef.current || !nextBtnRef.current) return;
+        revealQuizResult({ scrollEl: window, resultEl: explainRef.current, actionEl: nextBtnRef.current, topClearY: quizTopClearY(), bottomClearY: window.innerHeight });
+      });
+    });
+    return () => cancelAnimationFrame(raf1);
+  }, [phase, sel]);
+
+  useEffect(() => {
+    if (phase !== "quiz" || sel !== null) return;
+    let raf1 = requestAnimationFrame(() => {
+      raf1 = requestAnimationFrame(() => {
+        if (!quizHeadRef.current) return;
+        revealUnderClear({ scrollEl: window, el: quizHeadRef.current, topClearY: quizTopClearY() });
+      });
+    });
+    return () => cancelAnimationFrame(raf1);
+  }, [phase, qi, lesson.id]);
+
+  useEffect(() => {
+    if (phase !== "result") return;
+    let raf1 = requestAnimationFrame(() => {
+      raf1 = requestAnimationFrame(() => {
+        if (!resultRef.current) return;
+        revealUnderClear({ scrollEl: window, el: resultRef.current, topClearY: quizTopClearY() });
+      });
+    });
+    return () => cancelAnimationFrame(raf1);
+  }, [phase]);
+
   if (phase === "quiz") return (
     <div style={{padding:"0 16px 40px",maxWidth:COLW,margin:"0 auto"}}>
       <button onClick={()=>setPhase("content")} style={{background:"none",border:"none",color:"#6B7280",fontFamily:"'Anton',sans-serif",fontSize:12.5,letterSpacing:2,cursor:"pointer",marginBottom:16}}>← BACK TO LESSON</button>
-      <div style={{fontFamily:"'Anton',sans-serif",fontSize:12.5,color:"#10B981",letterSpacing:2,marginBottom:4}}>⚗️ LP LAB — LESSON {lesson.id} QUIZ</div>
+      <div ref={quizHeadRef} style={{fontFamily:"'Anton',sans-serif",fontSize:12.5,color:"#10B981",letterSpacing:2,marginBottom:4}}>⚗️ LP LAB — LESSON {lesson.id} QUIZ</div>
       <div data-read-skip="1" style={{fontFamily:"'Anton',sans-serif",fontSize:12.5,color:"#6B7280",letterSpacing:1,marginBottom:16}}>QUESTION {qi+1} OF {shuffledQuestions.length}</div>
       <div style={{background:"rgba(16,185,129,0.06)",border:"1px solid rgba(16,185,129,0.2)",borderRadius:12,padding:"14px 16px",marginBottom:16}}>
         <div style={{fontFamily:"'Anton',sans-serif",fontSize:15,color:"#F9FAFB",lineHeight:1.5}}>{q.q}</div>
@@ -3014,31 +3213,29 @@ function LPLessonView({ lesson, onBack, onComplete }) {
             else if (i === sel) { bg="rgba(239,68,68,0.15)"; border="#EF4444"; color="#EF4444"; }
           }
           return (
-            <button key={i} onClick={()=>pickAnswer(i)} style={{background:bg,border:`1px solid ${border}`,borderRadius:10,padding:"12px 14px",textAlign:"left",fontFamily:"'Anton',sans-serif",fontSize:15,color,cursor:sel===null?"pointer":"default",letterSpacing:0.5}}>
+            <button key={i} data-quiz-option="1" onClick={()=>pickAnswer(i)} style={{background:bg,border:`1px solid ${border}`,borderRadius:10,padding:"12px 14px",textAlign:"left",fontFamily:"'Anton',sans-serif",fontSize:15,color,cursor:sel===null?"pointer":"default",letterSpacing:0.5}}>
               <span style={{color:"#6B7280",marginRight:8}}>{String.fromCharCode(65+i)}.</span>{opt}
             </button>
           );
         })}
       </div>
       {showExp && (
-        <div style={{background:"rgba(16,185,129,0.06)",border:"1px solid rgba(16,185,129,0.2)",borderRadius:10,padding:14,marginBottom:12}}>
-          <div style={{fontFamily:"'Anton',sans-serif",fontSize:12.5,color:sel===q.correct?"#10B981":"#EF4444",letterSpacing:1,marginBottom:6}}>{sel===q.correct?"✓ CORRECT":"✗ NOT QUITE"} — CLUCK EXPLAINS:</div>
-          <p style={{margin:0,fontSize:15,color:"#D1D5DB",lineHeight:1.7}}>{q.explanation}</p>
-        </div>
-      )}
-      {showExp && (
-        <>
+        <div ref={explainRef} data-quiz-explain="1">
+          <div style={{background:"rgba(16,185,129,0.06)",border:"1px solid rgba(16,185,129,0.2)",borderRadius:10,padding:14,marginBottom:12}}>
+            <div style={{fontFamily:"'Anton',sans-serif",fontSize:12.5,color:sel===q.correct?"#10B981":"#EF4444",letterSpacing:1,marginBottom:6}}>{sel===q.correct?"✓ CORRECT":"✗ NOT QUITE"} — CLUCK EXPLAINS:</div>
+            <p style={{margin:0,fontSize:15,color:"#D1D5DB",lineHeight:1.7}}>{q.explanation}</p>
+          </div>
           <AskCluck context={`LP Lab Lesson ${lesson.id}: ${lesson.title}`} compact={true}/>
-          <button onClick={nextQuestion} style={{width:"100%",background:"#10B981",border:"none",borderRadius:10,padding:"13px",fontFamily:"'Anton',sans-serif",fontSize:15.5,fontWeight:700,color:"#fff",letterSpacing:2,cursor:"pointer",marginTop:8}}>
+          <button ref={nextBtnRef} data-quiz-next="1" onClick={nextQuestion} style={{width:"100%",background:"#10B981",border:"none",borderRadius:10,padding:"13px",fontFamily:"'Anton',sans-serif",fontSize:15.5,fontWeight:700,color:"#fff",letterSpacing:2,cursor:"pointer",marginTop:8}}>
             {qi+1<shuffledQuestions.length?"NEXT QUESTION →":"SEE RESULTS →"}
           </button>
-        </>
+        </div>
       )}
     </div>
   );
 
   if (phase === "result") return (
-    <div style={{padding:"0 16px 40px",maxWidth:COLW,margin:"0 auto",textAlign:"center"}}>
+    <div style={{padding:"0 16px 40px",maxWidth:COLW,margin:"0 auto",textAlign:"center"}} ref={resultRef}>
       <div style={{fontSize:48,marginBottom:12}}>{score===shuffledQuestions.length?"🏆":score>=3?"✅":"📚"}</div>
       <div style={{fontFamily:"'Anton',sans-serif",fontSize:20,fontWeight:900,color:"#10B981",letterSpacing:2,marginBottom:8}}>
         {score}/{shuffledQuestions.length} CORRECT
@@ -3054,20 +3251,26 @@ function LPLessonView({ lesson, onBack, onComplete }) {
         <div style={{fontFamily:"'Anton',sans-serif",fontSize:12.5,color:"#FF7A18",letterSpacing:2}}>— CLUCK NORRIS</div>
       </div>
       <div style={{display:"flex",gap:10}}>
-        <button onClick={()=>{setPhase("content");setQi(0);setSel(null);setAnswers([]);setShowExp(false);}} style={{flex:1,background:"rgba(255,122,24,0.09)",border:"1px solid rgba(255,122,24,0.22)",borderRadius:10,padding:"12px",fontFamily:"'Anton',sans-serif",fontSize:13.5,color:"#D1D5DB",cursor:"pointer",letterSpacing:1}}>
+        <button onClick={()=>{clearStep("lp:" + lesson.id);setPhase("content");setQi(0);setSel(null);setAnswers([]);setShowExp(false);}} style={{flex:1,background:"rgba(255,122,24,0.09)",border:"1px solid rgba(255,122,24,0.22)",borderRadius:10,padding:"12px",fontFamily:"'Anton',sans-serif",fontSize:13.5,color:"#D1D5DB",cursor:"pointer",letterSpacing:1}}>
           📖 REVIEW LESSON
         </button>
-        <button onClick={onComplete} style={{flex:1,background:"#10B981",border:"none",borderRadius:10,padding:"12px",fontFamily:"'Anton',sans-serif",fontSize:13.5,fontWeight:700,color:"#fff",letterSpacing:1,cursor:"pointer"}}>
+        <button onClick={()=>{clearStep("lp:" + lesson.id);onComplete();}} style={{flex:1,background:"#10B981",border:"none",borderRadius:10,padding:"12px",fontFamily:"'Anton',sans-serif",fontSize:13.5,fontWeight:700,color:"#fff",letterSpacing:1,cursor:"pointer"}}>
           NEXT LESSON →
         </button>
       </div>
     </div>
   );
 
-  return (
-    <div style={{padding:"0 16px 40px",maxWidth:COLW,margin:"0 auto"}}>
-      <button onClick={onBack} style={{background:"none",border:"none",color:"#6B7280",fontFamily:"'Anton',sans-serif",fontSize:12.5,letterSpacing:2,cursor:"pointer",marginBottom:16}}>← BACK TO LP LAB</button>
-
+  // Lesson stepper (owner 2026-09-25: "Yes all of website"). One screen per idea: the opening
+  // (header + Cluck's hook), one step per section (its table with it), then "Try it yourself" —
+  // the lesson's own calculators and the depth visualizer, together, after the reading that
+  // explains them — then Cluck's verdict with Ask Cluck, and the quiz button on that last step.
+  // The old accordion (one section open at a time, the rest collapsed) is gone: on a phone a
+  // collapsed section is a lesson nobody reads, and on a desktop it hid how much was left.
+  // src/shared/WebLessonStepper.jsx; the remembered step clears when the lesson is done.
+  const stepKey = "lp:" + lesson.id;
+  const steps = [
+    { label: "", node: (<>
       {/* Header */}
       <div style={{textAlign:"center",marginBottom:20}}>
         <div style={{fontSize:40,marginBottom:6}}>{lesson.icon}</div>
@@ -3082,16 +3285,10 @@ function LPLessonView({ lesson, onBack, onComplete }) {
         <p style={{margin:0,fontFamily:"Georgia,serif",fontStyle:"italic",color:"#FFB627",fontSize:15,lineHeight:1.7}}>{lesson.cluckHook}</p>
       </div>
 
-      {/* Sections */}
-      {lesson.sections.map((sec, i) => (
-        <div key={i} style={{marginBottom:8}}>
-          <button onClick={()=>setOpenSection(openSection===i?-1:i)} style={{width:"100%",background:openSection===i?"rgba(16,185,129,0.1)":"rgba(255,122,24,0.05)",border:`1px solid ${openSection===i?"rgba(16,185,129,0.4)":"rgba(255,122,24,0.18)"}`,borderRadius:openSection===i?"12px 12px 0 0":"12px",padding:"12px 16px",display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer"}}>
-            <span style={{fontFamily:"'Anton',sans-serif",fontSize:15,fontWeight:700,color:openSection===i?"#10B981":"#D1D5DB",letterSpacing:1}}>{sec.heading}</span>
-            <span style={{color:openSection===i?"#10B981":"#6B7280",fontSize:16}}>{openSection===i?"▲":"▼"}</span>
-          </button>
-          {openSection===i && (
-            <div style={{background:"rgba(255,122,24,0.04)",border:"1px solid rgba(16,185,129,0.2)",borderTop:"none",borderRadius:"0 0 12px 12px",padding:"14px 16px"}}>
-              <p style={{margin:"0 0 12px",fontSize:15,color:"#D1D5DB",lineHeight:1.8,whiteSpace:"pre-line"}}>{sec.body}</p>
+    </>) },
+    ...lesson.sections.map((sec) => ({ label: sec.heading, node: (
+      <div>
+        <p style={{margin:"0 0 12px",fontSize:15,color:"#D1D5DB",lineHeight:1.8,whiteSpace:"pre-line"}}>{sec.body}</p>
               {sec.table && (
                 <div style={{overflowX:"auto",marginTop:8}}>
                   <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
@@ -3112,11 +3309,9 @@ function LPLessonView({ lesson, onBack, onComplete }) {
                   </table>
                 </div>
               )}
-            </div>
-          )}
-        </div>
-      ))}
-
+      </div>
+    ) })),
+    { label: "Try it yourself", node: (<div data-no-swipe="1">
       {/* Interactive: IL Calculator — Lesson 3 */}
       {lesson.id === 3 && (<CalcErrorBoundary><ILCalculator /></CalcErrorBoundary>)}
 
@@ -3198,16 +3393,29 @@ function LPLessonView({ lesson, onBack, onComplete }) {
         )}
       </div>
 
-      {/* Cluck verdict */}
-      <div style={{background:"rgba(255,122,24,0.06)",border:"1px solid rgba(255,122,24,0.2)",borderRadius:12,padding:"14px 16px",marginBottom:16,marginTop:8}}>
-        <div style={{fontFamily:"'Anton',sans-serif",fontSize:9,color:"#FF7A18",letterSpacing:2,marginBottom:6}}>🐔 CLUCK'S VERDICT</div>
+    </div>) },
+    { label: "Cluck's verdict", node: (<>
+      <div style={{background:"rgba(255,122,24,0.06)",border:"1px solid rgba(255,122,24,0.2)",borderRadius:12,padding:"14px 16px",marginBottom:16}}>
         <p style={{margin:0,fontFamily:"Georgia,serif",fontStyle:"italic",color:"#FFB627",fontSize:15,lineHeight:1.7}}>{lesson.cluckVerdict}</p>
       </div>
-
       <AskCluck context={`LP Lab Lesson ${lesson.id}: ${lesson.title}`} compact={true}/>
-      <button onClick={()=>{setPhase("quiz");setQi(0);setSel(null);setAnswers([]);setShowExp(false);}} style={{width:"100%",background:"#10B981",border:"none",borderRadius:10,padding:"14px",fontFamily:"'Anton',sans-serif",fontSize:15,fontWeight:700,color:"#fff",letterSpacing:3,cursor:"pointer",marginTop:12}}>
+    </>) },
+  ];
+
+  return (
+    <div style={{padding:"0 16px 40px",maxWidth:COLW,margin:"0 auto"}}>
+      <button onClick={onBack} style={{background:"none",border:"none",color:"#6B7280",fontFamily:"'Anton',sans-serif",fontSize:12.5,letterSpacing:2,cursor:"pointer",marginBottom:16}}>← BACK TO LP LAB</button>
+      <WebLessonStepper
+        key={stepKey}
+        storeKey={stepKey}
+        color="#10B981"
+        steps={steps}
+        finish={
+          <button onClick={()=>{setPhase("quiz");setQi(0);setSel(null);setAnswers([]);setShowExp(false);}} style={{width:"100%",background:"#10B981",border:"none",borderRadius:10,padding:"14px",fontFamily:"'Anton',sans-serif",fontSize:15,fontWeight:700,color:"#fff",letterSpacing:3,cursor:"pointer",marginTop:0,height:"100%"}}>
         ✅ TAKE THE QUIZ →
       </button>
+        }
+      />
     </div>
   );
 }

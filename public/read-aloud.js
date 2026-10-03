@@ -7,7 +7,7 @@
       on Seeker/Android WebView + iOS). Used automatically when /api/tts answers
       503 (no key / over daily budget) or errors.
    A floating "Listen" button (bottom-left) reads the page's main content in the
-   current language (en/zh/es), with pause/resume/stop. Loaded globally via
+   current language (en/zh/es/it/pt/vi/hi/ko/tr/id), with pause/resume/stop. Loaded globally via
    the nav script. Skips nav/buttons/code and our own injected UI. */
 (function () {
   if (!("speechSynthesis" in window) || typeof window.SpeechSynthesisUtterance === "undefined") return;
@@ -20,14 +20,17 @@
     it: { listen: "🔊 Ascolta", pause: "⏸ Pausa", resume: "▶ Riprendi" },
     pt: { listen: "🔊 Ouvir", pause: "⏸ Pausar", resume: "▶ Retomar" },
     vi: { listen: "🔊 Nghe", pause: "⏸ Tạm dừng", resume: "▶ Tiếp tục" },
-    hi: { listen: "🔊 सुनें", pause: "⏸ रोकें", resume: "▶ जारी रखें" }
+    hi: { listen: "🔊 सुनें", pause: "⏸ रोकें", resume: "▶ जारी रखें" },
+    ko: { listen: "🔊 듣기", pause: "⏸ 일시정지", resume: "▶ 계속" },
+    tr: { listen: "🔊 Dinle", pause: "⏸ Duraklat", resume: "▶ Devam" },
+    id: { listen: "🔊 Dengarkan", pause: "⏸ Jeda", resume: "▶ Lanjut" }
   };
   function lang() {
     try { var s = localStorage.getItem("clkn_lang"); if (s && LABELS[s]) return s; } catch (_) {}
     var h = (document.documentElement.getAttribute("lang") || "en").toLowerCase();
-    return h.indexOf("zh") === 0 ? "zh" : h.indexOf("es") === 0 ? "es" : h.indexOf("it") === 0 ? "it" : h.indexOf("pt") === 0 ? "pt" : h.indexOf("vi") === 0 ? "vi" : h.indexOf("hi") === 0 ? "hi" : "en";
+    return h.indexOf("zh") === 0 ? "zh" : h.indexOf("es") === 0 ? "es" : h.indexOf("it") === 0 ? "it" : h.indexOf("pt") === 0 ? "pt" : h.indexOf("vi") === 0 ? "vi" : h.indexOf("hi") === 0 ? "hi" : h.indexOf("ko") === 0 ? "ko" : h.indexOf("tr") === 0 ? "tr" : h.indexOf("id") === 0 ? "id" : "en";
   }
-  function bcp47(l) { return l === "zh" ? "zh-CN" : l === "es" ? "es-ES" : l === "it" ? "it-IT" : l === "pt" ? "pt-BR" : l === "vi" ? "vi-VN" : l === "hi" ? "hi-IN" : "en-US"; }
+  function bcp47(l) { return l === "zh" ? "zh-CN" : l === "es" ? "es-ES" : l === "it" ? "it-IT" : l === "pt" ? "pt-BR" : l === "vi" ? "vi-VN" : l === "hi" ? "hi-IN" : l === "ko" ? "ko-KR" : l === "tr" ? "tr-TR" : l === "id" ? "id-ID" : "en-US"; }
 
   var SKIP = { SCRIPT: 1, STYLE: 1, NOSCRIPT: 1, CODE: 1, PRE: 1, BUTTON: 1, SELECT: 1, TEXTAREA: 1, SVG: 1, NAV: 1, HEADER: 1, FOOTER: 1, INPUT: 1, KBD: 1, SAMP: 1 };
   function isHidden(el) { try { return !(el.offsetParent !== null || (el.getClientRects && el.getClientRects().length)); } catch (_) { return false; } }
@@ -41,13 +44,19 @@
     }
     return false;
   }
+  // ⚠️ SCRIPT COVERAGE (2026-09-30): a text node is only read if it contains a letter from a script
+  // listed below. Devanagari was missing, so Hindi read-aloud skipped every line with no English word
+  // in it — most of every Hindi lesson. Hangul is here ahead of Korean. A NEW LANGUAGE IN A NEW SCRIPT
+  // MUST BE ADDED HERE, and to the sentence enders in chunk() (Hindi ends sentences with । / ॥), or its
+  // lessons read silently. The server cache is keyed on the exact chunk text, so changing any of this
+  // re-keys that language's clips: re-run scripts/tts-prewarm.js for it afterwards.
   function collect() {
     var tw = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, null);
     var out = [], n;
     while ((n = tw.nextNode())) {
       var t = (n.nodeValue || "").replace(/\s+/g, " ").trim();
       if (t.length < 2) continue;
-      if (!/[A-Za-z0-9一-鿿À-ɏ]/.test(t)) continue;  // has a letter/digit/CJK/accented
+      if (!/[A-Za-z0-9一-鿿À-ɏऀ-ॿ가-힣]/.test(t)) continue;  // has a letter/digit/CJK/accented/Devanagari/Hangul
       if (skipped(n)) continue;
       var pe = n.parentElement;
       if (pe && isHidden(pe)) continue;
@@ -57,7 +66,7 @@
       t = t.replace(/^(?:\d{1,3}[.)]|[•·▪◦‣*–—-])\s+/, "");
       // Give the voice a sentence boundary so it pauses instead of rushing into
       // the next line (fixes "…weak hands. Two. Never sell…" run-together cadence).
-      if (t && !/[.!?。！？:;,]$/.test(t)) t += ".";
+      if (t && !/[.!?。！？।॥:;,]$/.test(t)) t += ".";
       if (t.length < 2) continue;
       out.push(t);
     }
@@ -71,7 +80,7 @@
   function chunk(parts) {
     var chunks = [];
     for (var p = 0; p < parts.length; p++) {
-      var sentences = parts[p].match(/[^.!?。！？\n]+[.!?。！？]?/g) || [parts[p]];
+      var sentences = parts[p].match(/[^.!?。！？।॥\n]+[.!?。！？।॥]?/g) || [parts[p]];
       var cur = "";
       for (var i = 0; i < sentences.length; i++) {
         var s = sentences[i].trim(); if (!s) continue;

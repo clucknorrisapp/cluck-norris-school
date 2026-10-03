@@ -122,7 +122,7 @@ const TIER2_DATE_BY_ROUTE = {
   "/solana/phone": "Last checked 20 September 2026",
 };
 const TIER2_OWNER_LINE = "maintained by Cluck Norris";
-const LANGS = ["es", "hi", "it", "pt", "vi", "zh"];
+const LANGS = ["es", "hi", "it", "pt", "vi", "zh", "ko", "tr", "id"];
 
 // The mint page's real, verifiable example (task brief, verified against docs/SEEKER_APP_PLAN.md
 // §7): the official SKR mint (Jupiter-verified, ~45.8k holders) and the impersonator mint that a

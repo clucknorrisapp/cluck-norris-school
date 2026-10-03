@@ -43,6 +43,44 @@ mechanism, what it reuses, and **how it is verified without a human eye** — th
 Not in this list, by the owner's word: anything that connects a wallet, signs, pays, or shows a
 holder gate. The full toolkit stays on the Seeker and the website.
 
+## Apple Watch (owner, 2026-09-24: "could be a way to send daily update or some other type of integration")
+
+Added the day the Apple developer account was paid for and the watchOS toolchain installed. Same
+posture as everything above: education only — nothing on the wrist ever shows a wallet, a
+balance or an address. Three tiers, cheapest first; each is its own increment with its own test.
+
+| Tier | Feature | Mechanism | Reuses | Verified by |
+|---|---|---|---|---|
+| W1 | **Daily lesson push, mirrored to the watch.** One notification a day at an owner-set time: today's lesson title + its one question, deep-linking to the Daily pane. iOS mirrors iPhone notifications to a paired watch when the phone is locked, so no watch target is needed. **Lesson only — never the market closes** (Codex round 28: a price line in a notification reads as a trading alert without the school around it). | APNs (a key from the developer account) via the Capacitor push plugin in the wrapper; a server-side sender (`lib/push-daily.js`) with a device-token registry; opt-in on first launch, unsubscribe in settings. Android gets the same sender through Firebase. | **The bundled curriculum's own date-based selection (`src/seeker/school/daily.js`)** — the same lesson and question the Daily pane shows that day — NOT `/api/alpha`, which supplies the market content. The server runs the same selection over the same curriculum JSON so phone and push agree. | Unit tests on the sender: lesson/question ids match `daily.js` for a set of dates including the UTC rollover; payload shape; one send per day per token, idempotent across restart/retry; a dead token is dropped; a token never appears in any public response, analytics event or log line. The device receipt is the owner's. |
+| W2 | **Complication on the watch face.** Today's lesson title (or the streak) on the face; tap opens the WATCH app's lesson screen (a complication opens its own watch app, not the phone — Codex round 28). | WidgetKit on watchOS in a Swift target in the wrapper. The phone app **transfers** the daily brief to the watch over WatchConnectivity (`transferUserInfo` / application context); the watch app writes it to its OWN app-group container, which the complication reads. The watch never reads the phone's storage directly. | Same lesson selection. | Wrapper-side test that the phone sends the brief on launch and on date change, and that the watch extension stores what it receives; the face itself is the owner's screenshot. Depends on a minimal W3 shell existing, so W2 ships with or after W3's first cut. |
+| W3 | **A watch app.** Lesson of the day, its question answered by tap, the streak, the certificate's verify QR. | SwiftUI + WatchConnectivity (a webview cannot run on the watch, so this is native). | Curriculum JSON (static, bundled), the progress marks queue. | Unit tests on the Swift view model in the wrapper; marks land in the same ledger as the phone's. |
+
+**Privacy and registry contract, stated up front for the reviewer (revised after Codex round 28):**
+- A push token is a device identifier. It is stored against a **push install id** minted for this
+  purpose only — a fresh random id, **separate from analytics; no intentional linkage** (Codex
+  round 28: separate identifiers prevent a direct shared-id join, they do not guarantee anonymity,
+  so this plan does not claim it).
+- **Authorisation:** registration returns a per-install secret (random, stored on the device
+  only, hashed at rest server-side). Replacing a token, changing the send time and unsubscribing
+  require that secret; an install id alone authorises nothing, so installation A can never modify
+  installation B.
+- Never a wallet, never an email; deleted on unsubscribe and on an APNs/FCM "unregistered"
+  response — but a DELAYED invalid-token response can never delete a NEWER registration (the
+  delete is conditional on the token it names still being the current one).
+- Unsubscribe cancels any queued send; token rotation retires the old token in the same write.
+- The daily payload carries public lesson copy only.
+- Tests required before W1 ships (Codex's list): no registration or send without consent; A
+  cannot modify B; tokens absent from public responses, analytics and logs; unsubscribe cancels
+  queued sends and rotation retires the old token; a delayed invalid-token response cannot
+  delete a newer registration; restart/retry cannot duplicate the daily notification.
+- The privacy pages (`/privacy/store`) gain one paragraph before W1 ships.
+
+Sequencing: **all three wait for the Seeker submission to close (2026-10-09), like the rest of
+this plan.** Codex round 28 recommended it and the owner's reviewer count is the constraint: W1
+adds native permissions, two delivery providers, a token lifecycle and privacy work while
+money-path reviews are open. The Android reuse is real but does not make it a small server-only
+addition.
+
 ## Sequencing
 
 1. **After 2026-10-09 only.** The Seeker submission is the track until then.

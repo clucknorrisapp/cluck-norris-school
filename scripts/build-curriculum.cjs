@@ -65,7 +65,7 @@ const LP_LESSONS = extractArray(lpSrc, "LP_LESSONS") || [];
 
 // ── Count-drift guard (mirrors scripts/check-counts.js's philosophy: fail loud, never
 // silently render a wrong number on public-facing copy) ────────────────────────────────
-const EXPECTED = { LESSONS: 16, INCUBATOR_LESSONS: 7, LP_LESSONS: 14 };
+const EXPECTED = { LESSONS: 21, INCUBATOR_LESSONS: 7, LP_LESSONS: 15 };
 const actual = { LESSONS: LESSONS.length, INCUBATOR_LESSONS: INCUBATOR_LESSONS.length, LP_LESSONS: LP_LESSONS.length };
 const drift = Object.keys(EXPECTED).filter((k) => actual[k] !== EXPECTED[k]);
 if (drift.length) {
@@ -163,6 +163,9 @@ const LANGS = [
   { code: "pt", flag: "🇵🇹", name: "Português" },
   { code: "vi", flag: "🇻🇳", name: "Tiếng Việt" },
   { code: "zh", flag: "🇨🇳", name: "中文" },
+  { code: "ko", flag: "🇰🇷", name: "한국어" },
+  { code: "tr", flag: "🇹🇷", name: "Türkçe" },
+  { code: "id", flag: "🇮🇩", name: "Bahasa Indonesia" },
 ];
 
 function lessonCard(l) {
@@ -197,7 +200,7 @@ const jsonLd = {
   itemListElement: [
     { "@type": "Course", position: 1, name: "Belt Course", description: "15 belt-ranked lessons on wallets, tokens, DEXs, rugs, market cap and on-chain basics.", provider: { "@type": "Organization", name: "Cluck Norris" } },
     { "@type": "Course", position: 2, name: "Crypto 101 (Incubator)", description: "7 absolute-beginner lessons on wallets, tokens, on-ramps, DEXs and liquidity.", provider: { "@type": "Organization", name: "Cluck Norris" } },
-    { "@type": "Course", position: 3, name: "LP Lab", description: "14 lessons on AMMs, impermanent loss, concentrated liquidity and LP strategy.", provider: { "@type": "Organization", name: "Cluck Norris" } },
+    { "@type": "Course", position: 3, name: "LP Lab", description: "15 lessons on AMMs, impermanent loss, concentrated liquidity and LP strategy.", provider: { "@type": "Organization", name: "Cluck Norris" } },
   ],
 };
 
@@ -208,7 +211,7 @@ const html = `<!DOCTYPE html>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <link rel="stylesheet" href="/theme.css">
 <title>Curriculum — School of Crypto Hard Knocks</title>
-<meta name="description" content="The full syllabus of the School of Crypto Hard Knocks: ${TOTAL} free lessons across the Belt Course, Crypto 101 and the LP Lab, in 7 languages. What's taught, not the quiz."/>
+<meta name="description" content="The full syllabus of the School of Crypto Hard Knocks: ${TOTAL} free lessons across the Belt Course, Crypto 101 and the LP Lab, in 10 languages. What's taught, not the quiz."/>
 <meta property="og:title" content="Curriculum — School of Crypto Hard Knocks"/>
 <meta property="og:description" content="${TOTAL} free lessons on wallets, rugs, DEXs and liquidity — the syllabus, no signup, no quiz spoilers."/>
 <meta property="og:type" content="website"/>
@@ -253,11 +256,11 @@ const html = `<!DOCTYPE html>
   <a class="back" href="/">← HOME</a>
   <header class="page-head">
     <h1 class="title">Curriculum — <span class="c">School of Crypto Hard Knocks</span></h1>
-    <p class="stat-line">${TOTAL} lessons · 7 languages · free · no signup</p>
+    <p class="stat-line">${TOTAL} lessons · 10 languages · free · no signup</p>
     <div class="langs">
       ${LANGS.map((l) => `<span class="lang-chip">${l.flag} ${esc(l.name)}</span>`).join("\n      ")}
     </div>
-    <p class="lang-note">Every lesson below renders in all seven languages inside the school — pick yours from the language toggle once you start.</p>
+    <p class="lang-note">Every lesson below renders in all ten languages inside the school — pick yours from the language toggle once you start.</p>
     <div class="cta-row">
       <a class="cta" href="/school">Start the Belt Course</a>
       <a class="cta alt" href="/school#incubator">Start with Crypto 101</a>

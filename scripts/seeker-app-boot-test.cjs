@@ -42,6 +42,17 @@ const PORT = 3894;
 const BASE = `http://127.0.0.1:${PORT}`;
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), "clkn-seeker-boot-"));
 
+// Quiz options are shuffled per attempt in the app, so an answer is chosen by its TEXT, never by
+// position (a positional click picked the right answer by accident once options moved).
+async function clickOptionByText(page, text) {
+  const btns = page.locator(".seeker-school-option");
+  const n = await btns.count();
+  for (let k = 0; k < n; k++) {
+    if ((await btns.nth(k).innerText()).trim() === String(text).trim()) { await btns.nth(k).click(); return; }
+  }
+  throw new Error("no quiz option with text: " + String(text).slice(0, 80));
+}
+
 function findChromium() {
   const c = [process.env.PLAYWRIGHT_CHROMIUM_PATH, "/opt/pw-browsers/chromium"].filter(Boolean);
   for (const p of c) if (fs.existsSync(p)) return p;
@@ -1145,6 +1156,134 @@ const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css
     await ctx.close();
   }
 
+  // ---- L2: Firepit surplus — the SIGNED transaction contains ONLY WithdrawExcessLamports -------
+  //
+  // Adversarial review on PR #443 (finding 4): section L above never actually signs — it stops at
+  // the confirm sheet's typed gate. Nothing exercised the Seeker surplus path's real instruction-
+  // building code, so a dropped/misplaced `return` in the old shared builder (Firepit.jsx) could
+  // silently fall through into burn+close for the SAME account on top of the withdrawal, and
+  // nothing here would have noticed. This signs with a REAL keypair (the FAKE_SIGNING pattern
+  // section G/Hatchery already established), decodes the actual bytes handed to sendTransaction,
+  // and asserts: exactly one instruction, opcode 38 (WithdrawExcessLamports) — never 8 (Burn), 9
+  // (CloseAccount) or 15 (BurnChecked). The fixture's one account is deliberately NON-empty (holds
+  // a real balance) so a fallthrough bug would show up as an EXTRA instruction, not as nothing.
+  {
+    const SIGNER = web3.Keypair.generate();
+    const SIGNER_ADDR = SIGNER.publicKey.toBase58();
+    const TOKEN_ACCOUNT = web3.Keypair.generate().publicKey.toBase58();
+    const MINT = web3.Keypair.generate().publicKey.toBase58();
+    const FAKE_SIGNING = `(() => {
+      const SECRET = ${JSON.stringify(Array.from(SIGNER.secretKey))};
+      const account = { address: ${JSON.stringify(SIGNER_ADDR)}, publicKey: new Uint8Array(32).fill(7),
+        chains: ["solana:mainnet"], features: ["solana:signTransaction", "solana:signMessage"] };
+      const wallet = {
+        version: "1.0.0", name: "Jupiter", icon: "data:image/svg+xml;base64,PHN2Zy8+",
+        chains: ["solana:mainnet"], accounts: [],
+        features: {
+          "standard:connect": { version: "1.0.0", connect: async () => { wallet.accounts = [account]; return { accounts: [account] }; } },
+          "standard:disconnect": { version: "1.0.0", disconnect: async () => { wallet.accounts = []; } },
+          "standard:events": { version: "1.0.0", on: () => () => {} },
+          "solana:signTransaction": { version: "1.0.0", supportedTransactionVersions: ["legacy", 0],
+            signTransaction: async (...inputs) => inputs.map((x) => {
+              const tx = solanaWeb3.Transaction.from(x.transaction);
+              tx.sign(solanaWeb3.Keypair.fromSecretKey(Uint8Array.from(SECRET)));
+              return { signedTransaction: tx.serialize() };
+            }) },
+          "solana:signMessage": { version: "1.0.0",
+            signMessage: async (...inputs) => inputs.map((x) => ({ signedMessage: x.message, signature: new Uint8Array(64).fill(9) })) },
+        },
+      };
+      const cb = ({ register }) => register(wallet);
+      window.addEventListener("wallet-standard:app-ready", (ev) => cb(ev.detail));
+      window.dispatchEvent(new CustomEvent("wallet-standard:register-wallet", { detail: cb }));
+    })();`;
+
+    // One account: NOT empty (a real 0.5-unit balance), and surplus-eligible with a real mainnet
+    // surplus figure. Also lands in the (untouched) Burn group by virtue of not being empty — that
+    // is the app's normal, correct overlap between jobs, and this test never touches that section.
+    const SCAN = {
+      success: true, wallet: SIGNER_ADDR, count: 1, capped: false,
+      rentSolTotal: 1855569 / 1e9, valueUsdTotal: 5,
+      surplusAvailable: true, surplusLamportsTotal: 367129, surplusSolTotal: 367129 / 1e9,
+      accounts: [
+        { tokenAccount: TOKEN_ACCOUNT, mint: MINT, program: "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+          amountRaw: "500000", decimals: 6, uiAmount: 0.5,
+          rentLamports: 1855569, frozen: false, delegated: false, space: 165, isNative: false, owner: SIGNER_ADDR,
+          symbol: "SURP", name: "Surplus token", logo: null, priceUsd: 10, valueUsd: 5, priceKnown: true,
+          rentExemptLamports: 1488440, surplusLamports: 367129, surplusEligible: true,
+          empty: false, isNft: false },
+      ],
+    };
+
+    let capturedSendB64 = null;
+    const { ctx, page, errors } = await open(
+      (r) => r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(GOOD) }),
+      async (pg) => {
+        await pg.route("**/api/burn-scan*", (r) => r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(SCAN) }));
+        await pg.route("**/api/helius-rpc", async (r) => {
+          const body = JSON.parse(r.request().postData() || "{}");
+          const m = body.method;
+          let result;
+          if (m === "getLatestBlockhash") result = { value: { blockhash: web3.Keypair.generate().publicKey.toBase58() } };
+          else if (m === "sendTransaction") { capturedSendB64 = body.params[0]; result = "L2FAKESIG1111111111111111111111111111111111111111111111111"; }
+          else if (m === "getSignatureStatuses") result = { value: [{ err: null, confirmationStatus: "confirmed" }] };
+          else result = null;
+          r.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ jsonrpc: "2.0", id: 1, result }) });
+        });
+      }, FAKE_SIGNING);
+
+    await page.waitForFunction(() => !!document.querySelector(".seeker-shell"), null, { timeout: 20000 });
+    await page.click(".seeker-walletbtn");
+    await page.waitForFunction(() => /Disconnect/i.test(document.body.innerText), null, { timeout: 15000 });
+    await page.evaluate(() => { window.location.hash = "#/tools/firepit"; });
+    await page.waitForTimeout(800);
+
+    // Click the SURPLUS section's own "Select all" — the fixture's one account also appears in the
+    // Burn group (it's not empty), so a plain text match on "select all" would be ambiguous.
+    await page.evaluate(() => {
+      const sections = Array.from(document.querySelectorAll(".seeker-firepit-section"));
+      const surplusSection = sections.find((s) => /Reclaim surplus rent/i.test((s.querySelector("h2") || {}).textContent || ""));
+      const btn = surplusSection && Array.from(surplusSection.querySelectorAll("button")).find((b) => /select all/i.test(b.textContent.trim()));
+      btn && btn.click();
+    });
+    await page.waitForTimeout(150);
+    await page.evaluate(() => {
+      const b = Array.from(document.querySelectorAll("button")).find((x) => /^reclaim surplus$/i.test(x.textContent.trim()));
+      b && b.click();
+    });
+    const opened = await page.waitForFunction(() => !!document.querySelector(".seeker-confirm"), null, { timeout: 10000 })
+      .then(() => true).catch(() => false);
+    ok("L2 · the surplus confirm sheet opens", opened, await text(page).then((b) => b.slice(0, 300)));
+
+    if (opened) {
+      const confirmBtnState = await page.evaluate(() => {
+        const b = Array.from(document.querySelectorAll(".seeker-confirm button")).find((x) => /confirm and sign/i.test(x.innerText));
+        return b ? b.disabled : null;
+      });
+      ok("L2 · never destroys anything, so the confirm button is armed with no typed gate", confirmBtnState === false, `disabled=${confirmBtnState}`);
+
+      await page.evaluate(() => {
+        const b = Array.from(document.querySelectorAll(".seeker-confirm button")).find((x) => /confirm and sign/i.test(x.innerText));
+        b && b.click();
+      });
+      for (let i = 0; i < 100 && !capturedSendB64; i++) await page.waitForTimeout(100);
+      ok("L2 · the wallet was actually asked to sign and the page submitted a transaction", !!capturedSendB64);
+
+      if (capturedSendB64) {
+        const raw = Buffer.from(capturedSendB64, "base64");
+        const tx = web3.Transaction.from(raw);
+        ok("L2 · exactly one instruction — one selected account", tx.instructions.length === 1, tx.instructions.length);
+        const ix = tx.instructions[0];
+        ok("L2 · ⚠️ opcode is 38 (WithdrawExcessLamports) — NEVER 8 (Burn), 9 (CloseAccount) or 15 (BurnChecked)",
+           ix.data.length === 1 && ix.data[0] === 38, Array.from(ix.data));
+        ok("L2 · targets the account's own token program", ix.programId.toBase58() === "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA", ix.programId.toBase58());
+        ok("L2 · the transaction is really signed (verified ed25519 signature, not a stub)", tx.verifySignatures());
+      }
+    }
+    ok("L2 · no uncaught exception", errors.length === 0, errors.join(" | ").slice(0, 300));
+    await ctx.close();
+  }
+
   // ---- M: Project Burn never arms on a number it could not read --------------------------
   //
   // The other half of P2-9: Project Burn signs, and had no behavioural test beyond "it mounts".
@@ -1514,6 +1653,13 @@ const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css
     await page.waitForFunction(() => !!document.querySelector(".seeker-shell"), null, { timeout: 20000 });
 
     const go = async (hash) => { await page.evaluate((h) => { window.location.hash = h; }, hash); await page.waitForTimeout(320); };
+    // Every lesson reads as steps (#437, "send stepper on all levels"); the quiz button lives on the
+    // LAST step. Walks there through the strip, so a journey that starts a quiz goes the way a
+    // learner does — past the opening and the terms — rather than around the stepper.
+    const toLastStep = async () => {
+      const n = await page.locator(".seeker-step-seg").count();
+      if (n) { await page.locator(".seeker-step-seg").nth(n - 1).click(); await page.waitForTimeout(150); }
+    };
     const opts = () => page.evaluate(() => Array.from(document.querySelectorAll(".seeker-school-option")).map((b) => (b.innerText || "").trim()));
     const doneKeys = () => page.evaluate(() => { try { return JSON.parse(localStorage.getItem("clkn_completed") || "[]"); } catch (_) { return null; } });
     const progressOf = (cid) => page.evaluate((c) => {
@@ -1524,16 +1670,41 @@ const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css
     // ── P1: the lesson BODY is on the screen, not just its title ──────────────────────────
     // The LP Lab lesson with the most prose. 24 of the 58 lessons are LP Lab's and 11 are Deep
     // Dive's; between them that is 35 lessons whose entire teaching material is `sections`.
+    //
+    // ⚠️ THE LESSON STEPPER (owner 2026-09-24, #437) reads a long lesson ONE SECTION PER SCREEN.
+    // So "the material is rendered" now means "every section is reachable and renders on its own
+    // step": readLesson() walks every step through the strip and collects what each one shows.
+    // The bar is unchanged — every declared heading, and the bodies — only the reading of it moved
+    // from one screen to all of them. A lesson that silently lost a section still fails here.
+    const readLesson = async () => {
+      const steps = await page.locator(".seeker-step-seg").count();
+      const grab = () => page.evaluate(() => ({
+        heads: Array.from(document.querySelectorAll(".seeker-school-section .seeker-school-section-h")).map((h) => (h.innerText || "").trim()),
+        bodyChars: Array.from(document.querySelectorAll(".seeker-school-section-body p, .seeker-school-content p")).reduce((n, p) => n + (p.innerText || "").length, 0),
+        text: (document.body.innerText || "").length,
+        title: (document.querySelector(".seeker-school-title") || {}).innerText || "",
+      }));
+      if (!steps) return { stepped: false, steps: 0, ...(await grab()) };
+      const out = { stepped: true, steps, heads: [], bodyChars: 0, text: 0, title: "" };
+      for (let i = 0; i < steps; i++) {
+        await page.locator(".seeker-step-seg").nth(i).click();
+        await page.waitForTimeout(120);
+        const g = await grab();
+        if (i === 0) out.title = g.title;
+        for (const h of g.heads) if (!out.heads.includes(h)) out.heads.push(h);
+        out.bodyChars += g.bodyChars;
+        out.text += g.text;
+      }
+      return out;
+    };
     {
       const lp = courseOf("lp").lessons.map((l) => ({ l, chars: (l.sections || []).reduce((a, s) => a + (s.body || "").length, 0) }))
         .sort((a, b) => b.chars - a.chars)[0].l;
+      await page.evaluate(() => { try { localStorage.removeItem("clkn_lesson_step"); } catch (_) {} });
       await go(`#/school/lp/${lp.id}`);
-      const seen = await page.evaluate(() => ({
-        heads: Array.from(document.querySelectorAll(".seeker-school-section-h")).map((h) => (h.innerText || "").trim()),
-        bodyChars: Array.from(document.querySelectorAll(".seeker-school-section-body p")).reduce((n, p) => n + (p.innerText || "").length, 0),
-        title: (document.querySelector(".seeker-school-title") || {}).innerText || "",
-      }));
-      ok(`P1 · an LP Lab lesson renders its section headings (${seen.heads.length} of ${(lp.sections || []).length})`,
+      const seen = await readLesson();
+      ok("P1 · a long LP Lab lesson opens in the lesson stepper (one section per screen)", seen.stepped, seen.steps);
+      ok(`P1 · an LP Lab lesson renders its section headings (${seen.heads.length} of ${(lp.sections || []).length}, across ${seen.steps} steps)`,
          seen.heads.length === (lp.sections || []).length, JSON.stringify(seen.heads).slice(0, 200));
       ok("P1 · ⚠️ and their BODIES — the lesson is the material, not the title and a tagline",
          seen.bodyChars > 2000, `only ${seen.bodyChars} characters of body rendered for "${seen.title}"`);
@@ -1546,8 +1717,9 @@ const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css
     {
       const dd = courseOf("deepdive").lessons.find((l) => (l.sections || []).length || l.content);
       await go(`#/school/deepdive/${dd.id}`);
-      const before = await page.evaluate(() => (document.body.innerText || "").length);
-      ok("P2 · a Deep Dive lesson renders real material", before > 1200, `${before} chars`);
+      const seen = await readLesson();
+      ok("P2 · a Deep Dive lesson renders real material", seen.bodyChars > 1200, `${seen.bodyChars} chars of body across ${seen.steps} steps`);
+      // readLesson() leaves the stepper on its LAST step, which is where 'Mark as read' lives.
       const hasMarkRead = await page.evaluate(() => /Mark as read/i.test((document.querySelector(".seeker-school-start") || {}).innerText || ""));
       ok("P2 · a lesson with no questions offers 'Mark as read' rather than an empty quiz", hasMarkRead);
       await page.click(".seeker-school-start");
@@ -1568,6 +1740,7 @@ const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css
     const NEED = passMark(basicsDex.questions.length);
     {
       await go(`#/school/basics/${DUP}`);
+      await toLastStep();
       ok(`P3 · the beginner lesson offers its quiz (${basicsDex.questions.length} questions, ${NEED} to pass)`,
          await page.evaluate(() => !!document.querySelector(".seeker-school-start")));
       await page.click(".seeker-school-start");
@@ -1576,8 +1749,10 @@ const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css
       const firstOpts = await opts();
       // ⚠️ THE ONE THAT SHIPPED BROKEN. Zero buttons is what every learner would have met.
       ok("P3 · ⚠️ the quiz actually renders ANSWER BUTTONS", firstOpts.length >= 2, `rendered ${firstOpts.length} options`);
+      // The app shuffles options per attempt (School.jsx shuffleOptions), so the SET must match,
+      // not the order.
       ok("P3 · and they are the options the curriculum declares",
-         JSON.stringify(firstOpts) === JSON.stringify(basicsDex.questions[0].options), JSON.stringify({ screen: firstOpts, data: basicsDex.questions[0].options }).slice(0, 400));
+         JSON.stringify(firstOpts.slice().sort()) === JSON.stringify(basicsDex.questions[0].options.slice().sort()), JSON.stringify({ screen: firstOpts, data: basicsDex.questions[0].options }).slice(0, 400));
 
       const beaconsBefore = beacons.length;
       for (let i = 0; i < basicsDex.questions.length; i++) {
@@ -1585,7 +1760,7 @@ const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css
         const onScreen = await page.evaluate(() => ((document.querySelector(".seeker-school-q") || {}).innerText || "").trim());
         ok(`P3 · question ${i + 1} on screen is the one the curriculum holds`, onScreen === q.q, JSON.stringify({ onScreen, expected: q.q }).slice(0, 300));
         const wrongIdx = q.options.findIndex((_, k) => k !== q.correct);
-        await page.click(`.seeker-school-option >> nth=${wrongIdx}`);
+        await clickOptionByText(page, q.options[wrongIdx]);
         await page.waitForTimeout(160);
         const verdict = await page.evaluate(() => ((document.querySelector(".seeker-school-explain-verdict") || {}).innerText || "").trim());
         ok(`P3 · a wrong answer is marked wrong (q${i + 1})`, /Not quite/i.test(verdict), verdict);
@@ -1615,7 +1790,7 @@ const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css
       await page.waitForTimeout(250);
       for (let i = 0; i < basicsDex.questions.length; i++) {
         const q = basicsDex.questions[i];
-        await page.click(`.seeker-school-option >> nth=${q.correct}`);
+        await clickOptionByText(page, q.options[q.correct]);
         await page.waitForTimeout(160);
         const verdict = await page.evaluate(() => ((document.querySelector(".seeker-school-explain-verdict") || {}).innerText || "").trim());
         ok(`P4 · the curriculum's own \`correct\` index is marked correct on screen (q${i + 1})`, /Correct/i.test(verdict), verdict);
@@ -1663,12 +1838,13 @@ const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css
         // the missed screen would stay up and there would be no "Take the quiz" to press.
         await go("#/school");
         await go(`#/school/basics/${L.id}`);
+        await toLastStep();
         await page.click(".seeker-school-start");
         await page.waitForTimeout(250);
         for (let i = 0; i < L.questions.length; i++) {
           const q = L.questions[i];
           const idx = i < rightCount ? q.correct : q.options.findIndex((_, k) => k !== q.correct);
-          await page.click(`.seeker-school-option >> nth=${idx}`);
+          await clickOptionByText(page, q.options[idx]);
           await page.waitForTimeout(160);
           await page.click(".seeker-school-explain .seeker-btn");
           await page.waitForTimeout(200);
@@ -1707,6 +1883,9 @@ const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css
     const ES = JSON.parse(fs.readFileSync(path.join(ROOT, "public", "i18n", "es.school.json"), "utf8"));
     const CURRICULUM = require(path.join(ROOT, "data", "curriculum.json"));
     const norm = (x) => String(x || "").replace(/\s+/g, " ").trim();
+    // What is ON SCREEN: a heading line's trailing colon is dropped there (School.jsx dropColon), so
+    // rendered-vs-expected comparisons ignore a colon that ends a line. Dictionary LOOKUPS use norm.
+    const shown = (x) => norm(String(x || "").replace(/[ \t]*[:：][ \t]*(\n|$)/g, "$1"));
     const lp = CURRICULUM.courses.find((c) => c.id === "lp").lessons
       .map((l) => ({ l, chars: (l.sections || []).reduce((a, s) => a + (s.body || "").length, 0) }))
       .sort((a, b) => b.chars - a.chars)[0].l;
@@ -1717,7 +1896,13 @@ const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css
     const page = await ctx.newPage();
     const errors = [];
     page.on("pageerror", (e) => errors.push(e.message));
-    await page.addInitScript(() => { try { localStorage.setItem("clkn_lang", "es"); } catch (_) {} });
+    // The lesson stepper (#437) opens a long lesson on its opening step; section 0 is step 1.
+    // Seed the stepper's own remembered position so the lesson opens ON section 0 — the same
+    // path a learner takes coming back mid-lesson — and this reads the material, not the outline.
+    await page.addInitScript((key) => {
+      try { localStorage.setItem("clkn_lang", "es"); } catch (_) {}
+      try { localStorage.setItem("clkn_lesson_step", JSON.stringify({ [key]: 1 })); } catch (_) {}
+    }, "lp:" + lp.id);
     await page.route("**/api/**", (r) => r.fulfill({ status: 503, contentType: "application/json", body: "{}" }));
     await page.goto(`${BASE}/index.html`, { waitUntil: "domcontentloaded" });
     await page.waitForFunction(() => !!(window.CLKN_I18N && window.CLKN_I18N.dict && Object.keys(window.CLKN_I18N.dict).length > 100), null, { timeout: 20000 });
@@ -1736,8 +1921,8 @@ const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css
     ok("P8 · the curated Spanish translation of this section exists (or the test proves nothing)", !!curated && curated.length > 200);
     ok("P8 · the section heading renders in Spanish", got.heading && got.heading !== sec0.heading, JSON.stringify(got.heading));
     ok("P8 · ⚠️ the section BODY renders in Spanish, offline — not the English under a Spanish heading",
-       norm(got.body) === norm(curated), JSON.stringify({ got: got.body.slice(0, 120), want: String(curated).slice(0, 120) }));
-    ok("P8 · and it is NOT the English body", norm(got.body) !== norm(sec0.body));
+       shown(got.body) === shown(curated), JSON.stringify({ got: got.body.slice(0, 120), want: String(curated).slice(0, 120) }));
+    ok("P8 · and it is NOT the English body", shown(got.body) !== shown(sec0.body));
     ok("P8 · the translation's paragraph breaks survived (more than one <p>)", got.paras > 1, String(got.paras));
     ok("P8 · a curated block is marked data-i18n-skip so the observer never sends Spanish for machine translation", got.skipped === "1", String(got.skipped));
     ok("P8 · nothing threw", errors.length === 0, errors.join(" | ").slice(0, 300));
@@ -1758,6 +1943,9 @@ const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css
     const ES = JSON.parse(fs.readFileSync(path.join(ROOT, "public", "i18n", "es.school.json"), "utf8"));
     const CURRICULUM = require(path.join(ROOT, "data", "curriculum.json"));
     const norm = (x) => String(x || "").replace(/\s+/g, " ").trim();
+    // What is ON SCREEN: a heading line's trailing colon is dropped there (School.jsx dropColon), so
+    // rendered-vs-expected comparisons ignore a colon that ends a line. Dictionary LOOKUPS use norm.
+    const shown = (x) => norm(String(x || "").replace(/[ \t]*[:：][ \t]*(\n|$)/g, "$1"));
     const lp = CURRICULUM.courses.find((c) => c.id === "lp").lessons
       .map((l) => ({ l, chars: (l.sections || []).reduce((a, s) => a + (s.body || "").length, 0) }))
       .sort((a, b) => b.chars - a.chars)[0].l;
@@ -1769,7 +1957,13 @@ const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css
     const page = await ctx.newPage();
     const errors = [];
     page.on("pageerror", (e) => errors.push(e.message));
-    await page.addInitScript(() => { try { localStorage.setItem("clkn_lang", "es"); } catch (_) {} });
+    // The lesson stepper (#437) opens a long lesson on its opening step; section 0 is step 1.
+    // Seed the stepper's own remembered position so the lesson opens ON section 0 — the same
+    // path a learner takes coming back mid-lesson — and this reads the material, not the outline.
+    await page.addInitScript((key) => {
+      try { localStorage.setItem("clkn_lang", "es"); } catch (_) {}
+      try { localStorage.setItem("clkn_lesson_step", JSON.stringify({ [key]: 1 })); } catch (_) {}
+    }, "lp:" + lp.id);
     await page.route("**/api/**", (r) => r.fulfill({ status: 503, contentType: "application/json", body: "{}" }));
     // Hold the dictionaries back. Both files — the base pack and the school pack.
     await page.route("**/i18n/es*.json", async (route) => { await new Promise((r) => setTimeout(r, DELAY_MS)); await route.continue(); });
@@ -1780,20 +1974,20 @@ const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css
       dict: !!window.CLKN_I18N,
       body: (document.querySelector(".seeker-school-section-body") || {}).innerText || "",
     }));
-    ok("P9 · the lesson renders BEFORE the dictionary arrives (the race is real, not simulated)", !early.dict && norm(early.body) === norm(sec0.body), { dict: early.dict, ms: Date.now() - t0, body: early.body.slice(0, 80) });
+    ok("P9 · the lesson renders BEFORE the dictionary arrives (the race is real, not simulated)", !early.dict && shown(early.body) === shown(sec0.body), { dict: early.dict, ms: Date.now() - t0, body: early.body.slice(0, 80) });
 
     await page.waitForFunction(() => !!window.CLKN_I18N, null, { timeout: 20000 });
     await page.waitForFunction((want) => {
       const w = document.querySelector(".seeker-school-section-body");
-      return !!w && w.innerText.replace(/\s+/g, " ").trim() === want;
-    }, norm(curated), { timeout: 5000 }).catch(() => {});
+      return !!w && w.innerText.replace(/[ \t]*[:：][ \t]*(\n|$)/g, "$1").replace(/\s+/g, " ").trim() === want;
+    }, shown(curated), { timeout: 5000 }).catch(() => {});
     const late = await page.evaluate(() => {
       const w = document.querySelector(".seeker-school-section-body");
       return { body: w ? w.innerText : "", skipped: w ? w.getAttribute("data-i18n-skip") : null, paras: w ? w.querySelectorAll("p").length : 0,
                heading: ((document.querySelector(".seeker-school-section-h") || {}).innerText || "").trim() };
     });
     ok(`P9 · ⚠️ once the dictionary lands (${DELAY_MS} ms, past the old 1.5 s give-up) the lesson BODY becomes the curated Spanish on its own`,
-       norm(late.body) === norm(curated), { got: late.body.slice(0, 120), want: String(curated).slice(0, 120) });
+       shown(late.body) === shown(curated), { got: late.body.slice(0, 120), want: String(curated).slice(0, 120) });
     ok("P9 · with its paragraph breaks", late.paras > 1, String(late.paras));
     ok("P9 · marked data-i18n-skip so the observer never sends the Spanish for machine translation", late.skipped === "1", String(late.skipped));
     ok("P9 · the heading followed too", late.heading && late.heading !== sec0.heading, late.heading);

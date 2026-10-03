@@ -1,6 +1,26 @@
 import { useState, useEffect, useMemo, useRef, lazy, Suspense } from "react";
 import { CLKN_MINT, CLKN_TRADE_LINK, JUPITER_TRADE_LINK, LOGO_B64, COL, READ, MintAddress, JupiterSwapButton, AskCluck, LP_LESSONS_COUNT, RootCrakBadge, ROOTCRAK } from "./shared.jsx";
 import { STORE, api, STORE_PAGES } from "./edition.js";
+import { revealQuizResult, revealUnderClear } from "./shared/scrollReveal.js";
+import WebLessonStepper from "./shared/WebLessonStepper.jsx";
+import { clearStep } from "./shared/lessonSteps.js";
+
+// ── quiz auto-scroll (window-scrolling pages) ──────────────────────────────────────────────────
+// Owner (2026-09-24): "that has been a problem even in the web app … we need to address that
+// across all platforms" — the same ask as the Seeker app's school quiz (src/seeker/school/
+// School.jsx), reusing the same helper so the two can't drift. The page itself scrolls (no inner
+// pane here), and TWO things sit fixed above the content: the app's own sticky in-page header
+// (`[data-cluck-top-clear]`, reserves real flow space, so it is present here even though it
+// scrolls out) and the floating `#cluck-nav-bar` pill (`position:fixed`, injected by
+// public/cluck-nav.js, sits on top of everything). The clear line is whichever sits lower.
+function quizTopClearY() {
+  let y = 0;
+  const bar = document.getElementById("cluck-nav-bar");
+  if (bar) y = Math.max(y, bar.getBoundingClientRect().bottom);
+  const header = document.querySelector("[data-cluck-top-clear]");
+  if (header) y = Math.max(y, header.getBoundingClientRect().bottom);
+  return y;
+}
 const Library = lazy(() => import("./sections/Library.jsx"));
 const LPLab = lazy(() => import("./sections/LPLab.jsx"));
 const SOL_MINT = "So11111111111111111111111111111111111111112";
@@ -59,6 +79,8 @@ const LESSON_TOOLS = STORE ? {} : {
   staking:     {href:"/locker-room",     label:"See real locks on Jupiter Lock"},
   bags:        {href:"/bags",            label:"Watch live launches and graduations"},
   memecoins:   {href:"/listing-checkup", label:"Check a meme token's listings against the chain"},
+  signing:     {href:"/wallet-checkup",  label:"Find approvals you already signed, and revoke them"},
+  fakeseeker:  {href:"/wallet-checkup",  label:"Check a wallet for approvals a claim page left behind"},
 };
 // Library pieces ship in every edition (the Library is part of the school).
 const LESSON_READ={
@@ -76,6 +98,11 @@ const LESSON_READ={
   memecoins:   {id:"psychology",            label:"Trading psychology"},
   seedphrase:  {id:"wallet-security",       label:"Wallet security deep dive"},
   inheritance: {id:"wallet-security",       label:"Wallet security deep dive"},
+  poisoning:   {id:"wallet-security",       label:"Wallet security deep dive"},
+  signing:     {id:"wallet-security",       label:"Wallet security deep dive"},
+  token2022:   {id:"token-research",        label:"How to research a token"},
+  simswap:     {id:"wallet-security",       label:"Wallet security deep dive"},
+  fakeseeker:  {id:"wallet-security",       label:"Wallet security deep dive"},
 };
 function LessonLinks({lesson:l}){
   const tool=LESSON_TOOLS[l.id], read=LESSON_READ[l.id];
@@ -541,6 +568,124 @@ const LESSONS = [
       { q: "A site tells you to sign a message and approve a token delegate to 'claim your reduced-rent refund.' What is actually happening?", options: ["Normal procedure — sites need a delegate to send a refund", "This is the exact scam the rent cut invites — nobody needs your seed phrase, a delegate approval, or an 'unlock fee' to return a deposit that was already yours", "It's fine as long as the site looks professional", "You should send a small amount of SOL first to prove you're not a bot"], correct: 1, explanation: "This is the predictable next wave — the same way every past airdrop bred a wave of fake claim pages. Real amounts today are fractions of a cent per account. Anything asking for a delegate, a seed phrase, or SOL up front to 'unlock' your own money is lying. Close the tab." },
     ],
   },
+
+  // ── SAFETY BLOCK (2026-09-29, owner pick from the school review) ──────────────────────────
+  // Five ways people actually lose money today that the school did not teach: the lookalike
+  // address, the signature they did not read, the token that can reach into their wallet, the
+  // phone number that unlocks everything, and the scam wave that follows a device launch. Each
+  // one is written from what the chain or the device actually does, not from a headline. Facts
+  // that are checkable are stated so they can be checked: program ids, mint addresses, the one
+  // store URL. Nothing here promises a return, and "Earn" never appears.
+  {
+    id: "poisoning", belt: "PROCTOR", icon: "🪤", title: "Address Poisoning",
+    quote: "Cluck Norris reads all 44 characters. Every time.",
+    color: "#F87171", glow: "rgba(248,113,113,0.4)",
+    intro: "Your wallet shows an address as its first four characters, three dots, and its last four. Attackers know that. They generate an address whose ends match one you use, send you a worthless transfer from it so it lands in your history, and wait for you to copy it from there. No hack, no malware, no signature — you send the money yourself, to the wrong door, and nobody can bring it back. It works because the shortened address that looks right is the only thing you checked.",
+    concepts: [
+      { term: "The Lookalike", def: "An address ground out by a script until its first and last characters match an address you use — your exchange deposit, your other wallet, a friend. Matching four at each end takes minutes on an ordinary laptop. Everything in the middle is different, and the middle is the part nobody reads." },
+      { term: "The Poison Transfer", def: "The attacker sends you a tiny amount — dust, or a worthless token — FROM the lookalike. Nothing is stolen at that moment. The whole point is that the lookalike now sits in your transaction history, one tap away from being copied." },
+      { term: "Copy From History", def: "The theft itself: you copy the recent address, the ends match what you remember, and you send the real amount to it. A blockchain transfer has no reversal, no chargeback, and no support desk. The money belongs to the attacker the second it confirms." },
+      { term: "Fake Tokens With Real Names", def: "Tokens named after coins you hold, dropped into your wallet unasked. Some are poison — a familiar-looking address in your history. Some link to a claim site in their name or description. Hide them. Never swap them, never visit the link." },
+      { term: "Save It Once", def: "Put every address you send to regularly into your wallet's address book, from the destination's own screen — the exchange's deposit page, your hardware wallet's display, a QR code. Then send to the saved contact, never to a line in your history." },
+      { term: "The Test Send", def: "First time to a new address, send a small amount, wait for it to land, and check it arrived where you meant. Then send the rest. The few seconds it costs are the entire difference between losing a test amount and losing everything." },
+    ],
+    questions: [
+      { q: "An address in your recent history starts and ends with exactly the same characters as your exchange deposit address. What can you actually conclude?", options: ["It's the same address — the ends are unique", "Nothing yet — only the characters in the middle prove it's the same address", "It's safe if you've sent to it before", "It's the exchange's backup address"], correct: 1, explanation: "Matching ends are exactly what an attacker manufactures, and they're all a shortened address shows you. Two addresses are the same only when every character matches. Compare the middle, or better, don't copy from history at all." },
+      { q: "You receive 0.000001 SOL from an address you've never seen. Nothing else happened. Why would anyone bother?", options: ["A network reward for holding SOL", "A wallet test the exchange runs automatically", "To plant a lookalike address in your history for you to copy later", "A mistake by a stranger"], correct: 2, explanation: "Dust costs the attacker almost nothing and it isn't the theft — it's the bait. It puts an address they control into the list you'll scroll through next time you send. The money moves later, when you copy it yourself." },
+      { q: "Where should you copy a deposit address from?", options: ["Your transaction history — it's the most recent", "A screenshot someone sent you", "The destination's own screen or a contact you saved from it", "Whichever copy has the right first four characters"], correct: 2, explanation: "History is the one place an attacker can put something. The exchange's deposit page, your hardware wallet's screen, a QR code, or a contact you saved from one of those are places they can't reach. Copy from the source, and save it once." },
+      { q: "How hard is it to generate an address whose first four and last four characters match yours?", options: ["Practically impossible — addresses are random", "Only possible for well-funded groups", "Minutes on an ordinary computer", "It requires access to your wallet"], correct: 2, explanation: "Generating keypairs is cheap and the search only has to match eight characters, not forty-four. Free tools exist to grind a prefix and suffix. Longer matches cost more time, which is why attackers settle for the ends your wallet shows and nothing more." },
+      { q: "A token named after a coin you hold appears in your wallet. You didn't buy it. What's the safe move?", options: ["Swap it to SOL — free money", "Visit the site in its description to claim it", "Hide it and leave it alone", "Send it back to the address it came from"], correct: 2, explanation: "An unasked-for token is an advert at best and a trap at worst. Swapping it, opening its link, or sending it anywhere means interacting with something an attacker built. Hiding it costs nothing and closes every door they left open." },
+      { q: "You realise you sent funds to a poisoned address ten minutes ago. What can be done?", options: ["The network can reverse it within an hour", "Your wallet provider can freeze the recipient", "Nothing — the transfer is final, which is why the test send exists", "Report it and the exchange will refund you"], correct: 2, explanation: "There is no reversal on a blockchain, and no wallet or exchange can reach into an address they don't control. Every defence in this lesson sits before the send, because nothing works after it. A small test amount is the last cheap mistake you get to make." },
+    ],
+  },
+  {
+    id: "signing", belt: "PROVOST", icon: "🔏", title: "Read Before You Sign",
+    quote: "Cluck Norris never signs blind. He reads the preview — and he still doesn't take it on faith.",
+    color: "#60A5FA", glow: "rgba(96,165,250,0.4)",
+    intro: "Nearly every theft from a connected wallet is a signature the owner gave. Your wallet runs a transaction against the chain before you approve it and shows you what would change — what leaves, what arrives, what permissions move. A drainer's whole job is to get you past that screen without reading it. The preview is not a formality. It's your best look at what a transaction would do — a prediction, not a promise.",
+    concepts: [
+      { term: "The Simulation Preview", def: "Before you sign, the wallet simulates the transaction and lists the expected balance changes — minus this much SOL, plus this many tokens. Read every line that leaves your wallet and compare it to what you meant to do. If it doesn't match, or if anything is hidden or rushed, the answer is no. A match is not a guarantee: the simulation runs against the chain as it is now, which can change before your transaction lands, and attackers try to game previews." },
+      { term: "Simulation Failed", def: "The wallet couldn't predict what the transaction does. A site's own transactions almost always simulate. On a site you don't know, a prompt that can't be previewed is a stop sign, not a glitch to click through. Drainers deliberately break simulation so the preview shows nothing." },
+      { term: "Approve Is Not Transfer", def: "A delegate approval lets a program move up to an amount of your tokens LATER, without asking again. Nothing leaves when you sign, so the preview looks harmless. That's why drainers ask for approvals. Wallet Checkup exists to find and revoke the ones you already gave." },
+      { term: "Authority Changes", def: "Some instructions don't move tokens — they move who owns the account that holds them. Set authority, assign, close account. The preview shows no balance change because ownership itself is what moves, and everything in the account goes with it." },
+      { term: "Message vs Transaction", def: "Signing a plain-text message — a login nonce, a proof of ownership — cannot move funds by itself. But if the text you're asked to sign is unreadable — a wall of characters, a base64 blob — it may be a transaction or an order dressed as a message. If you can't read it, don't sign it." },
+      { term: "Durable Nonce", def: "A normal transaction expires in about a minute. One built with a durable nonce stays valid until it's used, so an attacker can hold your signature and cash it in whenever they like. Wallets flag it. If you didn't set one up yourself, refuse." },
+    ],
+    questions: [
+      { q: "The preview shows minus 0.00001 SOL, no tokens leaving, and a line that reads 'approve delegate: unlimited'. Safe?", options: ["Yes — almost nothing leaves", "No — it's permission for a program to take your tokens later, without asking", "Yes, as long as the site is popular", "Only unsafe if the amount is large"], correct: 1, explanation: "Nothing leaves at signing, which is the trick. An unlimited delegate approval lets whoever controls that program move your tokens at any time afterwards. The tiny SOL is just the fee. Refuse, and if you've signed one before, revoke it." },
+      { q: "A site you've never used shows a signing prompt and the wallet says 'simulation failed'. What now?", options: ["Sign — simulations fail all the time", "Sign, but with a small amount", "Close the tab — a transaction that can't be previewed on an unknown site is the pattern drainers use", "Try again until it simulates"], correct: 2, explanation: "Legitimate transactions simulate. Breaking simulation is a deliberate technique to blank the preview so you sign what you can't see. On an unfamiliar site that is enough on its own. Leave." },
+      { q: "The wallet warns that a transaction changes the owner of one of your token accounts. Nothing else moves. What does that mean?", options: ["A harmless account update", "The tokens in that account go to whoever the new owner is", "Only the account name changes", "The transaction will fail anyway"], correct: 1, explanation: "Tokens belong to whoever owns the account that holds them. Change the owner and every token inside changes hands, with no transfer line in the preview to warn you. An owner change you didn't ask for is a theft in progress." },
+      { q: "A site asks you to sign the message 'Sign in to Example — nonce 8f2a1c'. Can that signature move your funds?", options: ["Yes — any signature can", "No — a readable plain-text message proves ownership, it can't transfer anything by itself", "Only if you sign it twice", "Only on weekends"], correct: 1, explanation: "A plain, readable message is how sites prove you hold a wallet without asking for anything. It isn't a transaction and can't spend. The danger is a 'message' you can't read, which may be a transaction in disguise. Readable text: fine. Unreadable blob: no." },
+      { q: "A mint page says: 'Sign twice quickly — the first signature always fails.' What is really happening?", options: ["A known wallet bug, do as it says", "The first signature is the drain and the second is cover", "The site is checking your connection", "You need a newer wallet"], correct: 1, explanation: "There is no wallet bug that needs two signatures. The line exists to rush you past the first preview, which is the one that empties your wallet. Anything that tells you to sign fast is telling you not to read." },
+      { q: "What is the single habit that stops most of these?", options: ["Use a different browser", "Read every line that leaves your wallet before you approve, and stop if anything doesn't match what you meant to do", "Only use sites with a padlock", "Keep less than 1 SOL in the wallet"], correct: 1, explanation: "The preview is your best look at what a transaction would do — a prediction, not a promise. Every drainer technique — broken simulation, approvals, authority changes, rushed double-signing — is a way to get you past it. Read it, match it to your intent, and refuse anything you didn't ask for or can't make sense of." },
+    ],
+  },
+  {
+    id: "token2022", belt: "WARDEN", icon: "🧬", title: "Token-2022: Read the Extensions",
+    quote: "Cluck Norris checks what a token can do to him before he checks what it can do for him.",
+    color: "#34D399", glow: "rgba(52,211,153,0.4)",
+    intro: "Solana has two token programs. The original SPL program does one thing: move tokens. Token-2022 adds optional extensions, chosen when the mint is created — and some of them give the creator powers over your wallet, not just theirs. A permanent delegate can take tokens out of any holder's account. A transfer hook can refuse your sell. A transfer fee can tax every move. None of this is hidden: every extension is written on the mint, readable on any explorer, before you buy. Which extensions exist is fixed at the start; who holds their authorities can change, so read both.",
+    concepts: [
+      { term: "Two Token Programs", def: "Legacy SPL tokens live under the program that starts 'Tokenkeg…'. Token-2022 tokens live under the one that starts 'TokenzQd…'. Explorers label the program on the mint page, and any extensions sit right below it. That page is the token's rulebook." },
+      { term: "Permanent Delegate", def: "An address that can transfer or burn tokens from ANY holder's account without that holder's signature. Whether a mint has this extension is fixed at creation; who holds the role is not — the current delegate can hand it to someone else or give it up entirely. Legitimate for a stablecoin that must be able to seize funds under a court order. On a memecoin it means whoever holds the role can empty every bag whenever they choose." },
+      { term: "Transfer Hook", def: "A program that runs on every transfer and can reject it. Real uses: royalties, allowlists. The abuse: a hook that lets buys through and fails sells — a honeypot that looks like a normal chart until you try to leave." },
+      { term: "Transfer Fee", def: "A percentage taken on every transfer, up to a maximum per transfer, both set by a fee authority. The authority can change the rate and the maximum, and the change takes effect after a delay of about two epochs (a few days). Check the rate and the maximum today, and whether a fee authority exists that could raise them tomorrow." },
+      { term: "Freeze & Default State", def: "A freeze authority can freeze your token account so nothing moves — that exists on legacy SPL too. Token-2022 adds a default account state: if it's 'frozen', every new holder starts frozen and needs the creator to thaw them. That is a permission-to-sell switch." },
+      { term: "The Rest of the List", def: "Non-transferable makes a token soulbound — it can never leave the wallet it was minted to. Mint close authority, metadata pointer and interest-bearing display are mostly housekeeping. The question for each one is the same: who holds the authority, and can it change." },
+    ],
+    questions: [
+      { q: "A memecoin's mint shows a permanent delegate extension pointing at the creator's wallet. What can that wallet do?", options: ["Nothing — it's a display setting", "Pause trading for an hour", "Move or burn tokens from any holder's account, without their signature, at any time", "Only reclaim tokens that were airdropped"], correct: 2, explanation: "That's the whole definition of the extension. It's built for compliance on regulated assets, where seizure is the point. On a token with no such reason to exist, it is a drain that hasn't been used yet." },
+      { q: "You bought a token easily. Every sell fails with a program error while other people's buys keep landing. What fits?", options: ["The pool is out of SOL", "Network congestion", "A transfer hook or frozen account is refusing sells — a honeypot", "Your wallet needs updating"], correct: 2, explanation: "Buys pass, sells fail, and the chart looks healthy because nobody can exit. Both a hook that rejects transfers and a frozen account produce exactly this. The extensions on the mint would have shown it before the buy." },
+      { q: "A token's transfer fee is 1% today. Is that the number to plan around?", options: ["Yes — fees are fixed at creation", "No — check whether a fee authority exists; it can change both the rate and the per-transfer maximum", "Fees only apply to sells", "Fees are refunded to holders"], correct: 1, explanation: "The rate and the per-transfer maximum are both set by a fee authority and can be changed, taking effect after a delay of about two epochs. Read all three: the rate now, the maximum, and whether anyone holds the authority to move them. A fee that can go to 100% is a lock with a delay." },
+      { q: "Where do you find out which extensions a token has?", options: ["Only by asking the team", "On the mint account's page on an explorer, or in a token checker, before you buy", "By buying a small amount and trying to sell", "In the token's website FAQ"], correct: 1, explanation: "Extensions are data on the mint account, public and permanent. Explorers list them; checkers like RugCheck and the school's own tools read them. The team's word is not the source. The mint is." },
+      { q: "Is a token being Token-2022 a red flag on its own?", options: ["Yes — always avoid it", "No — the program is standard; what matters is which extensions are set and who holds their authorities", "Only for tokens over a year old", "Yes, unless it's a stablecoin"], correct: 1, explanation: "Plenty of legitimate tokens use Token-2022 with no dangerous extensions at all. Judging the program instead of the extensions gets you both false alarms and missed drains. Open the mint and read what's actually enabled." },
+      { q: "A mint's default account state is 'frozen'. What does a new buyer get?", options: ["A discount on the first transfer", "A token account that can't move anything until the creator thaws it", "Automatic staking", "Nothing different"], correct: 1, explanation: "Every new holder starts frozen. Whether you can ever sell depends on someone else choosing to thaw you. That's not decentralised anything — it's a permission slip, and you don't hold it." },
+    ],
+  },
+  {
+    id: "simswap", belt: "MARSHAL", icon: "📵", title: "The SIM Swap",
+    quote: "Cluck Norris's phone number can't open anything. Neither should yours.",
+    color: "#FB923C", glow: "rgba(251,146,60,0.4)",
+    intro: "Your phone number is a key. If someone can talk your carrier into moving it to their SIM, every 'text me a code' login is theirs: the exchange, the email, and the password resets for both. It happens with a phone call and a few facts about you bought from a data breach. Self-custody doesn't make you immune — the email that holds your exchange, your cloud backup and your notes app is still a number away.",
+    concepts: [
+      { term: "The Port-Out", def: "The attacker contacts your carrier pretending to be you, with details from a breach, and has your number moved to a SIM they hold. Your phone drops to 'No Service' in a place with full coverage. That is the alarm, and it's the only one you get." },
+      { term: "SMS Codes Go to the Number", def: "A code sent by text goes to whoever holds the number, not the phone in your pocket. Anything protected only by SMS is protected by the carrier's call centre and nothing else." },
+      { term: "Codes Made on the Device", def: "An authenticator app generates codes on the phone itself; a hardware security key or passkey signs the login locally. Neither travels with the number. Move every exchange and every email account onto one of these and turn SMS off." },
+      { term: "Port-Out PIN & Number Lock", def: "Most carriers offer a PIN or an account lock that must be given before a number can be moved. It's free, it takes five minutes, and almost nobody sets it. Set it." },
+      { term: "Email Is the Root", def: "Every account resets through your email. It needs the strongest login you own, no phone-number recovery, and ideally it's an address you use for nothing else. If the attacker gets the inbox, the rest is paperwork." },
+      { term: "The First Ten Minutes", def: "Signal dies for no reason: assume the swap. From another device, call the carrier, log into your email and exchanges, change passwords, log out every session. Funds on a hardware wallet are untouched — the seed was never near the number. Everything on an exchange is a race." },
+    ],
+    questions: [
+      { q: "Your phone shows 'No Service' in the middle of a city where it always works. First move?", options: ["Restart the phone and wait", "Assume a SIM swap: call the carrier from another phone and lock your email and exchange accounts", "Buy a new SIM tomorrow", "Ignore it — outages happen"], correct: 1, explanation: "The dead signal is the moment the number moved. Every minute after that, codes are arriving on someone else's phone. Treat it as an attack until the carrier proves otherwise; you lose nothing if you were wrong and everything if you weren't." },
+      { q: "Which second factor survives a SIM swap?", options: ["A code sent by text", "A code sent by voice call", "An authenticator app or a hardware security key", "A longer password"], correct: 2, explanation: "Text and voice codes follow the number. An app generates the code on your device, and a security key signs the login on the key. Neither can be ported by a carrier, which is the entire point." },
+      { q: "What does a successful SIM swap NOT give the attacker?", options: ["Your exchange login, if it uses SMS codes", "Your email, if it uses SMS recovery", "The seed phrase of a hardware wallet that has never touched the internet", "Password resets on sites tied to your number"], correct: 2, explanation: "A SIM swap reaches everything that trusts your number. A seed written on steel in a drawer trusts nothing. That's the difference between an exchange balance, which is a race, and self-custody done properly, which isn't affected at all." },
+      { q: "Why does your email account matter more than any single exchange?", options: ["Exchanges don't use email", "Because every other account resets through it — own the inbox, own the rest", "It doesn't; exchanges hold the money", "Email can't be protected"], correct: 1, explanation: "Password resets land in the inbox. An attacker with your email doesn't need your exchange password, your social login or your notes app password — they request new ones. Protect the root first, with the strongest factor you have and no phone-number recovery." },
+      { q: "What is a carrier port-out PIN?", options: ["The PIN to unlock your phone", "A code the carrier must be given before your number can be moved to another SIM", "Your voicemail password", "A code for international roaming"], correct: 1, explanation: "It's the one control that sits at the exact point of attack: the carrier's own move-this-number process. Free, quick, and it turns a phone call with your date of birth into a dead end." },
+      { q: "Who gets targeted?", options: ["Only people with millions", "Only exchange employees", "Anyone whose name, number and interest in crypto can be found together — a post about holdings is enough", "Nobody; it's very rare"], correct: 2, explanation: "Breached data links names to numbers. A public post about a bag, a handle in a trading group, a screenshot with a balance — that's the targeting list. Keep your number off your public identity and your holdings off your feed." },
+    ],
+  },
+  {
+    id: "fakeseeker", belt: "TRUSTEE", icon: "📱", title: "Fake Seeker & Solana Mobile Offers",
+    quote: "Cluck Norris bought his Seeker from one place. It wasn't a DM.",
+    color: "#A3E635", glow: "rgba(163,230,53,0.4)",
+    intro: "When a phone launches with a token attached, a scam wave launches with it: discount pre-orders in your DMs, pages that 'claim your SKR', support accounts that need your seed to fix something, second-hand devices that arrive with a wallet already set up. Everything real about the Seeker is checkable at one domain — solanamobile.com — and the token has one mint address. Everything else has to earn your trust, and almost none of it can.",
+    concepts: [
+      { term: "One Storefront", def: "The device is sold at store.solanamobile.com. A pre-order link in a reply, a 'last units at 40% off' DM, a group-buy in a chat — none of those are the store. Type the address yourself. A link someone sent you is exactly as trustworthy as the person who sent it." },
+      { term: "The Claim Page", def: "Any page that says 'claim your SKR', 'unlock your genesis token' or 'verify your Seeker' and then asks you to connect and sign is running the same play as every fake airdrop before it. A real claim never needs your seed phrase, a delegate approval, or a fee paid first. The real SKR mint starts 'SKRbvo6G…' — compare it on the official site, character by character." },
+      { term: "Fake Support, Fake Accounts", def: "Impersonators sit in the replies under every official post and DM anyone who looks confused. Official accounts don't DM you first and never ask for a seed phrase. Check the handle one character at a time; a capital I and a lowercase l look the same on purpose." },
+      { term: "The Pre-Seeded Phone", def: "A second-hand or 'unboxed' Seeker that arrives with a wallet already created and a seed card in the box. The seller kept a copy. Factory reset it and generate your own seed in the device's Seed Vault — the same rule as a hardware wallet that arrives with the recovery words already written in." },
+      { term: "Install From the dApp Store", def: "Apps for the Seeker come from the dApp Store on the device. An app file sent as a link, or a copycat listing with the same icon and one letter changed, is a drainer wearing a logo. Sideloading a wallet app is handing your keys to whoever built it." },
+      { term: "Send One, Get Two", def: "Every launch brings the giveaway: send SOL to this address and receive double back, 'sponsored by' the company. Nobody doubles your money. The address takes your SOL and the post gets deleted." },
+    ],
+    questions: [
+      { q: "A DM offers a Seeker at 40% off through a link, 'only 12 left'. What is it?", options: ["An authorised reseller promotion", "A scam — the device is sold at one store, and a discount link in a DM is not it", "Legitimate if the account has a blue check", "Worth trying with a small deposit"], correct: 1, explanation: "Scarcity plus a link plus a DM is the whole template. The store is a domain you type yourself. A checkmark can be bought or stolen; a URL in your own address bar can't." },
+      { q: "A page says your Seeker qualifies for an SKR claim and asks you to approve a token delegate to receive it. What's happening?", options: ["Standard procedure for token distribution", "A drainer — a real claim never needs a delegate approval, a seed phrase or an upfront fee", "Safe if the page uses the official logo", "Safe if the delegate amount is small"], correct: 1, explanation: "Approvals let a program move your tokens later; nothing about receiving a token requires that. The page is asking for the thing that empties your wallet, dressed as the thing that fills it. Close it and revoke anything you already signed." },
+      { q: "Your second-hand Seeker arrives with a wallet already set up and the recovery words on a card in the box. What do you do?", options: ["Use it — the seller was being helpful", "Move a small amount in to test it first", "Factory reset the phone and create your own seed in Seed Vault", "Just change the wallet's password"], correct: 2, explanation: "A seed someone else wrote down is a seed someone else holds. Any funds you put in it are theirs the moment they choose. Wipe the device, generate a fresh seed yourself, and never use recovery words you didn't create." },
+      { q: "Where should apps for the Seeker come from?", options: ["Any link the developer posts", "The dApp Store on the device", "A file shared in the project's group chat", "Whichever source has the newest version"], correct: 1, explanation: "The store on the device is where apps are reviewed and listed under the developer's own name. A file from a link skips all of that. For a wallet app in particular, sideloading means trusting whoever packaged the file with every key on the phone." },
+      { q: "A 'Solana Mobile Support' account DMs you: your SKR claim failed and they need your seed phrase to fix it. What's true?", options: ["Support sometimes needs the seed for hardware issues", "It's a scam — no support team, anywhere, ever needs your seed phrase", "Send only the first half of the words", "Legitimate if they message first"], correct: 1, explanation: "The request itself is the entire scam, same as every wallet, exchange and airdrop before it. There is no support task that requires the words. An account that asks for them has told you exactly what it is." },
+      { q: "A post says: send 1 SOL to this address and get 2 back, a Solana Mobile launch promo. What is it?", options: ["A real promotion with limited funds", "A giveaway you should test with a small amount", "A theft — nobody doubles your money, and the address keeps whatever you send", "Legitimate if it's pinned"], correct: 2, explanation: "The oldest crypto scam there is, re-skinned for each launch. Anything you send is gone, the post disappears, and there was never a second SOL. Real launches don't ask you to pay to be paid." },
+    ],
+  },
 ];
 
 
@@ -584,7 +729,7 @@ const INCUBATOR_LESSONS = [
       { term: "Custodial Wallet", def: "A wallet controlled by a company (like a Coinbase exchange account). They hold your keys — if they go down, you could lose access." },
     ],
     questions: [
-      { q: "Your public key is like your home address — safe to share so people can send you crypto.", options: ["True", "False"], correct: 0, explanation: "Correct! Your public key is safe to share. It's how others send crypto to you. Never confuse it with your private key or seed phrase." },
+      { q: "Your public key is like your home address — safe to share so people can send you crypto.", options: ["True", "False"], correct: 0, explanation: "Your public key is safe to share. It's how others send crypto to you. Never confuse it with your private key or seed phrase." },
       { q: "You should share your seed phrase with customer support if they ask for it.", options: ["True", "False"], correct: 1, explanation: "NEVER share your seed phrase with anyone — ever. Legitimate support teams will never ask for it. Anyone asking is trying to steal your crypto." },
       { q: "With a non-custodial wallet, who controls your crypto?", options: ["The wallet company", "You do"], correct: 1, explanation: "Non-custodial means YOU hold the keys. No company can freeze or take your funds. With great power comes great responsibility — back up your seed phrase!" },
     ],
@@ -620,7 +765,7 @@ const INCUBATOR_LESSONS = [
       { term: "KYC & Fees", def: "By law, ramps must verify your identity — KYC, 'Know Your Customer' — so expect to upload a photo ID. Ramps also charge fees; instant card-buy services like MoonPay are fast but cost more. Always check the fee before you confirm." },
     ],
     questions: [
-      { q: "An on-ramp is any service that turns regular money, like dollars, into crypto.", options: ["True", "False"], correct: 0, explanation: "Correct. An on-ramp is your entry point — connect a bank or card, buy crypto, and it arrives in your wallet. The off-ramp is the same trip in reverse, back to cash." },
+      { q: "An on-ramp is any service that turns regular money, like dollars, into crypto.", options: ["True", "False"], correct: 0, explanation: "An on-ramp is your entry point — connect a bank or card, buy crypto, and it arrives in your wallet. The off-ramp is the same trip in reverse, back to cash." },
       { q: "You can buy crypto on a major exchange like Coinbase without ever verifying your identity.", options: ["True", "False"], correct: 1, explanation: "False. By law, on-ramps must do KYC — Know Your Customer — so expect to upload a photo ID. Any 'exchange' that skips identity checks entirely is a red flag." },
       { q: "Why should you understand off-ramps before you put any money in?", options: ["Off-ramps only matter if the investment loses money", "So you know exactly how to cash out — the fees, the wait, the steps — before you ever need to"], correct: 1, explanation: "Always know your exit. Understanding how to convert crypto back to cash before you need to means no panic and no nasty surprises when it's time to take profit." },
     ],
@@ -733,6 +878,45 @@ function Incubator({ onComplete, onBack }) {
   const q = shuffledIncubatorQs[qi];
   useEffect(()=>{stopRead();},[phase,qi,lessonIdx]);
 
+  // Quiz auto-scroll refs — see "quiz auto-scroll" near the top of this file.
+  const quizHeadRef = useRef(null);
+  const explainRef = useRef(null);
+  const nextBtnRef = useRef(null);
+  const completeRef = useRef(null);
+
+  useEffect(() => {
+    if (phase !== "quiz" || sel === null) return;
+    let raf1 = requestAnimationFrame(() => {
+      raf1 = requestAnimationFrame(() => {
+        if (!explainRef.current || !nextBtnRef.current) return;
+        revealQuizResult({ scrollEl: window, resultEl: explainRef.current, actionEl: nextBtnRef.current, topClearY: quizTopClearY(), bottomClearY: window.innerHeight });
+      });
+    });
+    return () => cancelAnimationFrame(raf1);
+  }, [phase, sel]);
+
+  useEffect(() => {
+    if (phase !== "quiz" || sel !== null) return;
+    let raf1 = requestAnimationFrame(() => {
+      raf1 = requestAnimationFrame(() => {
+        if (!quizHeadRef.current) return;
+        revealUnderClear({ scrollEl: window, el: quizHeadRef.current, topClearY: quizTopClearY() });
+      });
+    });
+    return () => cancelAnimationFrame(raf1);
+  }, [phase, qi, lessonIdx]);
+
+  useEffect(() => {
+    if (phase !== "complete") return;
+    let raf1 = requestAnimationFrame(() => {
+      raf1 = requestAnimationFrame(() => {
+        if (!completeRef.current) return;
+        revealUnderClear({ scrollEl: window, el: completeRef.current, topClearY: quizTopClearY() });
+      });
+    });
+    return () => cancelAnimationFrame(raf1);
+  }, [phase]);
+
   function pick(i) {
     if (sel !== null) return;
     setSel(i);
@@ -745,7 +929,8 @@ function Incubator({ onComplete, onBack }) {
       setSel(null);
       setShowExp(false);
     } else {
-      // Lesson complete
+      // Lesson complete — the next visit to this lesson opens at the top, not on its last step.
+      clearStep("basics:" + lesson.id);
       const newCompleted = completed.includes(lesson.id) ? completed : [...completed, lesson.id];
       setCompleted(newCompleted);
       try { localStorage.setItem("incubator_progress", JSON.stringify({ completed: newCompleted })); } catch(e) {}
@@ -763,7 +948,7 @@ function Incubator({ onComplete, onBack }) {
 
   // Completion screen
   if (phase === "complete") return (
-    <div style={{padding:"0 16px 40px",maxWidth:READ,margin:"0 auto",textAlign:"center"}}>
+    <div style={{padding:"0 16px 40px",maxWidth:READ,margin:"0 auto",textAlign:"center"}} ref={completeRef}>
       <div style={{fontSize:60,marginBottom:16}}>🐔</div>
       <div style={{fontFamily:"'Anton',sans-serif",fontSize:13,letterSpacing:4,color:"#5B8DD6",marginBottom:8}}>INCUBATOR COMPLETE</div>
       <h2 style={{fontFamily:"'Anton',sans-serif",fontSize:28,fontWeight:900,color:"#F9FAFB",margin:"0 0 8px",lineHeight:1}}>YOU'VE HATCHED!</h2>
@@ -801,24 +986,40 @@ function Incubator({ onComplete, onBack }) {
           </div>
         ))}
       </div>
-      <div style={{textAlign:"center",marginBottom:20}}>
-        <div style={{fontSize:40,marginBottom:8}}>{lesson.icon}</div>
-        <div data-read-skip="1" style={{fontFamily:"'Anton',sans-serif",fontSize:12.5,letterSpacing:3,color:lesson.color,marginBottom:4}}>LESSON {lessonIdx+1} OF {INCUBATOR_LESSONS.length}</div>
-        <h2 style={{fontFamily:"'Anton',sans-serif",fontSize:26,fontWeight:900,color:"#F9FAFB",margin:"0 0 12px"}}>{lesson.title}</h2>
-        <p style={{color:"#9CA3AF",fontSize:15.5,lineHeight:1.7,margin:0}}>{lesson.intro}</p>
-      </div>
-      <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:20}}>
-        {lesson.concepts.map(c=>(
-          <div key={c.term} style={{background:"rgba(255,122,24,0.05)",border:`1px solid ${lesson.color}30`,borderRadius:10,padding:"12px 14px"}}>
-            <div style={{fontFamily:"'Anton',sans-serif",fontSize:15,fontWeight:700,color:lesson.color,marginBottom:4}}>{c.term}</div>
-            <div style={{fontSize:15,color:"#9CA3AF",lineHeight:1.6}}>{c.def}</div>
-          </div>
-        ))}
-      </div>
-      <AskCluck context={lesson.title} compact={true}/>
-      <button onClick={()=>setPhase("quiz")} style={{width:"100%",background:lesson.color,border:"none",borderRadius:10,padding:"14px",fontFamily:"'Anton',sans-serif",fontSize:15,fontWeight:700,color:"#fff",letterSpacing:3,cursor:"pointer",marginTop:12}}>
-        ✅ QUICK CHECK →
-      </button>
+      {/* Lesson stepper (owner 2026-09-25: "Yes all of website"): the opening, whose intro is the
+          explanation, then the terms, which carry the quick check. src/shared/WebLessonStepper.jsx. */}
+      <WebLessonStepper
+        key={"basics:"+lesson.id}
+        storeKey={"basics:"+lesson.id}
+        color={lesson.color}
+        onStepChange={stopRead}
+        steps={[
+          {label:"", node:(
+            <div style={{textAlign:"center"}}>
+              <div style={{fontSize:40,marginBottom:8}}>{lesson.icon}</div>
+              <div data-read-skip="1" style={{fontFamily:"'Anton',sans-serif",fontSize:12.5,letterSpacing:3,color:lesson.color,marginBottom:4}}>LESSON {lessonIdx+1} OF {INCUBATOR_LESSONS.length}</div>
+              <h2 style={{fontFamily:"'Anton',sans-serif",fontSize:26,fontWeight:900,color:"#F9FAFB",margin:"0 0 12px"}}>{lesson.title}</h2>
+              <p style={{color:"#9CA3AF",fontSize:15.5,lineHeight:1.7,margin:0}}>{lesson.intro}</p>
+            </div>
+          )},
+          {label:"The terms that matter", node:(<>
+            <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:12}}>
+              {lesson.concepts.map(c=>(
+                <div key={c.term} style={{background:"rgba(255,122,24,0.05)",border:`1px solid ${lesson.color}30`,borderRadius:10,padding:"12px 14px"}}>
+                  <div style={{fontFamily:"'Anton',sans-serif",fontSize:15,fontWeight:700,color:lesson.color,marginBottom:4}}>{c.term}</div>
+                  <div style={{fontSize:15,color:"#9CA3AF",lineHeight:1.6}}>{c.def}</div>
+                </div>
+              ))}
+            </div>
+            <AskCluck context={lesson.title} compact={true}/>
+          </>)},
+        ]}
+        finish={
+          <button onClick={()=>setPhase("quiz")} style={{width:"100%",height:"100%",background:lesson.color,border:"none",borderRadius:10,padding:"14px",fontFamily:"'Anton',sans-serif",fontSize:15,fontWeight:700,color:"#fff",letterSpacing:3,cursor:"pointer"}}>
+            ✅ QUICK CHECK →
+          </button>
+        }
+      />
       <button onClick={onBack} style={{display:"block",margin:"12px auto 0",background:"none",border:"none",color:"#6B7280",fontFamily:"'Anton',sans-serif",fontSize:12.5,letterSpacing:2,cursor:"pointer"}}>
         ← BACK TO ENTRANCE
       </button>
@@ -828,7 +1029,7 @@ function Incubator({ onComplete, onBack }) {
   // Quiz screen
   return (
     <div style={{padding:"0 16px 40px",maxWidth:READ,margin:"0 auto"}}>
-      <div style={{marginBottom:16}}>
+      <div style={{marginBottom:16}} ref={quizHeadRef}>
         <div data-read-skip="1" style={{display:"flex",justifyContent:"space-between",fontSize:12.5,color:"#6B7280",fontFamily:"'Anton',sans-serif",letterSpacing:1,marginBottom:5}}>
           <span style={{color:lesson.color}}>{lesson.icon} {lesson.title.toUpperCase()}</span>
           <span>Q {qi+1} OF {lesson.questions.length}</span>
@@ -847,21 +1048,21 @@ function Incubator({ onComplete, onBack }) {
             if(i===q.correct){bg="rgba(16,185,129,0.15)";border="1px solid #10B981";color="#10B981";}
             else if(i===sel){bg="rgba(239,68,68,0.15)";border="1px solid #EF4444";color="#EF4444";}
           }
-          return(<button key={i} onClick={()=>pick(i)} style={{background:bg,border,borderRadius:10,padding:"14px",color,cursor:sel!==null?"default":"pointer",textAlign:"left",fontSize:15,fontWeight:600}}>
+          return(<button key={i} data-quiz-option="1" onClick={()=>pick(i)} style={{background:bg,border,borderRadius:10,padding:"14px",color,cursor:sel!==null?"default":"pointer",textAlign:"left",fontSize:15,fontWeight:600}}>
             {opt}
           </button>);
         })}
       </div>
-      {showExp&&(<>
+      {showExp&&(<div ref={explainRef} data-quiz-explain="1">
         <div style={{background:sel===q.correct?"rgba(16,185,129,0.08)":"rgba(239,68,68,0.08)",border:`1px solid ${sel===q.correct?"#10B981":"#EF4444"}`,borderRadius:10,padding:14,marginBottom:12}}>
           <div style={{fontFamily:"'Anton',sans-serif",fontSize:12.5,letterSpacing:1,color:sel===q.correct?"#10B981":"#EF4444",marginBottom:5}}>{sel===q.correct?"✓ CORRECT!":"✗ NOT QUITE — HERE'S WHY:"}</div>
           <p style={{margin:0,color:"#D1D5DB",fontSize:15,lineHeight:1.6}}>{q.explanation}</p>
         </div>
         <AskCluck context={lesson.title} compact={true}/>
-        <button onClick={next} style={{width:"100%",background:lesson.color,border:"none",borderRadius:10,padding:"13px",fontFamily:"'Anton',sans-serif",fontSize:15.5,fontWeight:700,color:"#fff",letterSpacing:2,cursor:"pointer",marginTop:8}}>
+        <button ref={nextBtnRef} data-quiz-next="1" onClick={next} style={{width:"100%",background:lesson.color,border:"none",borderRadius:10,padding:"13px",fontFamily:"'Anton',sans-serif",fontSize:15.5,fontWeight:700,color:"#fff",letterSpacing:2,cursor:"pointer",marginTop:8}}>
           {qi+1<lesson.questions.length?"NEXT QUESTION →":"NEXT LESSON →"}
         </button>
-      </>)}
+      </div>)}
     </div>
   );
 }
@@ -1418,41 +1619,100 @@ function Lesson({lesson:l,onComplete,onBack,hubFrom}){
     else{setFinalScore(a.filter(Boolean).length);setPhase("result");}
   }
   function retry(){setSessionId(s=>s+1);setPhase("intro");setQi(0);setSel(null);setAnswers([]);setFinalScore(0);setShowExp(false);}
+
+  // Quiz auto-scroll refs — see "quiz auto-scroll" near the top of this file.
+  const quizHeadRef=useRef(null);
+  const explainRef=useRef(null);
+  const nextBtnRef=useRef(null);
+  const resultRef=useRef(null);
+
+  useEffect(() => {
+    if (phase !== "quiz" || sel === null) return;
+    let raf1 = requestAnimationFrame(() => {
+      raf1 = requestAnimationFrame(() => {
+        if (!explainRef.current || !nextBtnRef.current) return;
+        revealQuizResult({ scrollEl: window, resultEl: explainRef.current, actionEl: nextBtnRef.current, topClearY: quizTopClearY(), bottomClearY: window.innerHeight });
+      });
+    });
+    return () => cancelAnimationFrame(raf1);
+  }, [phase, sel]);
+
+  useEffect(() => {
+    if (phase !== "quiz" || sel !== null) return;
+    let raf1 = requestAnimationFrame(() => {
+      raf1 = requestAnimationFrame(() => {
+        if (!quizHeadRef.current) return;
+        revealUnderClear({ scrollEl: window, el: quizHeadRef.current, topClearY: quizTopClearY() });
+      });
+    });
+    return () => cancelAnimationFrame(raf1);
+  }, [phase, qi, l.id, sessionId]);
+
+  useEffect(() => {
+    if (phase !== "result") return;
+    let raf1 = requestAnimationFrame(() => {
+      raf1 = requestAnimationFrame(() => {
+        if (!resultRef.current) return;
+        revealUnderClear({ scrollEl: window, el: resultRef.current, topClearY: quizTopClearY() });
+      });
+    });
+    return () => cancelAnimationFrame(raf1);
+  }, [phase]);
+
   const score=phase==="result"?finalScore:answers.filter(Boolean).length;
   // Proportional pass mark (P2-108): a flat "score>=2" let a 7-question exam pass at ~29% while
   // a 5-question one needed 40%. ~67% (2 of 3) either way now — ceil() so a shorter quiz never
   // needs fewer than the 2-of-3 baseline, and a longer one needs the same bar or a hair stricter.
   const passed=score>=Math.ceil(l.questions.length*2/3);
+  // A pass means the next visit opens this lesson at the top, not on its exam step.
+  useEffect(()=>{ if(phase==="result"&&passed) clearStep("fundamentals:"+l.id); },[phase,passed,l.id]);
 
+  // Lesson stepper (owner 2026-09-25: "Yes all of website"): the opening — belt, title, quote and
+  // the intro, which IS the explanation — then the terms, which carry the exam button. See
+  // src/shared/WebLessonStepper.jsx. A pass clears the remembered step (effect above).
   if(phase==="intro") return(
     <div style={{padding:"0 16px 40px",maxWidth:READ,margin:"0 auto"}}>
       <button onClick={onBack} style={{background:"none",border:"none",color:"#6B7280",cursor:"pointer",fontFamily:"'Anton',sans-serif",fontSize:13,letterSpacing:2,marginBottom:18,padding:0}}>← BACK</button>
-      <div style={{textAlign:"center",marginBottom:20}}>
-        <div style={{fontSize:40,marginBottom:6}}>{l.icon}</div>
-        <Belt belt={l.belt}/>
-        <h2 style={{fontFamily:"'Anton',sans-serif",fontSize:28,color:"#F9FAFB",margin:"8px 0 4px"}}>{l.title}</h2>
-        <p style={{fontFamily:"Georgia,serif",fontStyle:"italic",color:l.color,fontSize:15.5,margin:0,lineHeight:1.5}}>"{l.quote}"</p>
-      </div>
-      <div style={{background:"rgba(255,122,24,0.05)",border:"1px solid rgba(255,122,24,0.16)",borderRadius:10,padding:16,marginBottom:16}}>
-        <p style={{color:"#D1D5DB",fontSize:15.5,lineHeight:1.7,margin:0}}>{l.intro}</p>
-      </div>
-      <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:24}}>
-        {l.concepts.map((c,i)=>(
-          <div key={i} style={{background:"rgba(255,122,24,0.04)",borderLeft:`3px solid ${l.color}`,borderRadius:8,padding:"10px 14px"}}>
-            <div style={{fontFamily:"'Anton',sans-serif",fontSize:13,color:l.color,letterSpacing:1,marginBottom:3}}>{c.term}</div>
-            <div style={{fontSize:13.5,color:"#9CA3AF",lineHeight:1.5}}>{c.def}</div>
-          </div>
-        ))}
-      </div>
-      <button onClick={()=>{trackId("quiz_start",l.id);setPhase("quiz");}} style={{width:"100%",background:l.color,border:"none",borderRadius:10,padding:"14px",fontFamily:"'Anton',sans-serif",fontSize:15,fontWeight:700,color:"#fff",letterSpacing:3,cursor:"pointer",boxShadow:`0 0 20px ${l.glow}`}}>
-        📝 TAKE THE EXAM
-      </button>
+      <WebLessonStepper
+        key={"fundamentals:"+l.id}
+        storeKey={"fundamentals:"+l.id}
+        color={l.color}
+        onStepChange={stopRead}
+        steps={[
+          {label:"", node:(<>
+            <div style={{textAlign:"center",marginBottom:20}}>
+              <div style={{fontSize:40,marginBottom:6}}>{l.icon}</div>
+              <Belt belt={l.belt}/>
+              <h2 style={{fontFamily:"'Anton',sans-serif",fontSize:28,color:"#F9FAFB",margin:"8px 0 4px"}}>{l.title}</h2>
+              <p style={{fontFamily:"Georgia,serif",fontStyle:"italic",color:l.color,fontSize:15.5,margin:0,lineHeight:1.5}}>"{l.quote}"</p>
+            </div>
+            <div style={{background:"rgba(255,122,24,0.05)",border:"1px solid rgba(255,122,24,0.16)",borderRadius:10,padding:16}}>
+              <p style={{color:"#D1D5DB",fontSize:15.5,lineHeight:1.7,margin:0}}>{l.intro}</p>
+            </div>
+          </>)},
+          {label:"The terms that matter", node:(
+            <div style={{display:"flex",flexDirection:"column",gap:8}}>
+              {l.concepts.map((c,i)=>(
+                <div key={i} style={{background:"rgba(255,122,24,0.04)",borderLeft:`3px solid ${l.color}`,borderRadius:8,padding:"10px 14px"}}>
+                  <div style={{fontFamily:"'Anton',sans-serif",fontSize:13,color:l.color,letterSpacing:1,marginBottom:3}}>{c.term}</div>
+                  <div style={{fontSize:13.5,color:"#9CA3AF",lineHeight:1.5}}>{c.def}</div>
+                </div>
+              ))}
+            </div>
+          )},
+        ]}
+        finish={
+          <button onClick={()=>{trackId("quiz_start",l.id);setPhase("quiz");}} style={{width:"100%",height:"100%",background:l.color,border:"none",borderRadius:10,padding:"14px",fontFamily:"'Anton',sans-serif",fontSize:15,fontWeight:700,color:"#fff",letterSpacing:3,cursor:"pointer",boxShadow:`0 0 20px ${l.glow}`}}>
+            📝 TAKE THE EXAM
+          </button>
+        }
+      />
     </div>
   );
 
   if(phase==="quiz") return(
     <div style={{padding:"0 16px 40px",maxWidth:READ,margin:"0 auto"}}>
-      <div style={{marginBottom:20}}>
+      <div style={{marginBottom:20}} ref={quizHeadRef}>
         <div data-read-skip="1" style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",gap:10,fontFamily:"'Anton',sans-serif",letterSpacing:1,marginBottom:5}}>
           <span style={{color:l.color,fontSize:15,fontWeight:700,letterSpacing:1.5}}>{l.title.toUpperCase()}</span><span style={{color:l.color,fontSize:13.5,fontWeight:700,whiteSpace:"nowrap"}}>QUESTION {qi+1} OF {shuffledQuestions.length} • {answers.filter(Boolean).length + (sel!==null && sel===q.correct ? 1 : 0)}/{shuffledQuestions.length} CORRECT</span>
         </div>
@@ -1471,26 +1731,26 @@ function Lesson({lesson:l,onComplete,onBack,hubFrom}){
             if(i===q.correct){bg="rgba(16,185,129,0.15)";border="1px solid #10B981";color="#10B981";}
             else if(i===sel){bg="rgba(239,68,68,0.15)";border="1px solid #EF4444";color="#EF4444";}
           }
-          return(<button key={i} onClick={()=>pick(i)} style={{background:bg,border,borderRadius:10,padding:"12px 14px",color,cursor:sel!==null?"default":"pointer",textAlign:"left",fontSize:15.5,display:"flex",gap:10,alignItems:"center"}}>
+          return(<button key={i} data-quiz-option="1" onClick={()=>pick(i)} style={{background:bg,border,borderRadius:10,padding:"12px 14px",color,cursor:sel!==null?"default":"pointer",textAlign:"left",fontSize:15.5,display:"flex",gap:10,alignItems:"center"}}>
             <span style={{fontFamily:"'Anton',sans-serif",fontSize:13,opacity:0.6,minWidth:18}}>{String.fromCharCode(65+i)}</span>{opt}
           </button>);
         })}
       </div>
-      {showExp&&(<>
+      {showExp&&(<div ref={explainRef} data-quiz-explain="1">
         <div style={{background:sel===q.correct?"rgba(16,185,129,0.08)":"rgba(239,68,68,0.08)",border:`1px solid ${sel===q.correct?"#10B981":"#EF4444"}`,borderRadius:10,padding:14,marginBottom:12}}>
           <div style={{fontFamily:"'Anton',sans-serif",fontSize:12.5,letterSpacing:1,color:sel===q.correct?"#10B981":"#EF4444",marginBottom:5}}>{sel===q.correct?"✓ CORRECT  -  PROFESSOR NORRIS NOTES:":"✗ WRONG  -  PROFESSOR NORRIS CORRECTS YOU:"}</div>
           <p style={{margin:0,color:"#D1D5DB",fontSize:15,lineHeight:1.6}}>{q.explanation}</p>
         </div>
         <AskCluck context={l.title} compact={true}/>
-        <button onClick={next} style={{width:"100%",background:l.color,border:"none",borderRadius:10,padding:"13px",fontFamily:"'Anton',sans-serif",fontSize:15.5,fontWeight:700,color:"#fff",letterSpacing:2,cursor:"pointer",marginTop:8}}>
+        <button ref={nextBtnRef} data-quiz-next="1" onClick={next} style={{width:"100%",background:l.color,border:"none",borderRadius:10,padding:"13px",fontFamily:"'Anton',sans-serif",fontSize:15.5,fontWeight:700,color:"#fff",letterSpacing:2,cursor:"pointer",marginTop:8}}>
           {qi+1<l.questions.length?"NEXT QUESTION →":"SEE REPORT CARD →"}
         </button>
-      </>)}
+      </div>)}
     </div>
   );
 
   return(
-    <div style={{padding:"0 16px 40px",maxWidth:READ,margin:"0 auto",textAlign:"center"}}>
+    <div style={{padding:"0 16px 40px",maxWidth:READ,margin:"0 auto",textAlign:"center"}} ref={resultRef}>
       <div style={{fontSize:56,marginBottom:12}}>{passed?"🏆":"💀"}</div>
       <div style={{fontFamily:"'Anton',sans-serif",fontSize:13,letterSpacing:4,color:passed?"#10B981":"#EF4444",marginBottom:6}}>{passed?"CLASS PASSED":"DETENTION"}</div>
       <h2 style={{fontFamily:"'Anton',sans-serif",fontSize:30,color:"#F9FAFB",margin:"0 0 8px"}}>{score}/{l.questions.length} Correct</h2>
@@ -1962,7 +2222,7 @@ export default function App(){
       `}</style>
       {/* Header — hidden on the Token Data (clkn) screen, which uses only the floating Home/Ask Cluck bar */}
       {screen!=="clkn" && (
-      <div data-read-skip="1" style={{borderBottom:"1px solid rgba(255,122,24,0.18)",background:"rgba(0,0,0,0.6)",backdropFilter:"blur(10px)",padding:"calc(50px + env(safe-area-inset-top, 0px)) 18px 12px",position:"sticky",top:0,zIndex:100}}>
+      <div data-read-skip="1" data-cluck-top-clear="1" style={{borderBottom:"1px solid rgba(255,122,24,0.18)",background:"rgba(0,0,0,0.6)",backdropFilter:"blur(10px)",padding:"calc(50px + env(safe-area-inset-top, 0px)) 18px 12px",position:"sticky",top:0,zIndex:100}}>
         {/* Brand row — compact, matching the homepage nav (no subtitle / contract / progress dots) */}
         <div onClick={()=>setScreen("landing")} style={{display:"flex",alignItems:"center",gap:10,marginBottom:10,cursor:"pointer"}}>
           <img src={LOGO_B64} alt="Cluck Norris" style={{width:30,height:30,objectFit:"cover",borderRadius:"50%",border:"1.5px solid #FF7A18",flexShrink:0}}/>

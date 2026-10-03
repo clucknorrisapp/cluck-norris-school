@@ -230,6 +230,8 @@ function raw(method, p, headers) {
   ok("GET /api/cuna-stake/payout?send= is refused with 405", r.status === 405, JSON.stringify(r.body));
   r = await call("GET", "/api/cuna-stake/payout?void=x&sig=y");
   ok("GET /api/cuna-stake/payout?void= is refused with 405", r.status === 405);
+  r = await call("GET", "/api/cuna-stake/payout?bonus=nope&run=1");
+  ok("GET /api/cuna-stake/payout?bonus= is refused with 405", r.status === 405);
 
   // ── #9 telegram test routes: 404 (not 403) without the key; post=1 needs POST
   r = await call("GET", "/api/bags-radar-test", false);

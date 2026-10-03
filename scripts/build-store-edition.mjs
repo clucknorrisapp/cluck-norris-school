@@ -105,6 +105,22 @@ for (const f of fs.readdirSync(path.join(OUT, "assets"))) if (/\.js$/.test(f)) {
 }
 for (const p of cfg.pages) copy(p, true);
 for (const f of cfg.files) copy(f, /\.(js|css)$/.test(f));
+// cfg.excludeLangs (google/ios only, 2026-09-30): the website school went from seven to ten languages
+// (ko, tr, id), but the store bundles are PINNED and their render scan covers seven. So the shipped
+// picker/detection and the dictionaries are cut back to the languages the store release was proven for
+// — a store build from this source stays what it was until someone extends the scan and cuts a release
+// on purpose. Removes the LANGS entries and detect() lines in i18n.js; the dictionaries are skipped below.
+const EXCLUDE_LANGS = cfg.excludeLangs || [];
+if (EXCLUDE_LANGS.length && cfg.files.includes("i18n.js")) {
+  const fp = path.join(OUT, "i18n.js");
+  let t = fs.readFileSync(fp, "utf8");
+  for (const l of EXCLUDE_LANGS) {
+    t = t.replace(new RegExp(`\\n[ \\t]*\\{ code: "${l}",[^\\n]*\\},?(?=\\n)`), "");
+    t = t.replace(new RegExp(`\\n[ \\t]*if \\(l\\.indexOf\\("${l}"\\) === 0[^\\n]*return "${l}";(?=\\n)`), "");
+  }
+  t = t.replace(/\},(\s*\n\s*\];)/, "}$1");   // no dangling comma after the last kept entry
+  fs.writeFileSync(fp, t);
+}
 // Translation dictionaries are the whole site's tables, so they are PRUNED, not copied: any entry
 // whose key or value carries a forbidden string or matches a forbidden pattern is dropped (v1.0.1
 // shipped the CLKN mint inside an orphaned Survival-Simulator line in six dictionaries — the
@@ -124,6 +140,7 @@ const forbiddenHit = (t) => cfg.forbidden.some((b) => t.includes(b)) || (cfg.for
 const EXCLUDE_KEYS = new Set(cfg.excludeKeys || []);
 let pruned = 0;
 for (const d of cfg.dirs) for (const f of fs.readdirSync(path.join(ROOT, "public", d))) {
+  if (EXCLUDE_LANGS.includes(f.split(".")[0])) continue;   // a language the store bundle does not ship (cfg.excludeLangs)
   if (/\.locker\.json$/.test(f)) continue;   // the Locker Room dictionary belongs to a page the bundle does not carry
   const src = path.join(ROOT, "public", d, f), dst = path.join(OUT, d, f);
   fs.mkdirSync(path.dirname(dst), { recursive: true });
@@ -145,6 +162,11 @@ const walk = (d) => fs.readdirSync(d, { withFileTypes: true }).flatMap((e) => e.
 const files = walk(OUT);
 const textFiles = files.filter((f) => /\.(html|js|css|json|webmanifest)$/.test(f));
 const problems = [];
+for (const l of EXCLUDE_LANGS) {   // the excluded languages must be gone from the shipped picker AND the dictionaries
+  const ij = path.join(OUT, "i18n.js");
+  if (fs.existsSync(ij) && new RegExp(`code: "${l}"|indexOf\\("${l}"\\)`).test(fs.readFileSync(ij, "utf8"))) problems.push(`i18n.js still offers excluded language "${l}"`);
+  if (files.some((f) => new RegExp(`/i18n/${l}(\\.|\\.school\\.|\\.locker\\.)json$`).test(f))) problems.push(`a dictionary for excluded language "${l}" is in the bundle`);
+}
 for (const f of textFiles) {
   const t = fs.readFileSync(f, "utf8"), rel = path.relative(OUT, f);
   {   // every text file, the pruned dictionaries included: default-deny, no exemptions
@@ -230,7 +252,26 @@ fs.cpSync(OUT, path.join(staging, NAME), { recursive: true });
 const sourceCommit = execFileSync("git", ["rev-parse", "HEAD"], { cwd: ROOT }).toString().trim();
 const commitTime = execFileSync("git", ["show", "-s", "--format=%ct", "HEAD"], { cwd: ROOT }).toString().trim();
 const tgz = path.join(REL, `${NAME}.tgz`);
-execFileSync("tar", ["--sort=name", "--owner=0", "--group=0", "--numeric-owner", `--mtime=@${commitTime}`, "-I", "gzip -n", "-cf", tgz, "-C", staging, NAME]);
+// GNU tar makes the archive byte-reproducible (sorted entries, fixed owner and mtime). macOS ships
+// bsdtar, which refuses --sort/--mtime/-I and failed the owner's `npm run build:ios-dev` on his
+// Mac (2026-09-25) before Xcode ever got the new files — so Xcode kept showing an old build. Use
+// GNU tar wherever it exists (`tar` on Linux and CI, `gtar` from Homebrew's gnu-tar), and only
+// otherwise fall back to a plain bsdtar archive: same contents, not byte-reproducible. Releases
+// that get pinned are built in CI, on GNU tar.
+function gnuTar() {
+  for (const bin of ["tar", "gtar"]) {
+    try { if (/GNU tar/.test(execFileSync(bin, ["--version"], { stdio: ["ignore", "pipe", "ignore"] }).toString())) return bin; } catch (_) {}
+  }
+  return null;
+}
+const tarBin = gnuTar();
+if (tarBin) {
+  execFileSync(tarBin, ["--sort=name", "--owner=0", "--group=0", "--numeric-owner", `--mtime=@${commitTime}`, "-I", "gzip -n", "-cf", tgz, "-C", staging, NAME]);
+} else {
+  log("GNU tar not found (macOS bsdtar) — archive contents are identical but NOT byte-reproducible; fine for a local dev build, never pin it");
+  // COPYFILE_DISABLE keeps macOS from adding ._ AppleDouble files to the archive.
+  execFileSync("tar", ["--uid", "0", "--gid", "0", "-czf", tgz, "-C", staging, NAME], { env: { ...process.env, COPYFILE_DISABLE: "1" } });
+}
 fs.rmSync(staging, { recursive: true, force: true });
 const sha256 = createHash("sha256").update(fs.readFileSync(tgz)).digest("hex");
 fs.writeFileSync(`${tgz}.sha256`, `${sha256}  ${path.basename(tgz)}\n`);

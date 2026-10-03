@@ -21,7 +21,7 @@
 const fs = require("fs");
 const path = require("path");
 const ROOT = path.join(__dirname, "..");
-const LANGS = ["es", "hi", "it", "pt", "vi", "zh"];
+const LANGS = ["es", "hi", "it", "pt", "vi", "zh", "ko", "tr", "id"];
 const { keys } = require(path.join(__dirname, "seeker-i18n-keys.cjs"));
 
 // ⚠️ THE DICTIONARIES ARE APPENDED TO AS TEXT, NOT RE-SERIALIZED. Two reasons, both found by

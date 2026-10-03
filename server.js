@@ -63,6 +63,7 @@ const jvpDashboard = require("./lib/jvp-dashboard");
 const curriculumPage = require("./lib/curriculum"); // lesson COUNTS only — the SEO mirror page was removed 2026-07-29
 const rpc = require("./lib/rpc"); // resilient RPC: primary Helius + automatic failover
 const { scanReclaimable } = require("./lib/rent-reclaim"); // Rent Reclaim, READ SIDE ONLY — Seeker app increment 2
+const { computeSurplusForAccounts } = require("./lib/rent-surplus"); // Firepit surplus-rent job, pure decision logic
 const {
   SOL_ADDR_RE, base58Decode, base58Encode, isOnCurveBytes, isOnCurve, deriveAta,
   DEX_PROGRAMS, LOCKER_PROGRAMS, TOKEN_PROGRAMS, PROGRAM_LABELS,
@@ -140,6 +141,14 @@ function publicErrMsg(err, fallback = "internal error") {
   return m.length > 1500 ? m.slice(0, 1500) + "…" : m;
 }
 
+// The first `text` block of a Messages API response — read by block type, never by position.
+// Sonnet 5.5 can put a `thinking` block (the between-tool-call progress notes) ahead of the text,
+// so `data.content[0].text` is not safe. "" when the response has no text (a refusal, an error).
+function claudeText(data) {
+  const b = data && Array.isArray(data.content) ? data.content.find((x) => x && x.type === "text" && typeof x.text === "string") : null;
+  return b ? b.text : "";
+}
+
 // ── Multi-language support for the AI endpoints ──────────────────────────────
 // The tutor/lectures/classroom answer in the learner's language. Crypto tickers,
 // protocol names, and addresses stay in English. Add languages here as we expand.
@@ -154,6 +163,7 @@ const AI_LANGS = {
   ko: "Korean",
   fr: "French",
   hi: "Hindi",
+  id: "Indonesian",
 };
 function aiLangName(lang) {
   const k = String(lang || "").toLowerCase().slice(0, 2);
@@ -1459,6 +1469,227 @@ if (!roseEngineHardKilled()) {
 } else {
   console.log("[rose-engine] ROSE_ENGINE_OFF=1 — engine hard-killed, loop not started.");
 }
+// ── BULLEN (BULLENCIAGA) volume engine — JVP CLIENT, OFF BY DEFAULT (owner, 2026-09-25) ──
+// First Token-2022 JVP client. Mint BULLENxRbvuwjo4DLBKBbh23cNQ4ZbpDeQKuoVXL7exN, 6 decimals,
+// Token-2022 with ONLY metadataPointer + tokenMetadata extensions (no transfer fee/permanent
+// delegate/transfer hook — confirmed on-chain 2026-09-25; mint+freeze authority revoked).
+// A read-only mainnet simulation the same day confirmed InitializePoolV2 succeeds for BULLEN
+// paired with both USDC and wSOL at the 0.01% tier (tickSpacing 1) — no TokenBadge required
+// (the on-chain program only needs a badge for extensions it can't handle permissionlessly;
+// ImmutableOwner is auto-added and is fine). The open/increase/decrease/close-position and
+// balance-read code paths this engine uses (lib/orca-whirlpools.js buildOpenPosition /
+// buildIncreaseLiquidity / buildDecreaseLiquidity / buildClosePosition, lib/whirlpool-vault.js
+// getFloat) already resolve each mint's OWN token program from chain (via the Orca SDK's
+// TokenExtensionUtil + resolveOrCreateATAs, and getFloat's dual-program scan) — they are NOT
+// legacy-Token-only. The one hand-rolled path that WAS legacy-only, buildRepriceStep, gained a
+// Token-2022 branch (swapV2Ix, resolved programs + ATAs, hook mints refused) the same night —
+// it was NOT moot: BULLEN's pools sold out above their bands, pinned at the edge while the market
+// ran 7% higher, and walking an emptied pool back to market is the only clean recenter.
+//
+// TWO pools only (owner): BULLEN/USDC + BULLEN/SOL, both 0.01% (tickSpacing 1), ±1.5% bands.
+// Canonical PDAs verified free on-chain 2026-09-25: USDC Bb8pCvrTtB9EdCkR9siwpfnWXL4vspeUyivFouaQDwx9,
+// SOL Grsyrh21rnUaqXU73TbisGwNnjSbCQ6mMwNj5yDXzf2e (both match poolAddressFor exactly). A THIRD
+// pool (BULLEN/JUP) is a config switch, not new code — jupEnabled stays false below at the same
+// 0.01%/±1.5% preset; its canonical PDA FgXGaLnEvXUBbo6UGzRyMxxqGEy17a7S3FsTpPgM4JkV is ALSO
+// confirmed free on-chain (checked 2026-09-25) — flipping it on later needs create-pool + the
+// flag, nothing else.
+//
+// OPERATOR: the SHARED CUNA/DNC/ROSE wallet (owner, 2026-09-25: "bind the bullen engine to the
+// EXISTING engine wallet" — no new MM_OPERATOR_SECRET_BULLEN). This is the SAME wallet those
+// three sign with, and per the JVP protocol's own trap #1 ("one armed engine per wallet"), only
+// ONE of {cuna, dnc, rose, bullen} may be armed at a time — see bullenWalletConflict() below,
+// enforced symmetrically on all four arm routes via ENGINE_ARM_TABLE. That wallet ALSO holds
+// other projects' inventory (ROSE, CUNA, and other mints) which this engine must NEVER touch:
+// structurally guaranteed, not just promised — every builder call here is parameterized by
+// tok().mint (BULLEN) + this project's own quoteMints [USDC, wSOL, (JUP, disabled)], so
+// listPositions()/evenPools()'s orphan sweep only ever sees positions whose POOL involves
+// BULLEN (checked on-chain against the pool's own mints, not a guess), getFloat() only ever
+// counts SOL/USDC/BTC/JUP/BULLEN balances by mint (never ROSE/CUNA/anything else), and
+// manualSwap()'s fromSym/toSym vocabulary is hardcoded to {SOL,USDC,CLKN(=BULLEN),BTC,JUP} — it
+// has no way to reference another project's mint even if asked to.
+//
+// SIZING (owner, 2026-09-25, after funding the wallet with 300 USDC + 0.6234 SOL): four equal
+// legs — BULLEN+USDC for the USDC pool, BULLEN+SOL for the SOL pool — sized off LIVE
+// balances/prices by bullenBootstrap() below, targeting ~$180 total per pool (~$90/side at
+// today's prices). The deploy-threshold calibration band (JVP protocol Phase 2) is "≈half a
+// typical trim, above idle dust": deployFrac 0.95 leaves ~5% (~$4.50 on a $90 side) idle after
+// every roll — that's the floor. A full close+reopen (~$90) is the ceiling. A "typical trim" for
+// a pool this small sits around $15 (moving into/out of range once); HALF of that is ~$7-8 — well
+// above the ~$4.50 dust floor, well below the $90 ceiling. Same ratio for the SOL leg in SOL terms
+// (~$8 / ~$122 SOL ≈ 0.065, rounded to 0.06). maxUsd/solMaxSol carry headroom above the ~$90/
+// ~0.75 SOL targets so organic growth deploys instead of stranding at the cap.
+const BULLEN_MINT = "BULLENxRbvuwjo4DLBKBbh23cNQ4ZbpDeQKuoVXL7exN";
+const BULLEN_QUOTES = [
+  "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",  // USDC
+  "So11111111111111111111111111111111111111112",   // wSOL
+  "JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN",    // JUP — quoteMint present so the PDA/config
+                                                      // preset exists; jupEnabled stays false.
+];
+const BULLEN_ARM_KEY = "bullenEngineArmed";
+function bullenHardKilled() { return process.env.BULLEN_ENGINE_OFF === "1"; }
+function bullenEngineArmed() {
+  if (bullenHardKilled()) return false;
+  // kv is the ONLY arm switch (2026-09-17 P1-032 lesson, applied from day one here) — an
+  // absent key is OFF, and there is deliberately no BULLEN_ENGINE_ON env fallback to go inert.
+  return kv.get(BULLEN_ARM_KEY, null) === true;
+}
+function bullenEngineSetArmed(on) { kv.set(BULLEN_ARM_KEY, !!on); return bullenEngineArmed(); }
+
+// ── One-armed-engine-per-wallet guard (owner, 2026-09-25) ──────────────────────────────────
+// bullen shares its signing wallet with cuna/dnc/rose. Resolved from each project's OWN
+// registered operatorEnv (never hardcoded to "these four are always on that wallet") so this
+// stays correct if any of them is ever repointed to its own dedicated wallet — at that point
+// its operatorEnv simply stops matching and it drops out of the conflict set automatically.
+const WALLET_SHARED_ENGINE_IDS = ["cuna", "dnc", "rose", "bullen"];
+function walletSharedArmedFn(id) {
+  return { cuna: cunaArmed, dnc: dncArmed, rose: roseEngineArmed, bullen: bullenEngineArmed }[id] || (() => false);
+}
+function walletConflictFor(requestingId) {
+  // Compare resolved operator PUBKEYS, not operatorEnv NAMES (Codex review on #444): two
+  // different env vars that happen to hold the same secret would still share a wallet and
+  // still need this guard, and comparing the actual signer is the ground truth either way.
+  const reqPubkey = whirlpoolMM.vault.operatorPubkey(requestingId);
+  if (!reqPubkey) return null;   // no operator loaded — the no-operator check (run first) catches this
+  for (const id of WALLET_SHARED_ENGINE_IDS) {
+    if (id === requestingId) continue;
+    if (!whirlpoolMM.vault.getProject(id)) continue;   // not registered — nothing to conflict with
+    const otherPubkey = whirlpoolMM.vault.operatorPubkey(id);
+    if (!otherPubkey || otherPubkey !== reqPubkey) continue;   // different (or unloaded) wallet — no conflict
+    if (walletSharedArmedFn(id)()) return { id, reason: `${id}-engine is armed on the same operator wallet (${reqPubkey}) — only one engine may be armed on a shared wallet at a time` };
+    // Extra caution ONLY on bullen's OWN arm attempt (owner, 2026-09-25): bullen is new to this
+    // wallet and holds no history on it, so it additionally refuses while a sibling's vault
+    // project isn't explicitly paused. cuna/dnc/rose arming EACH OTHER never required that (a
+    // fresh/never-paused sibling is their normal resting state) — only the "armed" check above
+    // applies there, or a clean install would permanently deadlock all three.
+    if (requestingId === "bullen" && !whirlpoolMM.vault.isPaused(id)) {
+      return { id, reason: `${id}'s vault project is not paused (shares the ${reqPubkey} wallet) — pause it first: /api/whirlpool/vault/pause?project=${id}` };
+    }
+  }
+  return null;
+}
+
+function bullenEngineConfigRatchet() {
+  const wantEnv = process.env.CUNA_OPERATOR_ENV || "MM_OPERATOR_SECRET_CUNA";
+  const proj = whirlpoolMM.vault.getProject("bullen");
+  // telegramChatId !== "off" is in this condition on purpose (Codex review on #444): the
+  // client's community room is PUBLIC, so notify()'s room fallback must never be able to land
+  // there — the live record was registered "off" by hand, but this makes it durably enforced
+  // rather than merely assumed. Every other field's prev-fallback below is unaffected.
+  if (!proj || proj.operatorEnv !== wantEnv || proj.tokenSellOk !== true || proj.telegramChatId !== "off") {
+    whirlpoolMM.vault.registerProject({
+      id: "bullen", label: (proj && proj.label) || "BULLENCIAGA", symbol: (proj && proj.symbol) || "BULLEN",
+      tokenMint: BULLEN_MINT, decimals: 6, quoteMints: BULLEN_QUOTES,
+      // BULLEN is Token-2022 — getFloat() reads this to make its balance scan mandatory
+      // rather than best-effort (Codex review on #444; see registerProject's own comment).
+      tokenProgram: "token2022",
+      venue: "orca", operatorEnv: wantEnv,
+      // Owner, 2026-09-25: "full permission to buy/sell any asset involved (BULLEN/USDC/SOL
+      // only)" — inventory, not a brand bag; manualSwap may sell BULLEN for pool balancing.
+      tokenSellOk: true,
+      // Client room is public — ops/roll noise never lands there (mirrors rose/cuna/dnc).
+      // Hardcoded "off", not a prev-fallback (Codex review on #444): a prev-fallback would just
+      // copy a drifted value straight back in, defeating the re-register condition above.
+      telegramChatId: "off",
+      ownerWallet: (proj && proj.ownerWallet) || null,
+    });
+    console.log(`[bullen-engine] project bound to operator env ${wantEnv} (tokenSellOk on)`);
+  }
+  const c = whirlpoolMM.vault.getConfig("bullen");
+  const want = {
+    pair: "BULLEN/USDC", baseEnabled: true,
+    // ±1.5% uniform (owner, 2026-09-25) on both pools — tight enough that every real move
+    // recenters (fresh arb trade), wide enough not to sit out-of-range constantly at this size.
+    feeTierPct: 0.01, widthPct: 1.5, solFeeTierPct: 0.01, solWidthPct: 1.5, solEnabled: true,
+    // Preset, disabled (owner: "config switch that is OFF … so turning it on later is a config
+    // change + create-pool, not new code"). PDA confirmed free on-chain 2026-09-25.
+    jupEnabled: false, jupFeeTierPct: 0.01, jupWidthPct: 1.5,
+    slippageBps: 250, priceGapGuardPct: 10,        // thin-book numbers, matches cuna/rose
+    buybackEnabled: false,                          // wallet is funded via bootstrap swaps, not organic inventory
+    edgeTriggerFrac: 0.3, deployFrac: 0.95, minRebalanceIntervalSec: 300,
+    // Calibration band for ~$90/side pools (see the block comment above for the math):
+    // baseDeployThresholdUsd ~half a typical $15 trim, above the ~$4.50 idle-dust floor.
+    baseDeployThresholdUsd: 8,
+    // maxUsd/solMaxSol are DELIBERATELY NOT in `want` (Codex review on #444): evenPools()
+    // recomputes both EVERY cycle from actual capital (lib/whirlpool-vault.js ~3002-3009,
+    // "caps stop being a hand-tuned input") — asserting a fixed value here every boot would
+    // fight that live sizing on the next deploy. They're seeded once via `floor` below instead
+    // (only fires while still at an unset/pre-launch value; evenPools owns them after that).
+    //
+    // NO FLOORS (owner, live-fire correction 2026-09-25, after go-live on this tiny shared
+    // wallet): the vault's stock swapSolFloor DEFAULT is 2 SOL — sized for CLKN-scale
+    // treasuries, not a ~0.6 SOL client wallet. Left unset here it made tickSol read
+    // solAvail as 0 and fall back to "deploy 100% of the token side" with no check that the
+    // implied SOL half was even affordable — a real deploy failed needing more SOL than the
+    // wallet held. usdcFloor 0 and swapSolFloor/solGasReserve down to a bare fee/rent
+    // reserve (~0.03 SOL) fixed the sizing; lib/whirlpool-vault.js tickSol also gained a
+    // guard that clamps (rather than blindly attempts) a token-primary deploy against the
+    // wallet's real spendable SOL, so this class of failure can't recur even if a future
+    // project's floors drift too high again.
+    usdcFloor: 0, swapSolFloor: 0.03, solGasReserve: 0.03,
+    solDeployThreshold: 0.03,
+    // Deployed-value cap (owner, 2026-09-25): bounds how much TOTAL position value this
+    // engine will ever grow to, so stray SOL/USDC sent to the SHARED cuna/dnc/rose/bullen
+    // operator wallet (5WUjHiUVxmUuBnYZx3b5SyFiR7vW2N19VUhgCr2ZRZQ — free quote there belongs
+    // to bullen only while it holds the arm, per the one-armed-engine-per-wallet guard above)
+    // isn't silently absorbed without bound.
+    maxDeployedUsd: 400,
+    // Small pools must stay about the SAME USD value so price impact is even across both —
+    // tight evenness tolerance (owner, 2026-09-25), tighter than rose/cuna/dnc's 10%.
+    swapEnabled: true, poolBalanceTolPct: 5, maxSwapUsdPerCycle: 30, minSwapUsd: 5,
+    maxSwapSolPerCycle: 0.3, swapSlippageBps: 150, maxSwapsPerDay: 24,
+    scaleUpUsdPerCycle: 10, scaleUpDailyCapUsd: 60,
+    // Roll rebalance (review round 2026-09-26, after the SOL pool went $167→$109 and the JUP
+    // pool never reopened): rebalance a fresh close's freed float toward 50/50 before reopening.
+    // OFF for every other project (DEFAULT_CONFIG ships 0) — bullen opts in with a $300/day cap.
+    rollRebalanceUsdPerDay: 300,
+    askWallEnabled: false, btcEnabled: false, dualSleeveEnabled: false,
+    maxActionsPerDay: 96,   // cautious floor to start (matches rose's own ramp-up floor); raise
+                            // live via /api/whirlpool/vault/config?project=bullen&durable=1
+    notifyRolls: false,
+  };
+  const overrides = kv.get("ratchetOverrides:bullen", {}) || {};
+  const { patch } = engineRatchet.ratchetPatch({
+    current: c, want, overrides,
+    // Seeds maxUsd/solMaxSol ONCE, only while they're still at an unset or absurdly-low
+    // pre-launch value — evenPools' own live sizing (see the `want` comment above) owns them
+    // from the first real cycle onward, and an override still wins over this floor either way.
+    // The "still untouched" range excludes BOTH ends: unset/absurdly-low (never seeded) AND
+    // the vault's generic CLKN-scale default (maxUsd:1000, DEFAULT_CONFIG) — a fresh project
+    // reads the default until something writes it, so the default itself must trip this floor
+    // too, or a brand-new bullen would launch with a $1000 cap sized for a treasury.
+    floor: {
+      when: (cc) => cc.maxUsd == null || cc.maxUsd < 20 || cc.maxUsd >= 500 || cc.solMaxSol == null || cc.solMaxSol < 0.1 || cc.solMaxSol >= 3,
+      values: { maxUsd: 200, solMaxSol: 0.66 },
+    },
+  });
+  if (Object.keys(patch).length) {
+    whirlpoolMM.vault.setConfig(patch, "bullen");
+    console.log("[bullen-engine] config ratchet corrected:", Object.keys(patch).join(", "));
+  }
+}
+try { bullenEngineConfigRatchet(); } catch (e) { console.warn("[bullen-engine] register:", e.message); }
+let bullenEngineTickBusy = false;
+async function bullenEngineTick() {
+  if (!bullenEngineArmed()) return;   // checked EVERY tick — &off=1 stops it inside one cycle
+  if (bullenEngineTickBusy) return;
+  bullenEngineTickBusy = true;
+  try {
+    bullenEngineConfigRatchet();
+    try { await whirlpoolMM.vault.evenPools({ projectId: "bullen" }); } catch (e) { console.warn("[bullen-engine] even:", e.message); }
+    try { await whirlpoolMM.vault.tick({ projectId: "bullen" }); } catch (e) { console.warn("[bullen-engine] base tick:", e.message); }
+    try { await whirlpoolMM.vault.tickSol({ projectId: "bullen" }); } catch (e) { console.warn("[bullen-engine] sol tick:", e.message); }
+    try { await whirlpoolMM.vault.tickJup({ projectId: "bullen" }); } catch (e) { console.warn("[bullen-engine] jup tick:", e.message); }  // no-op while jupEnabled:false
+    try { await whirlpoolMM.vault.buyback({ projectId: "bullen" }); } catch (e) { console.warn("[bullen-engine] buyback:", e.message); }   // no-op while buybackEnabled:false
+    try { await whirlpoolMM.vault.flushNotifyDigest({ projectId: "bullen" }); } catch (e) { console.warn("[bullen-engine] digest:", e.message); }
+  } finally { bullenEngineTickBusy = false; }
+}
+if (!bullenHardKilled()) {
+  console.log(`[bullen-engine] loop up — currently ${bullenEngineArmed() ? "ARMED" : "DISARMED"} (toggle: /api/bullen-engine?key=…&on=1|&off=1)`);
+  setInterval(() => bullenEngineTick().catch((e) => console.warn("[bullen-engine] tick:", e.message)), 90000);
+  setTimeout(() => bullenEngineTick().catch((e) => console.warn("[bullen-engine] first tick:", e.message)), 35000);
+} else {
+  console.log("[bullen-engine] BULLEN_ENGINE_OFF=1 — engine hard-killed, loop not started.");
+}
 // 1×/day (owner's call 2026-06-20 — was 3×/day): ONE full lesson at 13:00 UTC
 // (8am CT), then amplified by lessonBumpTick (self-replies at later slots tagging
 // different ecosystem groups) instead of posting more new lessons. Odd hour so it
@@ -1757,6 +1988,19 @@ function burnBroadcastFloor(receipt) {
   if (usd < BURN_BROADCAST_MIN_USD) return `below-floor:${usd.toFixed(2)}<${BURN_BROADCAST_MIN_USD}`;
   return null;
 }
+// Where the burn broadcaster's OWN failure notes go: the operator DM, never TELEGRAM_CHAT_ID.
+// TELEGRAM_CHAT_ID is the public CLKN community room — the "operator chat" alerts below used to
+// land there, so every failed X post showed the community a "⚠️ … failed" line (owner, 2026-09-28).
+function burnOpsChat() { return operatorChatId() || OPERATOR_DM_FALLBACK; }
+// X's own reason for a refused post, so the alert says WHY (a bare "403" can be a duplicate, a
+// permission problem or a spend cap, and each has a different fix).
+function xFailReason(xres) {
+  if (!xres) return "?";
+  const b = xres.body || {};
+  const e0 = Array.isArray(b.errors) && b.errors[0] ? b.errors[0] : {};
+  const why = String(b.detail || b.title || e0.message || e0.detail || b.reason || xres.error || "").replace(/\s+/g, " ").slice(0, 200);
+  return `${xres.status || "no status"}${why ? " — " + why : ""}`;
+}
 function burnSymbolSafe(sym) {
   const s = String(sym || "").replace(/[^A-Za-z0-9]/g, "").slice(0, 12);
   return s || "TOKEN";
@@ -1784,9 +2028,8 @@ async function broadcastBurnCelebration(receipt) {
     }
     if (gate.hourCount >= BURN_BROADCAST_HOURLY_CAP) {
       console.warn(`[burn-celebrate] hourly cap ${BURN_BROADCAST_HOURLY_CAP} hit — skipping`);
-      const chat = process.env.TELEGRAM_CHAT_ID;
-      if (chat && process.env.TELEGRAM_BOT_TOKEN && !gate.capAlerted) {
-        tgSend(chat, `⚠️ Project-burn auto-broadcast hit its hourly cap (${BURN_BROADCAST_HOURLY_CAP}). Extra burns still get receipts; they just aren't auto-posting this hour.`, null, { silent: true }).catch(() => {});
+      if (process.env.TELEGRAM_BOT_TOKEN && !gate.capAlerted) {
+        tgSend(burnOpsChat(), `⚠️ Project-burn auto-broadcast hit its hourly cap (${BURN_BROADCAST_HOURLY_CAP}). Extra burns still get receipts; they just aren't auto-posting this hour.`, null, { silent: true }).catch(() => {});
         gate.capAlerted = true;
       }
       kv.set("burnBroadcastGate", gate);
@@ -1802,11 +2045,13 @@ async function broadcastBurnCelebration(receipt) {
     const pct = receipt.pctSupply != null ? (receipt.pctSupply < 0.01 ? "<0.01%" : receipt.pctSupply.toFixed(receipt.pctSupply < 1 ? 2 : 2) + "%") : null;
     const usd = receipt.usdValue != null && receipt.usdValue >= 0.01 ? `$${receipt.usdValue.toLocaleString(undefined, { maximumFractionDigits: 0 })}` : null;
     const url = `https://clucknorris.app/burn/${receipt.sig}`;
-    // X post (force carve-out). URL not a bare CA → dodges the post-auth raw-CA 403.
+    // X post (force carve-out). The SHORT receipt link, never the full one: an 88-char base58
+    // signature in the URL read as a crypto address and X 403'd every burn post (2026-09-28).
+    // Telegram keeps the full URL — it has no such filter.
     const xText =
       `🔥 ${amt} $${sym} just got burned forever${pct ? ` — ${pct} of supply` : ""}.\n\n` +
       `${usd ? usd + " " : ""}permanently destroyed on Solana, verified on-chain. Burned free & non-custodially 🐔\n\n` +
-      `Receipt 👉 ${url}`;
+      `Receipt 👉 ${burnShortUrl(receipt.sig)}`;
     const xres = await postToX(xText, { force: true });
     // Telegram to the PUBLIC community chat (celebration). Not silent — a celebration should
     // ping. Preview ON so the receipt card renders. Include the X link if the tweet landed.
@@ -1823,10 +2068,10 @@ async function broadcastBurnCelebration(receipt) {
       await tgApi("sendMessage", { chat_id: chat, text: tgText, parse_mode: "HTML", disable_web_page_preview: false });
     }
     // Per the house rule: if the X carve-out failed for a real reason (not the pause), alert
-    // the operator chat rather than failing silently.
-    if (xres && !xres.ok && !xres.paused && !xres.skipped) {
-      const opchat = process.env.TELEGRAM_CHAT_ID;
-      if (opchat && token) tgSend(opchat, `⚠️ Burn celebration X post failed (${xres.status || xres.error || "?"}) for ${amt} $${tgEsc(sym)}. Receipt: ${url}`, null, { silent: true }).catch(() => {});
+    // the OPERATOR DM rather than failing silently — never the public room (see burnOpsChat).
+    if (xres && !xres.ok && !xres.paused && !xres.skipped && !xres.staging) {
+      console.warn(`[burn-celebrate] X post failed: ${xFailReason(xres)} — ${receipt.sig}`);
+      if (token) tgSend(burnOpsChat(), `⚠️ Burn celebration X post failed (${tgEsc(xFailReason(xres))}) for ${amt} $${tgEsc(sym)}. Receipt: ${url}`, null, { silent: true }).catch(() => {});
     }
     return { xPosted: !!(xres && xres.ok), xId: xres && xres.id };
   } catch (e) {
@@ -2717,11 +2962,11 @@ function guideRoute(key) {
         "No wallet, no money, no sign-up needed to learn. Reply here any time with a question — that's what I'm for.";
     case "basics":
       return "📚 <b>Got the basics? Time to level up.</b>\n\n" +
-        `Finish the <b>12-lesson course</b> and you earn a permanent, shareable transcript. Want to go deep on liquidity? The <b>LP Lab</b> has 14 advanced lessons.\n\n` +
+        `Finish the <b>12-lesson course</b> and you earn a permanent, shareable transcript. Want to go deep on liquidity? The <b>LP Lab</b> has 15 advanced lessons.\n\n` +
         `🎓 ${B}\n\nReply with whatever you're stuck on and I'll aim you at the right lesson.`;
     case "lp":
       return "💧 <b>Liquidity pools &amp; LP investing — earn fees, know the risks.</b>\n\n" +
-        "The <b>LP Lab</b> is a 14-lesson deep dive: how AMMs work, impermanent loss, concentrated liquidity, fees &amp; earnings, reading a pool, and building a real LP strategy — protocol-agnostic (Meteora, Raydium, Orca, Uniswap).\n\n" +
+        "The <b>LP Lab</b> is a 15-lesson deep dive: how AMMs work, impermanent loss, concentrated liquidity, fees &amp; earnings, reading a pool, and building a real LP strategy — protocol-agnostic (Meteora, Raydium, Orca, Uniswap).\n\n" +
         `📚 Start the LP Lab → ${B}\n\n` +
         "New to it? Walk Lesson 1 (What Is Liquidity?) first. Reply here with any LP question and I'll break it down.";
     case "research":
@@ -2753,7 +2998,7 @@ function guideSystemPrompt() {
   return [
     "You are Cluck Norris, the friendly guide for the Cluck Norris app (clucknorris.app) — a FREE crypto school ('School of Crypto Hard Knocks') plus a Solana token-research toolkit. You're helping someone in a Telegram group find their way around and answering their crypto/app questions.",
     "WHAT THE APP HAS — route people to the right part:",
-    "- The School (free, no wallet or sign-up to learn): the INCUBATOR (tiny beginner lessons: wallets, tokens, staying safe), the 12-LESSON COURSE (belts Freshman→Emeritus, finish it for a permanent shareable transcript), and the LP LAB (14 advanced liquidity lessons).",
+    "- The School (free, no wallet or sign-up to learn): the INCUBATOR (tiny beginner lessons: wallets, tokens, staying safe), the 12-LESSON COURSE (belts Freshman→Emeritus, finish it for a permanent shareable transcript), and the LP LAB (15 advanced liquidity lessons).",
     "- Always-free tools: WALLET CHECKUP (/wallet-checkup — approvals, honeypot holdings and live mint/freeze authority, and you can revoke your own there), FIREPIT (/firepit — burn junk, reclaim SOL rent), THE JUP LOCKER ROOM (/locker-room — free non-custodial token locking for any Solana project), BAGS feed (/bags — live launches & graduations), and the toolkit index (/tools). Heavy tools — WALLET X-RAY (/wallet-xray), HOLDERS (/holders), TRACE (/trace) — preview free and run on the tools pass below.",
     "- THE HATCHERY (/hatchery): guided token creation with a safety preview.",
     "- CLKN token + the tools pass: HOLD about $50 worth of CLKN and every heavy tool (X-Ray, Holders, Trace, the airdropper, Buy Special) unlocks free. Not holding? One click pays 0.05 SOL for a 7-day pass to ALL of them. Premium forensics stays holder-gated at 2,000,000 CLKN, re-checked live. Holding also earns airdrop eligibility. The school itself is always free. NOTE: the old 'send CLKN to unlock' flow was retired 2026-07-30 — never tell anyone to send tokens by hand.",
@@ -3525,8 +3770,9 @@ const CSP_NQ = CSP.replace(
 // as the normiequest.app root (isGameHost/rawHost are declared further down and read the raw Host
 // header, not req.hostname, for the same anti-spoof reason documented there).
 const NQ_EVAL_PATH = /^\/normie-quest-x7(-lab)?$/;
+const AHOY_EVAL_PATH = /^\/ahoy-quest\/?$/;   // AHOY: PumpFunPirates also ships Phaser
 const needsEvalCSP = (req) =>
-  NQ_EVAL_PATH.test(req.path) || (isGameHost(req) && (req.path === "/" || req.path === ""));
+  NQ_EVAL_PATH.test(req.path) || AHOY_EVAL_PATH.test(req.path) || (isGameHost(req) && (req.path === "/" || req.path === ""));
 
 // PERMISSIONS-POLICY. Denies powerful browser features we never use, so an injected script
 // can't prompt for them under our origin. Only four are listed, and the omissions matter:
@@ -3921,7 +4167,7 @@ app.use((req, res, next) => {
 // endpoint keeps its own gate (the tools pass, the receipt sign-in, the payment checks), and the
 // store UA refusal below still answers 403 to the education editions on these — now WITH the
 // CORS headers, so that app reads the refusal instead of an opaque network error.
-const SEEKER_API_RE = /^\/api\/(tool-gate\/(config|challenge|session)|seeker\/reclaimable|wallet-xray|snapshot|trace|airdrop\/record|lock\/(create-tx|record)|locks|burn-(scan|token-info|receipt)|hatchery\/(config|build|submit|minted))$/;
+const SEEKER_API_RE = /^\/api\/(tool-gate\/(config|challenge|session)|seeker\/reclaimable|seeker\/swap\/(config|quote|tx)|wallet-xray|snapshot|trace|airdrop\/record|lock\/(create-tx|record)|locks|burn-(scan|token-info|receipt)|hatchery\/(config|build|submit|minted))$/;
 app.use((req, res, next) => {
   const origin = String(req.get("origin") || "");
   if (!origin || !STORE_APP_ORIGINS.has(origin) || !SEEKER_API_RE.test(req.path)) return next();
@@ -3940,7 +4186,7 @@ app.use((req, res, next) => {
 // marker only ever LOSES access, so nothing security-sensitive rests on it — the excluded flows are
 // absent from the bundle and every endpoint enforces its own rules regardless of UA.
 const STORE_UA_RE = /Clucknorris(Play|IOS)/;
-const STORE_DENY_RE = /^\/api\/(tool-gate|hatchery|airdrop|buyspecial|buycomp|lock\b|firepit|burn|project-burn|lp-rescue|wallet-xray|trace|snapshot|holders|owners-snapshot\/start|security-coop\/revoke|swap|premium|verify-sol-payment|claim$|classroom\/graduate-claim|cuna-stake|cuna-draw|whirlpool|rose|jvp|nq\/|normie)/;
+const STORE_DENY_RE = /^\/api\/(tool-gate|hatchery|airdrop|buyspecial|buycomp|lock\b|firepit|burn|project-burn|lp-rescue|wallet-xray|trace|snapshot|holders|owners-snapshot\/start|security-coop\/revoke|swap|seeker\/swap|premium|verify-sol-payment|claim$|classroom\/graduate-claim|cuna-stake|cuna-draw|whirlpool|rose|jvp|nq\/|normie)/;
 app.use((req, res, next) => {
   if (!STORE_UA_RE.test(String(req.get("user-agent") || ""))) return next();
   if (!STORE_DENY_RE.test(req.path)) return next();
@@ -4017,6 +4263,10 @@ app.use("/api/wallet-checkup", rateLimit("forensic", { windowMs: 60000, max: 15 
 // Rent Reclaim (Seeker app, read side): 2 billed getTokenAccountsByOwner reads per request,
 // unauthenticated — same "forensic" budget as its siblings above, for the same reason (sec M3).
 app.use("/api/seeker/reclaimable", rateLimit("forensic", { windowMs: 60000, max: 15 }));
+// Seeker app in-app swap (docs/SEEKER_SWAP_DESIGN.md): public relays to Jupiter, no admin key,
+// nothing server-signed. The app refreshes a quote every 15s while the pane is open — 60/min
+// covers real use with room, and stops a scripted hammer on the keyed upstream.
+app.use("/api/seeker/swap", rateLimit("seekerswap", { windowMs: 60000, max: 60 }));
 // Owners Snapshot: /start queues an hours-long paced crawl, so it gets its own tight cap; the
 // status/result/history reads are cheap file reads and only need the global /api cap.
 app.use("/api/owners-snapshot/start", rateLimit("ownersstart", { windowMs: 3600000, max: 6 }));
@@ -4051,7 +4301,7 @@ app.use(express.urlencoded({ extended: true }));
 // fills EVERYTHING else so a language mode is complete, not piecemeal. Public +
 // rate-limited; a daily global budget on NEW translations caps cost/abuse — once
 // the app's finite string set is warm, ongoing cost is ~zero (all cache hits).
-const I18N_MT_LANGNAMES = { zh: "Simplified Chinese (简体中文)", es: "neutral Latin-American Spanish", it: "Italian", pt: "Brazilian Portuguese", vi: "Vietnamese", hi: "Hindi (हिन्दी, Devanagari script)" };
+const I18N_MT_LANGNAMES = { zh: "Simplified Chinese (简体中文)", es: "neutral Latin-American Spanish", it: "Italian", pt: "Brazilian Portuguese", vi: "Vietnamese", hi: "Hindi (हिन्दी, Devanagari script)", ko: "Korean (한국어, Hangul)", tr: "Turkish (Türkçe)", id: "Indonesian (Bahasa Indonesia)" };
 const I18N_MT_DIR = process.env.DATA_DIR || "/data";
 const I18N_MT_DAILY_NEW_CAP = 20000;
 const i18nMt = {};            // lang -> { text: translation } (in-memory, lazy-loaded)
@@ -4137,10 +4387,14 @@ app.post("/api/i18n/translate", rateLimit("i18nmt", { windowMs: 60000, max: 90 }
 //   ELEVENLABS_API_KEY      — required to enable; unset = off
 //   ELEVENLABS_VOICE_ID     — the custom Cluck voice (per-lang override: *_ZH / *_ES)
 //   ELEVENLABS_MODEL        — default eleven_flash_v2_5 (HALF-price credits, multilingual)
-//   TTS_DAILY_CHAR_CAP      — daily budget on NEW synthesis (default 40000)
+//   TTS_DAILY_CHAR_CAP      — daily budget on NEW synthesis (default 250000). Raised from 40000 on
+//                             2026-09-30 (owner) to spend the Pro plan's credits warming the cache
+//                             before the account drops to the $6 plan (~30k credits/month). ⚠️ Lower
+//                             this default again when that plan takes effect — at 250k it no longer
+//                             guards the monthly quota; ElevenLabs' own quota does.
 const TTS_DIR = join(process.env.DATA_DIR || "/data", "tts");
 const TTS_MODEL = process.env.ELEVENLABS_MODEL || "eleven_flash_v2_5";
-const TTS_DAILY_CHAR_CAP = parseInt(process.env.TTS_DAILY_CHAR_CAP || "40000", 10);
+const TTS_DAILY_CHAR_CAP = parseInt(process.env.TTS_DAILY_CHAR_CAP || "250000", 10);
 let ttsNewChars = 0, ttsNewDay = "";
 function ttsVoiceId(lang) {
   return process.env["ELEVENLABS_VOICE_ID_" + String(lang || "").toUpperCase()] ||
@@ -4150,7 +4404,7 @@ function ttsCachePath(lang, voiceId, text) {
   const h = createHash("sha256").update(TTS_MODEL + ":" + voiceId + ":" + lang + ":" + text).digest("hex");
   return join(TTS_DIR, h + ".mp3");
 }
-function ttsLangCode(l) { return ["zh","es","it","pt","vi","hi"].includes(l) ? l : "en"; }
+function ttsLangCode(l) { return ["zh","es","it","pt","vi","hi","ko","tr","id"].includes(l) ? l : "en"; }
 app.post("/api/tts", rateLimit("tts", { windowMs: 60000, max: 60 }), async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   const lang = ttsLangCode(String((req.body && req.body.lang) || "en").toLowerCase().slice(0, 2));
@@ -4905,7 +5159,7 @@ app.get("/api/lp-scan", adminGuarded(ADMIN_404), async (req, res) => { // operat
     catch (e) { console.warn("[near-grad] test error:", e.stack || e.message); return res.status(200).json({ success: false, error: publicErrMsg(e) }); }
   }
   const amountUsd = Number(req.query.amount) || 0;
-  try { return res.status(200).json({ success: true, ...(await lpScanner.scanPair(String(A), String(B), { amountUsd })) }); }
+  try { return res.status(200).json({ success: true, ...(await lpScanner.scanPair(String(A), String(B), { amountUsd, includeRisky: req.query.includeRisky === "1" })) }); }
   catch (e) { return res.status(200).json({ success: false, error: e.message }); }
 });
 
@@ -4934,7 +5188,7 @@ app.get("/api/cg-agg-test", adminGuarded(ADMIN_404_SUCCESS), async (req, res) =>
 app.get("/api/lp-top", adminGuarded(ADMIN_404), async (req, res) => { // operator-only since 2026-07-04 (owner: LP scanner off public, kept for CLKN ops)
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Cache-Control", "public, max-age=600");
-  try { return res.status(200).json({ success: true, ...(await lpScanner.topPools({ kind: req.query.kind, force: req.query.refresh === "1" })) }); }
+  try { return res.status(200).json({ success: true, ...(await lpScanner.topPools({ kind: req.query.kind, force: req.query.refresh === "1", includeRisky: req.query.includeRisky === "1" })) }); }
   catch (e) { return res.status(200).json({ success: false, error: e.message }); }
 });
 
@@ -5001,7 +5255,7 @@ app.get("/api/lp-token", adminGuarded(ADMIN_404), async (req, res) => { // opera
   const T = req.query.token || req.query.t;
   if (!T) return res.status(400).json({ success: false, error: "pass ?token=<symbol|mint>, optional &amount=<usd>" });
   const amountUsd = Number(req.query.amount) || 0;
-  try { return res.status(200).json({ success: true, ...(await lpScanner.scanToken(String(T), { amountUsd })) }); }
+  try { return res.status(200).json({ success: true, ...(await lpScanner.scanToken(String(T), { amountUsd, includeRisky: req.query.includeRisky === "1" })) }); }
   catch (e) { return res.status(200).json({ success: false, error: e.message }); }
 });
 
@@ -5032,7 +5286,9 @@ app.post("/api/lp-ask", adminGuarded(ADMIN_404), async (req, res) => { // operat
   try {
     const scan = await lpScanner.scanPair(String(a), String(b), { amountUsd: Number(amount) || 0 });
     const ctx = (scan.pools || []).map((p) => {
-      const base = `${p.dex} — TVL $${p.tvlUsd.toLocaleString()}, 24h vol $${Math.round(p.volume.h24).toLocaleString()}, turnover ${p.turnover24h}x`;
+      const riskNote = (p.flags || []).filter((f) => f.level !== "info").map((f) => `${f.symbol ? f.symbol + ": " : ""}${f.text}`).join("; ");
+      const base = `${p.dex} — TVL $${p.tvlUsd.toLocaleString()}, 24h vol $${Math.round(p.volume.h24).toLocaleString()}, turnover ${p.turnover24h}x`
+        + (riskNote ? `, PRE-FLIGHT FLAGS: ${riskNote}` : "");
       if (p.feeTier == null) return `${base}, fee tier NOT YET READ (don't estimate its yield)`;
       return `${base}, fee ${p.feeTier}%, 24h-yield ${p.feeYieldPctDay}%/day`
         + (p.feeYield7dPctDay != null ? `, 7d-avg-yield ${p.feeYield7dPctDay}%/day` : "")
@@ -5042,6 +5298,7 @@ app.post("/api/lp-ask", adminGuarded(ADMIN_404), async (req, res) => { // operat
     const system = `You are Cluck Norris — the toughest LP professor on Solana — analyzing REAL pool data so a user can compare where to LP ${scan.pair}.
 HARD RULES:
 - INFORMATIONAL ONLY. NEVER tell them where to put money, never predict prices. Explain tradeoffs; THEY decide.
+- If a pool line carries PRE-FLIGHT FLAGS (transfer fee, display multiplier, issuer pause/clawback, pre-IPO wrapper, unverified mint), lead with them — they can matter more than the yield. Pools whose token has a transfer fee are already excluded from the list; say so if asked why a pool is missing.
 - Ground every claim in the DATA below. If a pool's fee tier isn't read yet, say so — never invent a yield.
 - Turnover (vol/TVL) is NOT yield. A high-turnover pool with a tiny fee earns little. Fee-yield (fees/TVL) is the money metric — teach that.
 - Lead with the 7d-avg yield (the truer rate), not the 1-day number. If a pool's volume is "spiking", warn its 24h yield probably won't hold; if "cooling", flag that it's slowing down.
@@ -5056,11 +5313,11 @@ ${ctx || "(no pools found for this pair)"}`;
     const r = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-api-key": ANTHROPIC_KEY, "anthropic-version": "2023-06-01" },
-      body: JSON.stringify({ model: "claude-sonnet-5", max_tokens: 800, thinking: { type: "disabled" }, system, messages: [{ role: "user", content: String(question) }] }),
+      body: JSON.stringify({ model: "claude-sonnet-5-5", max_tokens: 800, thinking: { type: "between_tools" }, output_config: { effort: "high" }, system, messages: [{ role: "user", content: String(question) }] }),
     });
     const data = await r.json();
-    if (data && data.content && data.content[0]) {
-      const answer = data.content[0].text.replace(/\*\*([^*]+)\*\*/g, "$1").replace(/\*([^*]+)\*/g, "$1").replace(/#{1,3}\s/g, "").trim();
+    if (claudeText(data)) {
+      const answer = claudeText(data).replace(/\*\*([^*]+)\*\*/g, "$1").replace(/\*([^*]+)\*/g, "$1").replace(/#{1,3}\s/g, "").trim();
       return res.status(200).json({ success: true, pair: scan.pair, answer, pools: scan.pools });
     }
     return res.status(500).json({ success: false, error: (data && data.error && data.error.message) || "No response from AI" });
@@ -5176,10 +5433,10 @@ RULES: Never tell anyone to buy/sell or predict prices. Never recommend, rank or
     const r = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-api-key": KEY, "anthropic-version": "2023-06-01" },
-      body: JSON.stringify({ model: "claude-sonnet-5", max_tokens: 1500, thinking: { type: "disabled" }, system, messages: [{ role: "user", content: `Here's today's live Solana market data:\n\n${summary}\n\nWrite today's Daily Alpha.` }] }),
+      body: JSON.stringify({ model: "claude-sonnet-5-5", max_tokens: 1500, thinking: { type: "between_tools" }, output_config: { effort: "high" }, system, messages: [{ role: "user", content: `Here's today's live Solana market data:\n\n${summary}\n\nWrite today's Daily Alpha.` }] }),
     });
     const data = await r.json();
-    if (data && data.content && data.content[0]) return data.content[0].text.replace(/\*\*([^*]+)\*\*/g, "$1").replace(/\*([^*]+)\*/g, "$1").replace(/^#{1,3}\s/gm, "").trim();
+    if (claudeText(data)) return claudeText(data).replace(/\*\*([^*]+)\*\*/g, "$1").replace(/\*([^*]+)\*/g, "$1").replace(/^#{1,3}\s/gm, "").trim();
   } catch (_) {}
   return `🐔 CLUCK'S DAILY ALPHA\n\n${summary}\n\nNot financial advice — now go do your homework. 🐔`;
 }
@@ -5323,11 +5580,11 @@ RULES: Never give financial advice or price predictions. Encouraging but blunt. 
     const r = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-api-key": KEY, "anthropic-version": "2023-06-01" },
-      body: JSON.stringify({ model: "claude-sonnet-5", max_tokens: 950, thinking: { type: "disabled" }, system, messages }),
+      body: JSON.stringify({ model: "claude-sonnet-5-5", max_tokens: 950, thinking: { type: "between_tools" }, output_config: { effort: "high" }, system, messages }),
     });
     const data = await r.json();
-    if (data && data.content && data.content[0]) {
-      let reply = data.content[0].text.replace(/\*\*([^*]+)\*\*/g, "$1").replace(/\*([^*]+)\*/g, "$1").replace(/^#{1,3}\s/gm, "").trim();
+    if (claudeText(data)) {
+      let reply = claudeText(data).replace(/\*\*([^*]+)\*\*/g, "$1").replace(/\*([^*]+)\*/g, "$1").replace(/^#{1,3}\s/gm, "").trim();
       const complete = /\[LESSON COMPLETE\]/i.test(reply);
       reply = reply.replace(/\[LESSON COMPLETE\]/ig, "").trim();
       return res.status(200).json({ success: true, reply, complete });
@@ -5534,11 +5791,11 @@ RULES: No financial advice. Encouraging but honest. No markdown headers/asterisk
     const r = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-api-key": KEY, "anthropic-version": "2023-06-01" },
-      body: JSON.stringify({ model: "claude-sonnet-5", max_tokens: 950, thinking: { type: "disabled" }, system, messages }),
+      body: JSON.stringify({ model: "claude-sonnet-5-5", max_tokens: 950, thinking: { type: "between_tools" }, output_config: { effort: "high" }, system, messages }),
     });
     const data = await r.json();
-    if (data && data.content && data.content[0]) {
-      let reply = data.content[0].text.replace(/\*\*([^*]+)\*\*/g, "$1").replace(/\*([^*]+)\*/g, "$1").replace(/^#{1,3}\s/gm, "").trim();
+    if (claudeText(data)) {
+      let reply = claudeText(data).replace(/\*\*([^*]+)\*\*/g, "$1").replace(/\*([^*]+)\*/g, "$1").replace(/^#{1,3}\s/gm, "").trim();
       const passed = /\[EXAM PASSED\]/i.test(reply);
       const failed = /\[EXAM FAILED\]/i.test(reply);
       reply = reply.replace(/\[EXAM (PASSED|FAILED)\]/ig, "").trim();
@@ -10921,7 +11178,11 @@ function buyCaptionGeneric(b, cfg, tokUsd, mkt) {
   // market cap by multiples. mkt.mc (price × CIRCULATING supply, from Jupiter's live
   // supply feed) is the correct field — matches what roseBuyCaption and the main CLKN
   // alert already use. Never swap this back to fdv without relabeling it FDV.
-  if (fill > 0) info.push(`📈 <b>Price $${fill.toPrecision(3)}</b>` + (mkt && mkt.mc ? `\n🏦 MC $${roseFmtNum(mkt.mc)}` : ""));
+  // FDV (owner, 2026-10-01: "add FDV to the buy bot") sits beside MC, labelled as FDV — it is
+  // price × TOTAL supply from Jupiter's same feed, so for a heavily locked token it reads well
+  // above MC. Either one missing just drops that half of the line.
+  const capLine = [mkt && mkt.mc ? `🏦 MC $${roseFmtNum(mkt.mc)}` : "", mkt && mkt.fdv ? `💎 FDV $${roseFmtNum(mkt.fdv)}` : ""].filter(Boolean).join("  ·  ");
+  if (fill > 0) info.push(`📈 <b>Price $${fill.toPrecision(3)}</b>` + (capLine ? `\n${capLine}` : ""));
   info.push((isDev ? `🛠️ <b>project wallet</b> ` : `👤 `) + `<code>${(b.wallet || "").slice(0, 4)}…${(b.wallet || "").slice(-4)}</code>` + (b.sig ? `  ·  <a href="https://solscan.io/tx/${b.sig}">tx</a>` : ""));
   info.push(`📈 <a href="https://dexscreener.com/solana/${cfg.mint}">Chart</a>  ·  🛒 <a href="https://jup.ag/tokens/${cfg.mint}">Buy ${tgEsc(sym)}</a>`);
   return [head, bar, ...info].join("\n");
@@ -11232,7 +11493,23 @@ const ENGINE_ARM_TABLE = [
     }),
     catchShape: (e) => ({ ok: false, error: "server_error", detail: e.message }),
   },
+  {
+    id: "bullen", route: "/api/bullen-engine", armed: bullenEngineArmed, setArmed: bullenEngineSetArmed, hardKilled: bullenHardKilled,
+    offEnv: "BULLEN_ENGINE_OFF", beforeArm: bullenEngineConfigRatchet, walletShared: true,
+    noOperatorError: "no_operator", noOperatorDetail: "the CUNA engine wallet key (MM_OPERATOR_SECRET_CUNA) is not loaded — nothing can sign.",
+    cfgFallbackEmpty: true,
+    fields: (cfg) => ({
+      pair: cfg.pair, widthPct: cfg.widthPct, solWidthPct: cfg.solWidthPct, jupEnabled: cfg.jupEnabled,
+      feeTierPct: cfg.feeTierPct, maxUsd: cfg.maxUsd, solMaxSol: cfg.solMaxSol, buybackEnabled: cfg.buybackEnabled,
+    }),
+    catchShape: (e) => ({ ok: false, error: e.message }),
+  },
 ];
+// walletShared entries (cuna/dnc/rose/bullen — see walletConflictFor above) refuse to arm while
+// a SIBLING on the same operator wallet is armed or unpaused. Set on all four so the guard is
+// symmetric: arming bullen refuses while cuna/dnc/rose are live on that wallet, and arming any
+// of THEM refuses while bullen is live — added retroactively to the pre-existing three entries.
+for (const e of ENGINE_ARM_TABLE) if (["cuna", "dnc", "rose"].includes(e.id)) e.walletShared = true;
 function registerEngineArmRoute(entry) {
   app.all(entry.route, adminGuarded(ADMIN_404, { noStore: true }), (req, res) => {
     if (mutatingGetRefused(req, res, ["on", "off"])) return;   // arming a liquidity engine is never a link unfurl away
@@ -11240,7 +11517,14 @@ function registerEngineArmRoute(entry) {
       if (req.query.on === "1") {
         if (entry.hardKilled()) return res.json({ ok: false, error: "hard_killed", detail: `${entry.offEnv}=1 is set in Railway — clear it first.` });
         if (entry.beforeArm) entry.beforeArm();   // ROSE's ratchet: shape asserted BEFORE the first armed tick can deploy
+        // No-operator is the more fundamental blocker (a Railway config gap, unrelated to any
+        // other engine) — check it before the wallet-conflict check so that error surfaces first
+        // when both are true; a wallet conflict alone (operator present) is checked after.
         if (!whirlpoolMM.vault.operatorPubkey(entry.id)) return res.json({ ok: false, error: entry.noOperatorError, detail: entry.noOperatorDetail });
+        if (entry.walletShared) {
+          const conflict = walletConflictFor(entry.id);
+          if (conflict) return res.json({ ok: false, error: "wallet_conflict", detail: conflict.reason });
+        }
         entry.setArmed(true);
       } else if (req.query.off === "1") {
         entry.setArmed(false);
@@ -11256,6 +11540,21 @@ function registerEngineArmRoute(entry) {
   });
 }
 for (const entry of ENGINE_ARM_TABLE) registerEngineArmRoute(entry);
+
+// GET /api/bullen-bootstrap?key=…[&maxImpact=1.5][&maxSlices=6]  → dry-run plan (live quotes,
+// no signing). POST the same + &run=1 to execute. "The client sends one token and we take care
+// of the rest" (owner, 2026-09-25): converts whatever USDC (+ SOL gas) the shared operator
+// wallet holds into the four legs bullen's two pools need — see vault.bootstrap() for the math.
+// Idempotent: safe to call again after a partial run, or just to re-check the plan.
+app.all("/api/bullen-bootstrap", adminGuarded(ADMIN_404, { noStore: true }), async (req, res) => {
+  if (mutatingGetRefused(req, res, ["run"])) return;
+  try {
+    const maxImpactPct = req.query.maxImpact != null ? Math.max(0.1, Math.min(10, Number(req.query.maxImpact) || 1.5)) : 1.5;
+    const maxSlices = req.query.maxSlices != null ? Math.max(1, Math.min(12, parseInt(req.query.maxSlices, 10) || 6)) : 6;
+    const out = await whirlpoolMM.vault.bootstrap({ projectId: "bullen", dryRun: req.query.run !== "1", maxImpactPct, maxSlices });
+    res.json(out);
+  } catch (e) { res.status(500).json({ ok: false, error: e.message || "bootstrap failed" }); }
+});
 
 app.all("/api/cuna-giveaway/admin", adminGuarded(ADMIN_404, { noStore: true }), async (req, res) => {
   // Deep dive 2026-09-17 P0-002: this was the one CUNA admin route the 2026-09-05 mutating-GET
@@ -13795,6 +14094,7 @@ app.all("/api/cuna-burn/admin", async (req, res) => {
 //   ?cancel=<id>   it never went: back to owed, nothing written to paid
 const CUNA_PAID_KV = "cunaStakePaid";        // { wallet: raw }
 const CUNA_BATCH_KV = "cunaStakeBatches";    // { id: { state, amounts, ... } }
+const CUNA_BONUS_KV = "cunaStakeBonuses";    // { batchId: { kind, at, sent: { wallet: { sig, amountRaw, pending, at } } } } — one-off bonus sends, outside the ledger
 
 // The double-checks the page shows before a single signature. Each is computed HERE from the
 // ledger and the chain, never from what the page thinks it knows. A red row is a reason to stop;
@@ -13866,7 +14166,7 @@ app.all("/api/cuna-stake/payout", async (req, res) => {
     // running — link-preview bots fetch URLs in chats, browsers prerender history entries — which
     // is why the POKE pause route is POST-only too. Reads stay on GET so the runbook's
     // "open this URL" checks keep working.
-    const mutating = q.confirm || q.cancel || q.sent || q.send || q.void || String(q.sweep || "") === "1" || String(q.export || "") === "1";
+    const mutating = q.confirm || q.cancel || q.sent || q.send || q.void || q.bonus || String(q.sweep || "") === "1" || String(q.export || "") === "1";
     if (mutating && req.method !== "POST") {
       return res.status(405).json({ ok: false, error: "this changes payout state — send it as a POST" });
     }
@@ -13987,6 +14287,59 @@ app.all("/api/cuna-stake/payout", async (req, res) => {
         if (run) console.log(`[cuna-payout] batch ${id} SERVER-SENT from ${payer}: ${r.action} — paid ${(r.paid || []).length}, pending ${(r.pending || []).length}, failed ${(r.failed || []).length}`);
       }
     }
+    // ── ONE-OFF BONUS on a batch that has already gone out (owner, 2026-10-01: "we want to double
+    // the rewards since price got nuked" … "send the extra"). POST ?bonus=<batchId> is the vault's
+    // dry run; &run=1 sends. The bonus pays each wallet EXACTLY its row in that SENT batch again —
+    // no amount, multiplier or address is accepted from the request — so it can only ever double a
+    // payout the ledger already settled. It never touches the accrual days, `paid` or the batch
+    // record, so conservation (credited = owed + pending + paid) is unaffected; its own journal
+    // (CUNA_BONUS_KV, one entry per batch, a row per wallet written at submit time and read back
+    // from disk before it counts) is what stops a second bonus on the same batch.
+    let bonusReport = null;
+    if (q.bonus) {
+      const id = String(q.bonus);
+      const b = batches[id];
+      if (!b) return res.status(404).json({ ok: false, error: "no such batch" });
+      if (b.state !== "sent") return res.status(400).json({ ok: false, error: `batch is ${b.state} — a bonus only doubles a batch that has fully gone out` });
+      const bonuses = kv.get(CUNA_BONUS_KV, {}) || {};
+      const done = (bonuses[id] && bonuses[id].sent) || {};
+      const excludedNow = new Set((cunaProgramme().config.excludeWallets || []).map(String));
+      const bp = require("./lib/buycomp-payout");
+      const hubPublic = require("./lib/hub/public");
+      const recipients = Object.entries(b.amounts || {})
+        // Only rows whose original transfer is CONFIRMED with a signature: a pending or manual
+        // (sig-less) row may not have landed, so it is not "a payout that settled".
+        .filter(([w]) => b.sent && b.sent[w] && b.sent[w].sig && !b.sent[w].pending && !done[w] && !excludedNow.has(w))
+        .map(([wallet, raw]) => ({ wallet, amountUi: Number(hubPublic.rawToUi(raw, 9)), amountRaw: String(raw) }));
+      if (!recipients.length) {
+        bonusReport = { action: "none", reason: "every row of this batch already has its bonus", batch: id };
+      } else {
+        const run = q.run === "1";
+        const totalUi = recipients.reduce((t, r) => t + r.amountUi, 0);
+        const perMax = recipients.reduce((m, r) => Math.max(m, r.amountUi), 0);
+        const onPaid = (row) => {
+          const all = kv.get(CUNA_BONUS_KV, {}) || {};
+          const cur = all[id] || { batch: id, kind: "double", at: Math.floor(Date.now() / 1000), sent: {} };
+          const amt = (b.amounts || {})[row.wallet];
+          // Never overwrite a recorded bonus with a different signature — that would be a second
+          // transfer to the same wallet, and overwriting would also erase the evidence of it.
+          const prev = cur.sent && cur.sent[row.wallet];
+          if (prev && prev.sig && prev.sig !== row.sig) throw new Error(`bonus for ${row.wallet} already recorded with ${prev.sig} — refusing a second transfer`);
+          cur.sent = { ...cur.sent, [row.wallet]: { sig: row.sig, amountRaw: String(amt), pending: !!row.pending, at: Math.floor(Date.now() / 1000) } };
+          if (!kv.setVerified(CUNA_BONUS_KV, { ...all, [id]: cur })) {
+            throw new Error("bonus journal did not reach the volume (" + (kv.lastPersistError() || "read-back mismatch") + ") — STOP; do not re-run until it is reconciled");
+          }
+        };
+        const lock = run ? bp.lockAcquire(kv, "cuna-bonus:" + id) : { ok: true, token: null };
+        if (!lock.ok) return res.status(409).json({ ok: false, error: "payout_in_flight", lock });
+        let r;
+        try {
+          r = await whirlpoolMM.vault.payoutSpl({ projectId: "treasury", mintAddr: SUPPLY_FEEDS.cuna.mint, recipients, perRecipientMaxUi: perMax, totalMaxUi: totalUi, dryRun: !run, onPaid });
+        } finally { if (lock.token) bp.lockRelease(kv, lock.token); }
+        bonusReport = { ...r, batch: id, kind: "double", ran: run, caps: { perRecipientMaxUi: perMax, totalMaxUi: totalUi } };
+        if (run) console.log(`[cuna-payout] BONUS on batch ${id} sent from treasury: ${r.action} — paid ${(r.paid || []).length}, pending ${(r.pending || []).length}, failed ${(r.failed || []).length}`);
+      }
+    }
     if (q.void) {
       const id = String(q.batch || "");
       const b = batches[id];
@@ -14020,12 +14373,15 @@ app.all("/api/cuna-stake/payout", async (req, res) => {
     // No `journal`/`projectId`: the dedicated CUNA payout desk (CLAUDE.md "CUNA on the Hub —
     // HELD") never writes a settlement journal entry — see the comment on cunaPayoutChecks above.
     const owed = pay.owedNow({ days, paid, pending: batches });
+    // Excluded wallets stay owed in the ledger but are never put in a batch (lib/cuna-payout.js
+    // buildBatch) — the same list the "exclude" hard check in cunaPayoutChecks reads.
+    const payExcluded = (cunaProgramme().config.excludeWallets || []).map(String);
 
     let created = null, note = null;
     if (String(q.export || "") === "1") {
       const id = "cb_" + randomBytes(5).toString("hex");
       const batch = pay.buildBatch({
-        owed, batchId: id, nowUnix,
+        owed, batchId: id, nowUnix, excludeWallets: payExcluded,
         minPayoutRaw: q.minPayoutRaw != null ? q.minPayoutRaw : pay.DEFAULT_MIN_PAYOUT_RAW,   // 0 = pay everyone
       });
       // Nothing to pay is a normal outcome, not a different endpoint: it falls through to the
@@ -14050,12 +14406,12 @@ app.all("/api/cuna-stake/payout", async (req, res) => {
       ok: true,
       created,
       note,
-      sendReport, voidReport, sweepReport,
+      sendReport, voidReport, sweepReport, bonusReport,
       owed: fmtOwed(owed),
       owedTotalRaw: Object.values(owed).reduce((a, v) => a + v, 0n).toString(),
       // A preview of the file, so the owner can eyeball it before creating a batch that holds funds.
       previewLines: created ? null : pay.toAirdropLines(
-        pay.buildBatch({ owed, batchId: "preview", nowUnix }).amounts, 9),
+        pay.buildBatch({ owed, batchId: "preview", nowUnix, excludeWallets: payExcluded }).amounts, 9),
       pendingBatches: pending.map((b) => ({ id: b.id, at: b.at, count: b.count, totalRaw: b.totalRaw })),
       // Per-wallet rows for one batch, so scripts/cuna-payout-verify.cjs can check the line items
       // against the header rather than trusting it.
@@ -14893,6 +15249,42 @@ app.get("/api/wallet-checkup", async (req, res) => {
 // can show, and make the user confirm, the USD VALUE being destroyed before any burn.
 // READ-ONLY: it never builds or signs anything — the client builds the burn+close tx and
 // the user's own wallet signs it. Frozen accounts are flagged (can't be burned/closed).
+//
+// ── surplus rent (WithdrawExcessLamports), added 2026-09-25 ─────────────────────────────
+// A rent PARAMETER cut (most recently the p-token/SIMD-0266 rollout) lowers the network's
+// rent-exempt MINIMUM without touching what an EXISTING account already deposited — so an
+// account opened before the cut can sit on more lamports than today's rule requires, on top
+// of (not instead of) its ordinary "close it, get everything back" reclaim above. The token
+// program's WithdrawExcessLamports instruction (opcode 38, both programs) lets the owner pull
+// that surplus WITHOUT closing the account or touching its token balance. This never hardcodes
+// a rent figure (CLAUDE.md: "more rent cuts are coming") — the minimum is read live per account
+// from its own on-chain byte length, cached briefly by length since the minimum only moves on a
+// protocol change, not per request.
+const rentExemptMinCache = new Map(); // space(bytes) -> { lamports, at }
+const RENT_EXEMPT_CACHE_MS = 60 * 60 * 1000; // an hour — this is a network PARAMETER, not per-account state
+// Its OWN short timeout (3s, not the 15s the account-read calls in this route use) and its OWN
+// fetch — this lookup is cached and near-static, so it must never hold up the ordinary burn/
+// reclaim scan as long as a real account read is allowed to (adversarial review on PR #443, P3-8).
+// lib/rent-surplus.js's computeSurplusForAccounts calls several of these concurrently.
+const RENT_EXEMPT_LOOKUP_TIMEOUT_MS = 3000;
+async function rentExemptMinimumFor(rpcUrl, space) {
+  const now = Date.now();
+  const cached = rentExemptMinCache.get(space);
+  if (cached && (now - cached.at) < RENT_EXEMPT_CACHE_MS) return cached.lamports;
+  const r = await fetch(rpcUrl, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ jsonrpc: "2.0", id: "getMinimumBalanceForRentExemption", method: "getMinimumBalanceForRentExemption", params: [space] }),
+    signal: AbortSignal.timeout(RENT_EXEMPT_LOOKUP_TIMEOUT_MS),
+  });
+  const d = await r.json();
+  const lamports = Number(d && d.result);
+  if (!Number.isFinite(lamports) || lamports <= 0) {
+    if (cached) return cached.lamports;   // stale-but-real beats nothing
+    throw new Error("bad getMinimumBalanceForRentExemption response");
+  }
+  rentExemptMinCache.set(space, { lamports, at: now });
+  return lamports;
+}
 app.get("/api/burn-scan", async (req, res) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Cache-Control", "no-store");
@@ -14910,7 +15302,9 @@ app.get("/api/burn-scan", async (req, res) => {
   try {
     const accounts = [];
     for (const prog of [TOKEN_2022_PROG, TOKEN_PROG]) {
-      const d = await rpc("getTokenAccountsByOwner", [wallet, { programId: prog }, { encoding: "jsonParsed" }]);
+      // "confirmed", not the RPC default "finalized": finalized trails by ~15-30s, so a Rescan right
+      // after a burn/reclaim showed the closed accounts again until a reconnect (owner report 2026-10-02).
+      const d = await rpc("getTokenAccountsByOwner", [wallet, { programId: prog }, { encoding: "jsonParsed", commitment: "confirmed" }]);
       for (const acc of (d?.result?.value || [])) {
         const info = acc.account?.data?.parsed?.info;
         if (!info?.mint || !acc.pubkey) continue;
@@ -14925,6 +15319,16 @@ app.get("/api/burn-scan", async (req, res) => {
           rentLamports: Number(acc.account?.lamports) || 0,   // exact reclaimable rent for THIS account
           frozen: info.state === "frozen",                    // frozen accounts can't be burned/closed
           delegated: !!info.delegate,                          // a delegate has approval on this account
+          // Both fields the surplus job needs. `space` is the account's own byte length, straight off
+          // the RPC's account envelope (present alongside `data` even under jsonParsed encoding) — NEVER
+          // assumed as 165, because a Token-2022 account with extensions (immutableOwner, etc.) is a
+          // different length and a wrong length would misprice its rent-exempt minimum. `isNative` is
+          // the token program's OWN flag for a wrapped-SOL account (info.isNative) — WithdrawExcessLamports
+          // refuses those (NativeNotSupported); trust the program's flag rather than re-deriving it from
+          // a hardcoded wSOL mint string here.
+          space: Number(acc.account?.space ?? acc.account?.data?.space) || 0,
+          isNative: !!info.isNative,
+          owner: info.owner || null,   // should always equal `wallet` (the RPC filter) — carried for lib/rent-surplus's defense-in-depth check
         });
       }
     }
@@ -14932,8 +15336,22 @@ app.get("/api/burn-scan", async (req, res) => {
     const list = accounts.slice(0, 200);
     const mints = [...new Set(list.map((a) => a.mint))];
     const priced = mints.length ? await priceTokensBatch(mints) : {};
+
+    // The surplus job's whole read side lives in lib/rent-surplus.js (pure, unit-tested with an
+    // injected lookup — no network in the test). `surplusAvailable` is false — never a silent
+    // "everything's fine" a client could read as "nothing to reclaim" — when any non-native
+    // account's byte length is missing/unreadable, when a length's live rent-exempt lookup
+    // failed, or when more distinct lengths exist than the cap allows (adversarial review on PR
+    // #443, findings 3/8). `rentExemptMinimumFor` has its own short (3s) timeout and every
+    // distinct length is looked up CONCURRENTLY, so this never holds up the ordinary burn/reclaim
+    // scan the way the old 15s-per-length serial loop could.
+    const surplusResult = await computeSurplusForAccounts(list, wallet, (sp) => rentExemptMinimumFor(rpcUrl, sp));
+    const surplusAvailable = surplusResult.surplusAvailable;
+    const surplusLamportsTotal = surplusResult.surplusLamportsTotal;
+    const surplusBySpaceOrder = surplusResult.accounts; // same order/length as `list` — zip by index below
+
     let rentLamportsTotal = 0, valueUsdTotal = 0;
-    const out = list.map((a) => {
+    const out = list.map((a, idx) => {
       const p = priced[a.mint] || {};
       const priceUsd = Number(p.priceUsd) || 0;
       const valueUsd = Number((a.uiAmount * priceUsd).toFixed(4));
@@ -14945,10 +15363,15 @@ app.get("/api/burn-scan", async (req, res) => {
       // token unless we say so. The client uses this to warn "value UNKNOWN, not zero" instead of
       // flashing a false "nothing of value is destroyed" all-clear over a bag that may be worth money.
       const priceKnown = Object.prototype.hasOwnProperty.call(priced, a.mint);
+      // Surplus fields (rentExemptLamports/surplusLamports/surplusEligible) — null/false, never a
+      // fabricated 0, when the minimum couldn't be read for this account's space. Wrapped SOL is
+      // excluded outright: WithdrawExcessLamports refuses it (NativeNotSupported).
+      const { rentExemptLamports, surplusLamports, surplusEligible } = surplusBySpaceOrder[idx];
       return {
         ...a,
         symbol: p.symbol || null, name: p.name || null, logo: p.logo || null,
         priceUsd, valueUsd, priceKnown,
+        rentExemptLamports, surplusLamports, surplusEligible,
         // ⚠️ "empty" comes from the BASE-UNIT STRING, never from uiAmount (adversarial review
         // P1-6, 2026-09-21). `uiAmount` is `f64 | null` in the RPC schema, and `Number(null) || 0`
         // above is 0 — so any account the node declines to ui-scale (the Token-2022
@@ -14979,6 +15402,12 @@ app.get("/api/burn-scan", async (req, res) => {
       count: out.length, capped,
       rentSolTotal: Number((rentLamportsTotal / 1e9).toFixed(6)),
       valueUsdTotal: Number(valueUsdTotal.toFixed(2)),
+      // surplusAvailable is false whenever ANY part of the surplus read couldn't be trusted (see
+      // computeSurplusForAccounts's header) — the client must show "couldn't check" rather than a
+      // false "0 to reclaim" (same rule as /api/seeker/reclaimable's RPC-failure posture).
+      surplusAvailable,
+      surplusLamportsTotal,
+      surplusSolTotal: Number((surplusLamportsTotal / 1e9).toFixed(6)),
       accounts: out,
     });
   } catch (e) {
@@ -15008,6 +15437,272 @@ app.get("/api/seeker/reclaimable", async (req, res) => {
     // rule for the tool gate applies just as hard to money-adjacent reads. Never a 200 here.
     console.error("[seeker-reclaimable]", e.message);
     return res.status(503).json({ success: false, status: "unavailable", wallet, error: "Could not read the chain right now — try again shortly." });
+  }
+});
+
+// ── Seeker app — in-app swap (Jupiter proxy), docs/SEEKER_SWAP_DESIGN.md ───────────────────────
+// The app NEVER calls Jupiter directly: the API key and its rate limits stay server-side, the
+// mint allowlist lives in one place, the app's allowedHosts (store-edition/seeker-edition.json)
+// doesn't grow a third-party host, and scripts/seeker-cors-test.cjs can see the whole endpoint
+// inventory. All three routes are PUBLIC RELAYS — no admin key, nothing server-signed; every
+// transaction is built by Jupiter and signed by the user's own connected wallet in the app.
+//
+// ⛔ NO PLATFORM FEE (owner, 2026-09-24: "I do not want to collect any platform fee") — no
+// platformFeeBps on the quote call, no feeAccount on the swap call, no fee env vars anywhere in
+// this block. platformFeeBps is published on /config as the constant 0 so the pane's contract
+// never has to change if this is revisited.
+//
+// JUP_SWAP_BASE overrides BOTH upstream hosts with one URL — test-only (scripts/seeker-swap-test.cjs
+// points it at a local fixture stub); unset in every real environment, where the real keyed-then-
+// lite-api pattern below (same as jupTokensSearch) applies.
+//
+// ⚠️ Fix round P2-1: honoured ONLY when NODE_ENV !== "production", OR the value itself points at
+// 127.0.0.1/localhost — a stray JUP_SWAP_BASE left set on a production deploy would otherwise
+// silently redirect every swap quote/build to whatever host it names, with no key and no
+// allowlisting of its own. A non-local value in production is logged loudly and ignored; the
+// real api.jup.ag / lite-api.jup.ag pattern below still runs.
+const JUP_SWAP_BASE_RAW = process.env.JUP_SWAP_BASE || "";
+const JUP_SWAP_BASE_LOCAL_RE = /^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?(\/|$|\?)/;
+let JUP_SWAP_BASE = "";
+if (JUP_SWAP_BASE_RAW) {
+  if (process.env.NODE_ENV !== "production" || JUP_SWAP_BASE_LOCAL_RE.test(JUP_SWAP_BASE_RAW)) {
+    JUP_SWAP_BASE = JUP_SWAP_BASE_RAW;
+  } else {
+    console.error("[seeker-swap] JUP_SWAP_BASE is set in production to a non-local URL — ignoring it and calling the real Jupiter API. value=" + JUP_SWAP_BASE_RAW);
+  }
+}
+const SEEKER_SWAP_SLIPPAGE_OPTIONS = [50, 100, 300];
+const SEEKER_SWAP_DEFAULT_SLIPPAGE_BPS = 100;
+// Base-unit integer amount, no float, no leading zero, capped at 20 digits (design's own bound —
+// well above any real token's total supply in base units, so nothing legitimate is ever refused).
+const SEEKER_SWAP_AMOUNT_RE = /^[1-9][0-9]{0,19}$/;
+// SOL and USDC decimals are fixed by the SPL standard for these specific well-known mints; SKR
+// and CLKN are read from the chain once and cached forever below — AGENTS.md: never hardcode
+// SKR/CLKN decimals. SKR_MINT comes from lib/tool-pass-qualify.js (required above as
+// TOOL_PASS_QUALIFY/SKR_MINT) — never retyped, a look-alike mint exists.
+const SEEKER_SWAP_MINTS = [
+  { symbol: "SOL", mint: "So11111111111111111111111111111111111111112", decimals: 9 },
+  { symbol: "SKR", mint: SKR_MINT, decimals: null },
+  { symbol: "CLKN", mint: CLKN_MINT, decimals: null },
+  { symbol: "USDC", mint: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v", decimals: 6 },
+];
+const SEEKER_SWAP_MINT_SET = new Set(SEEKER_SWAP_MINTS.map((m) => m.mint));
+const seekerSwapDecimalsCache = new Map(); // mint -> decimals (never expires — decimals are immutable)
+async function seekerSwapDecimalsFor(mint) {
+  if (seekerSwapDecimalsCache.has(mint)) return seekerSwapDecimalsCache.get(mint);
+  const sup = await rpc.rpcJson("getTokenSupply", [mint]);
+  const d = sup && sup.result && sup.result.value && sup.result.value.decimals;
+  if (typeof d !== "number") throw new Error("could not read decimals for " + mint);
+  seekerSwapDecimalsCache.set(mint, d);
+  return d;
+}
+// A 60s in-memory quote store, keyed by quoteId (sha256 of the quote JSON). The tx route echoes
+// amounts from the STORED quote, never the request, so the confirm sheet and the transaction come
+// from the same object a client cannot forge. Swept on an interval rather than on every read.
+const seekerSwapQuotes = new Map(); // quoteId -> { quote, at }
+const SEEKER_SWAP_QUOTE_TTL_MS = 60000;
+setInterval(() => {
+  const now = Date.now();
+  for (const [id, v] of seekerSwapQuotes) if (now - v.at > SEEKER_SWAP_QUOTE_TTL_MS) seekerSwapQuotes.delete(id);
+}, 30000).unref();
+
+// Same keyed-host-then-lite-api pattern as jupTokensSearch (~line 20000): api.jup.ag with
+// x-api-key when JUPITER_API_KEY is set, automatic fallback to lite-api.jup.ag. JUP_SWAP_BASE
+// (test-only) replaces both with one URL and sends no key header.
+async function jupSwapCall(pathAndQuery, { method = "GET", body } = {}) {
+  const tries = JUP_SWAP_BASE
+    ? [{ u: JUP_SWAP_BASE + pathAndQuery, h: {} }]
+    : (JUP_API_KEY ? [{ u: "https://api.jup.ag" + pathAndQuery, h: { "x-api-key": JUP_API_KEY } }] : [])
+        .concat([{ u: "https://lite-api.jup.ag" + pathAndQuery, h: {} }]);
+  let lastErr = null;
+  for (const t of tries) {
+    try {
+      const r = await fetch(t.u, {
+        method,
+        headers: Object.assign({ "Content-Type": "application/json" }, t.h),
+        body: body ? JSON.stringify(body) : undefined,
+        signal: AbortSignal.timeout(8000),
+      });
+      const j = await r.json().catch(() => null);
+      if (!r.ok) { lastErr = new Error("jupiter " + r.status + (j && j.error ? ": " + j.error : "")); continue; }
+      return j;
+    } catch (e) { lastErr = e; continue; }
+  }
+  throw lastErr || new Error("jupiter unavailable");
+}
+
+// ⚠️ Fix round P3: no wildcard Access-Control-Allow-Origin on any of the three swap routes below —
+// the SEEKER_API_RE middleware mounted earlier already sets a RESTRICTED, origin-echoed CORS
+// header for the exact Seeker/store-app origins in STORE_APP_ORIGINS, the same as every other
+// seeker/* route. A route-level "*" here would silently override that restriction on every real
+// (non-OPTIONS) response.
+app.get("/api/seeker/swap/config", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  try {
+    const mints = await Promise.all(SEEKER_SWAP_MINTS.map(async (m) => ({
+      symbol: m.symbol, mint: m.mint,
+      decimals: m.decimals != null ? m.decimals : await seekerSwapDecimalsFor(m.mint),
+    })));
+    return res.status(200).json({
+      ok: true,
+      mints,
+      defaultIn: "SOL", defaultOut: "SKR",
+      slippageBpsOptions: SEEKER_SWAP_SLIPPAGE_OPTIONS,
+      defaultSlippageBps: SEEKER_SWAP_DEFAULT_SLIPPAGE_BPS,
+      platformFeeBps: 0,
+    });
+  } catch (e) {
+    console.error("[seeker-swap-config]", e.message);
+    return res.status(502).json({ ok: false, error: "swap_unavailable" });
+  }
+});
+
+// Request expects Jupiter's default swap mode when none is sent — never sent explicitly above,
+// so this is what a quote must echo back to be trusted (P2-1: the quote is never checked against
+// what was asked for, so a mismatched/forged-looking upstream response was returned as-is).
+const SEEKER_SWAP_REQUESTED_MODE = "ExactIn";
+// ⚠️ Frontier review round 31b item 2 — the SAME hard ceiling as `MAX_PRIORITY_FEE_LAMPORTS` in
+// `src/seeker/swap-verify.js` (that file can't be `require()`d here — it's an ESM module the
+// client bundles — so the number is kept in sync by hand; `scripts/seeker-swap-test.cjs` pins
+// both files' values equal). A `/tx` response whose own `prioritizationFeeLamports` exceeds this
+// is refused server-side, never merely trusted client-side.
+const SEEKER_SWAP_MAX_PRIORITY_FEE_LAMPORTS = 1000000;
+// A tighter per-IP cap than the 60/min shared across the whole /api/seeker/swap group — the quote
+// route is the one an idle pane can hammer every 400ms while the amount box is being typed into
+// (fix round P3: the pane also debounces its own calls by 400ms, below is the server-side floor).
+app.get("/api/seeker/swap/quote", rateLimit("seekerswapquote", { windowMs: 60000, max: 30 }), async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  const inputMint = String(req.query.inputMint || "").trim();
+  const outputMint = String(req.query.outputMint || "").trim();
+  const amount = String(req.query.amount || "").trim();
+  const slippageBps = Number(req.query.slippageBps);
+
+  if (!SEEKER_SWAP_MINT_SET.has(inputMint)) return res.status(400).json({ ok: false, error: "bad_request", field: "inputMint" });
+  if (!SEEKER_SWAP_MINT_SET.has(outputMint)) return res.status(400).json({ ok: false, error: "bad_request", field: "outputMint" });
+  if (inputMint === outputMint) return res.status(400).json({ ok: false, error: "bad_request", field: "outputMint" });
+  if (!SEEKER_SWAP_AMOUNT_RE.test(amount)) return res.status(400).json({ ok: false, error: "bad_request", field: "amount" });
+  if (!SEEKER_SWAP_SLIPPAGE_OPTIONS.includes(slippageBps)) return res.status(400).json({ ok: false, error: "bad_request", field: "slippageBps" });
+
+  try {
+    const qs = new URLSearchParams({
+      inputMint, outputMint, amount, slippageBps: String(slippageBps),
+      restrictIntermediateTokens: "true",
+    });
+    const quote = await jupSwapCall("/swap/v1/quote?" + qs.toString());
+    if (!quote || quote.error || !quote.outAmount) return res.status(502).json({ ok: false, error: "quote_unavailable" });
+    // ⚠️ P2-1: the transaction is never checked against the quote — the first half of that is
+    // never STORING a quote whose own fields disagree with what was asked for. A quote that comes
+    // back naming a different pair, a different swap mode, a different slippage, or (round 30
+    // fix 5 — Codex found `amount` was never checked here at all) a different `inAmount` than
+    // requested is refused outright rather than handed to the client (and never cached under a
+    // quoteId a /tx call could later be built from).
+    if (quote.inputMint !== inputMint || quote.outputMint !== outputMint
+      || quote.swapMode !== SEEKER_SWAP_REQUESTED_MODE || Number(quote.slippageBps) !== slippageBps
+      || String(quote.inAmount) !== amount) {
+      console.error("[seeker-swap-quote] quote_mismatch", { inputMint, outputMint, amount, slippageBps, got: { inputMint: quote.inputMint, outputMint: quote.outputMint, swapMode: quote.swapMode, slippageBps: quote.slippageBps, inAmount: quote.inAmount } });
+      return res.status(502).json({ ok: false, error: "quote_mismatch" });
+    }
+    // ⚠️ Frontier review round 31b item 3 — nobody ever tied `otherAmountThreshold` (the minimum
+    // the confirm sheet displayed) to `outAmount`/`slippageBps` (the two numbers the CLIENT
+    // verifier checks the route instruction's own bytes against). Only `SEEKER_SWAP_REQUESTED_MODE
+    // === "ExactIn"` is ever accepted above (checked before this point), so only that mode's rule
+    // applies here; a stored quote whose upstream threshold disagrees with it is refused rather
+    // than cached under a quoteId a /tx call could later build from.
+    // ⚠️ NOT a plain floor: checked against the real recorded fixture
+    // (scripts/fixtures/seeker-swap/quote.json — a genuine 3-hop route, outAmount 55,235,110,
+    // slippageBps 100) and floor(outAmount × 9900 / 10000) = 54,682,758 while the fixture's own
+    // otherAmountThreshold is 54,682,759 — Jupiter's real threshold does not exactly reduce to a
+    // floor on the final outAmount (whether from its own rounding convention or per-hop
+    // arithmetic). Rather than guess a single formula and risk refusing genuine quotes forever,
+    // this accepts EITHER the floor OR the ceiling of outAmount × (10000 − slippageBps) / 10000 —
+    // the only two values any honest single global rounding of that exact formula can produce —
+    // and refuses anything outside that two-value window. The fixture's 54,682,759 is the ceiling
+    // of that range; `scripts/seeker-swap-test.cjs` pins the fixture passing and a forged
+    // (materially smaller) threshold refusing.
+    const thresholdNumerator = BigInt(quote.outAmount) * (10000n - BigInt(slippageBps));
+    const thresholdFloor = thresholdNumerator / 10000n;
+    const thresholdCeil = (thresholdNumerator % 10000n === 0n) ? thresholdFloor : thresholdFloor + 1n;
+    const gotThreshold = BigInt(String(quote.otherAmountThreshold));
+    if (gotThreshold < thresholdFloor || gotThreshold > thresholdCeil) {
+      console.error("[seeker-swap-quote] threshold_mismatch", { outAmount: quote.outAmount, slippageBps, thresholdFloor: String(thresholdFloor), thresholdCeil: String(thresholdCeil), got: quote.otherAmountThreshold });
+      return res.status(502).json({ ok: false, error: "quote_mismatch" });
+    }
+    const quoteId = createHash("sha256").update(JSON.stringify(quote)).digest("hex");
+    seekerSwapQuotes.set(quoteId, { quote, at: Date.now() });
+    return res.status(200).json({ ok: true, quote, quoteId });
+  } catch (e) {
+    console.error("[seeker-swap-quote]", e.message);
+    return res.status(502).json({ ok: false, error: "quote_unavailable" });
+  }
+});
+
+app.post("/api/seeker/swap/tx", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  const quoteId = String((req.body && req.body.quoteId) || "").trim();
+  const userPublicKey = String((req.body && req.body.userPublicKey) || "").trim();
+  if (!quoteId) return res.status(400).json({ ok: false, error: "bad_request", field: "quoteId" });
+  if (!SOL_ADDR_RE.test(userPublicKey)) return res.status(400).json({ ok: false, error: "bad_request", field: "userPublicKey" });
+
+  const entry = seekerSwapQuotes.get(quoteId);
+  if (!entry || Date.now() - entry.at > SEEKER_SWAP_QUOTE_TTL_MS) {
+    seekerSwapQuotes.delete(quoteId);
+    return res.status(409).json({ ok: false, error: "quote_expired" });
+  }
+
+  try {
+    const body = {
+      quoteResponse: entry.quote,
+      userPublicKey,
+      wrapAndUnwrapSol: true,
+      dynamicComputeUnitLimit: true,
+      asLegacyTransaction: false,
+      prioritizationFeeLamports: { priorityLevelWithMaxLamports: { maxLamports: 1000000, priorityLevel: "high" } },
+    };
+    const out = await jupSwapCall("/swap/v1/swap", { method: "POST", body });
+    if (!out || !out.swapTransaction) return res.status(502).json({ ok: false, error: "swap_unavailable" });
+    // ⚠️ P2-1: Jupiter simulates every transaction it builds before returning it, and a non-null
+    // simulationError means IT ALREADY KNOWS this transaction will fail on-chain — refuse it here
+    // rather than hand the app a transaction to sign that Jupiter itself expects to fail.
+    if (out.simulationError != null) {
+      console.error("[seeker-swap-tx] simulationError", out.simulationError);
+      return res.status(502).json({ ok: false, error: "swap_unavailable", detail: out.simulationError });
+    }
+    // ⚠️ Frontier review round 31b item 2 — `prioritizationFeeLamports` used to be passed through
+    // raw, unchecked: missing, non-numeric or absurd (Codex's exploit: no compute-unit-limit
+    // instruction + an enormous price) all reached the client as-is. Refused here, server-side,
+    // never merely trusted — the CLIENT still computes and enforces its own hard ceiling from the
+    // transaction's actual bytes (`MAX_PRIORITY_FEE_LAMPORTS`, `swap-verify.js`); this is defense
+    // in depth, not a replacement for that check.
+    if (typeof out.prioritizationFeeLamports !== "number" || !Number.isFinite(out.prioritizationFeeLamports)
+      || out.prioritizationFeeLamports < 0 || out.prioritizationFeeLamports > SEEKER_SWAP_MAX_PRIORITY_FEE_LAMPORTS) {
+      console.error("[seeker-swap-tx] prioritizationFeeLamports out of bounds", out.prioritizationFeeLamports);
+      return res.status(502).json({ ok: false, error: "swap_unavailable" });
+    }
+    // Round 31b item 6 — `lastValidBlockHeight` drives the client's expiry logic (checkPendingSwap
+    // in sign.js); anything that isn't a genuine positive block height is refused rather than
+    // handed to a client that would otherwise trust it blind.
+    if (!Number.isInteger(out.lastValidBlockHeight) || out.lastValidBlockHeight <= 0) {
+      console.error("[seeker-swap-tx] lastValidBlockHeight invalid", out.lastValidBlockHeight);
+      return res.status(502).json({ ok: false, error: "swap_unavailable" });
+    }
+    // Amounts echoed from the STORED quote (entry.quote), never the request — the confirm sheet
+    // and the transaction Jupiter actually built come from the same object.
+    return res.status(200).json({
+      ok: true,
+      swapTransaction: out.swapTransaction,
+      lastValidBlockHeight: out.lastValidBlockHeight,
+      prioritizationFeeLamports: out.prioritizationFeeLamports,
+      inputMint: entry.quote.inputMint,
+      outputMint: entry.quote.outputMint,
+      inAmount: entry.quote.inAmount,
+      outAmount: entry.quote.outAmount,
+      otherAmountThreshold: entry.quote.otherAmountThreshold,
+      priceImpactPct: entry.quote.priceImpactPct,
+      slippageBps: entry.quote.slippageBps,
+    });
+  } catch (e) {
+    console.error("[seeker-swap-tx]", e.message);
+    return res.status(502).json({ ok: false, error: "swap_unavailable" });
   }
 });
 
@@ -15496,7 +16191,7 @@ YOUR SCHOOL -- KNOW THIS COLD:
 - Built on Bags.fm, powered by the CLKN token on Solana
 - CLKN contract: DW6DF2mjtyx67vcNmMhFm9XdxAwREurorghZcS3CBAGS
 - Trade CLKN at: bags.fm or Jupiter
-- The school has 5 areas: The Incubator (beginner), School of Hard Knocks (16 lessons), the LP Lab, The Library, and Token Data
+- The school has 5 areas: The Incubator (beginner), School of Hard Knocks (21 lessons), the LP Lab, The Library, and Token Data
 
 THE CLKN INCUBATOR:
 - For complete beginners. 7 lessons covering wallets, tokens, on-ramps and off-ramps, DEXs, liquidity, market cap, and staying safe.
@@ -15506,11 +16201,11 @@ SCHOOL OF HARD KNOCKS:
 - 12 progressive lessons with a belt ranking system from Freshman to Emeritus
 - Topics: liquidity pools, tokenomics, MEV, on-chain research, rugs and scams, DeFi strategies and more
 - Each lesson ends in a quiz. Progress saves automatically.
-- Complete all 16 lessons to graduate, then submit your wallet for a permanent shareable transcript and an on-chain graduation NFT
+- Complete all 21 lessons to graduate, then submit your wallet for a permanent shareable transcript and an on-chain graduation NFT
 
 THE LP LAB (its own tab, not inside the Library):
-- 14 lessons on liquidity providing, from the fundamentals to building a real strategy
-- Topics: What Is Liquidity, How AMMs Work, Impermanent Loss, LP Fees, Concentrated Liquidity, Price Bins and Ticks, Single-Sided Deposits, Active vs Passive, Risk Management, Reading Pool Data, Token Launch Liquidity, Building a Strategy, DLMM Liquidity Shapes, Laddering and Multi-Position
+- 15 lessons on liquidity providing, from the fundamentals to building a real strategy
+- Topics: What Is Liquidity, How AMMs Work, Impermanent Loss, LP Fees, Concentrated Liquidity, Price Bins and Ticks, Single-Sided Deposits, Active vs Passive, Risk Management, Reading Pool Data, Token Launch Liquidity, Building a Strategy, DLMM Liquidity Shapes, Laddering and Multi-Position, Check the Token Before You LP It
 - Protocol-agnostic -- works on Meteora, Raydium, Orca, Uniswap, anywhere you LP
 - Interactive calculators throughout: impermanent loss, AMM price impact, fee-vs-IL breakeven, capital efficiency, bin visualizer, DCA accumulation, LP-vs-HODL, strategy matcher
 - Shareable directly at clucknorris.app/lp-lab
@@ -15562,7 +16257,7 @@ CLKN TOKEN UTILITY:
   SOL price buys a 7-day pass to all of them. Premium forensics is separate: 2,000,000 CLKN,
   re-checked live. You connect a wallet and the gate resolves itself -- nothing is sent by hand.
 - Hold CLKN to be eligible for airdrops and exclusive rewards
-- Graduate all 16 lessons and submit your wallet for a transcript and an on-chain graduation NFT
+- Graduate all 21 lessons and submit your wallet for a transcript and an on-chain graduation NFT
 
 FIRECHICKEN CONNECTION:
 - FireChicken (FCKN) was the original token that built the community on Bags.fm
@@ -16992,11 +17687,11 @@ HOW YOU ANSWER:
     const r = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-api-key": KEY, "anthropic-version": "2023-06-01" },
-      body: JSON.stringify({ model: "claude-sonnet-5", max_tokens: 950, thinking: { type: "disabled" }, system, messages }),
+      body: JSON.stringify({ model: "claude-sonnet-5-5", max_tokens: 950, thinking: { type: "between_tools" }, output_config: { effort: "high" }, system, messages }),
     });
     const data = await r.json();
-    if (data && data.content && data.content[0]) {
-      const reply = data.content[0].text.replace(/\*\*([^*]+)\*\*/g, "$1").replace(/\*([^*]+)\*/g, "$1").replace(/^#{1,3}\s/gm, "").trim();
+    if (claudeText(data)) {
+      const reply = claudeText(data).replace(/\*\*([^*]+)\*\*/g, "$1").replace(/\*([^*]+)\*/g, "$1").replace(/^#{1,3}\s/gm, "").trim();
       return res.status(200).json({ success: true, reply });
     }
     return res.status(500).json({ success: false, error: (data && data.error && data.error.message) || "Cluck went quiet — try again." });
@@ -18055,6 +18750,23 @@ app.get("/api/jupverify/admin/scorecard", adminGuarded(ADMIN_404_CAP), async (re
     }
   } catch (_) { /* vault optional */ }
   res.json(out);
+});
+
+// Short receipt link for X — /b/<first 10 chars of the signature> → 301 /burn/<sig>.
+// X refused every burn celebration with a 403 (owner, 2026-09-28): the post carried the full
+// 88-character base58 transaction signature in its receipt URL, and X's crypto-address filter
+// (the same one that 403'd bare CAs in lesson posts, see CLKN_DEXSCREENER) reads a long base58
+// run as an address. Ten characters can't look like one. Resolves only a UNIQUE prefix of a
+// stored receipt; anything else is a 404, never a guess.
+const BURN_SHORT_LEN = 10;
+function burnShortUrl(sig) { return `https://clucknorris.app/b/${String(sig).slice(0, BURN_SHORT_LEN)}`; }
+app.get("/b/:code", (req, res) => {
+  const code = String(req.params.code || "");
+  if (!new RegExp(`^[1-9A-HJ-NP-Za-km-z]{${BURN_SHORT_LEN}}$`).test(code)) return res.status(404).type("text").send("not found");
+  const store = kv.get("burnReceipts", {}) || {};
+  const hits = Object.keys(store).filter((s) => s.startsWith(code));
+  if (hits.length !== 1) return res.status(404).type("text").send("not found");
+  res.redirect(301, `/burn/${hits[0]}`);
 });
 
 // Public burn receipt — server-rendered so it carries OG tags for a rich social share.
@@ -19313,6 +20025,10 @@ app.get("/curriculum", (req, res) => {
 const nqRouter = require("./normie-quest/routes");
 if (typeof nqRouter.setHelpers === "function") nqRouter.setHelpers({ mutatingGetRefused });
 app.use(nqRouter);
+// AHOY: PumpFunPirates — a game built for the Pump Fun Pirates community (2026-10-02). Unlisted
+// at /ahoy-quest/, noindex; static game + a read-only holder API (pirates/routes.js). Mounted
+// before the React catch-all and the /api 404 so its routes win.
+app.use(require("./pirates/routes")({ getUsdPrice: (m) => orderbook.getUsdPrice(m), sessionSecret: process.env.AHOY_SESSION_SECRET || (process.env.PREMIUM_ACCESS_KEY ? "ahoy:" + process.env.PREMIUM_ACCESS_KEY : null) }));
 
 // Gated dry-run / manual-fire of the Normie Quest playtest digest (the twice-daily auto-DM).
 // Dry by default (returns the preview it WOULD send); &send=1 actually DMs the operator chat;
@@ -22074,6 +22790,9 @@ app.listen(PORT, () => {
     rose: roseEngineArmed,
     cuna: cunaArmed,
     dnc: dncArmed,
+    bullen: bullenEngineArmed,   // Codex review on #444 — bullen has its own 90s loop; without
+                                  // this entry the generic 10-min loop would ALSO tick it while
+                                  // armed, the exact two-scheduler race that minted the $355 orphan.
     poke: () => process.env.POKE_ENGINE_ON === "1" && process.env.POKE_ENGINE_OFF !== "1" && !IS_STAGING, // OFF by default (owner, 2026-09-05), never on staging
   };
   const vaultEnabledIds = () => Object.keys(whirlpoolMM.vault.listProjects()).filter((id) => {

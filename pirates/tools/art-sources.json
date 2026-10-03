@@ -1,0 +1,69 @@
+{
+  "_note": "Higgsfield generations for AHOY: PumpFunPirates (2026-10-02). build-assets.cjs downloads + compresses these into public/assets. Sprites are the background-removed versions. sprite/pose: per-pirate side-view frames (run1, run2, jump, swing), generated with the crew sprite as reference, background-removed.",
+  "base": "https://d8j0ntlcm91z4.cloudfront.net/user_3FusN3Ju3eYDQtXzIkwBTR7xnLV/",
+  "bg": {
+    "launch-beach": "hf_20261002_023400_67670d33-1c21-4b70-9748-4a6ad7125c7a.png",
+    "palm-jungle": "hf_20261002_023848_0e0dae59-6342-4a4c-8aa5-95841683237b.png",
+    "shipwreck-cove": "hf_20261002_023848_257b4f44-41ed-4037-8dbb-c14157058d24.png",
+    "smugglers-fort": "hf_20261002_023848_0a77ff6a-6683-402d-a674-5a5d24a45b26.png",
+    "skull-rock": "hf_20261002_023848_25aa3e7b-5230-41ac-913f-f3d6e5c4477e.png",
+    "merchant-docks": "hf_20261002_023848_bd0b3536-af1b-4b95-bc3c-be3077b6106c.png",
+    "current-caves": "hf_20261002_023848_48097399-5fa7-4317-bab3-cf3f06b8475c.png",
+    "lighthouse-point": "hf_20261002_023848_cb99c465-fb7e-404c-b1b4-c8fbd7ea269c.png",
+    "tidepool-vault": "hf_20261002_023848_d38e8c45-5f67-4c10-91a4-890b5d918e84.png",
+    "coral-maze": "hf_20261002_023848_2b25c586-23ec-4964-ab02-4bdd5e2a244e.png",
+    "gull-roost": "hf_20261002_023849_03580f0c-4eb7-4c0c-8301-7fb9dbf0f0f0.png",
+    "ice-caves": "hf_20261002_023848_5ea4e36b-c642-4efc-8aeb-f58c0f5b786b.png",
+    "frozen-vault": "hf_20261002_023848_974de612-972a-4812-97ce-1da206e2f542.png",
+    "sunken-ruins": "hf_20261002_023907_842e8032-47cb-4753-a4fa-c5fde07a71c0.png",
+    "kraken-lair": "hf_20261002_023907_9b8d9416-807a-4744-9d91-4eb93682074d.png",
+    "uptober-isle": "hf_20261002_023907_972102ef-7e0a-45f2-8d39-874a03f1fae9.png",
+    "moon-isle": "hf_20261002_023907_ec241683-fb30-4d48-89f4-ce0cc219f07e.png",
+    "captains-cove": "hf_20261002_023907_8eccb5e8-99ee-468f-aff2-2ba463524bd4.png"
+  },
+  "ui": {
+    "sea-chart": "hf_20261002_115941_11cd95e6-3cc6-4e9f-9fd3-8a9ea6790db7.png",
+    "title": "hf_20261002_023400_31c1d9d7-3e88-4ed1-aafe-1ba51c828c7d.png"
+  },
+  "card": {
+    "kraken": "hf_20261002_023400_84bee5c3-1d7f-4ec0-9629-a40ba702e758.png",
+    "storm": "hf_20261002_023907_bc791a00-1e31-4b9d-8631-82326d365603.png",
+    "sirens": "hf_20261002_023907_ee3ffb00-9ddc-499e-a977-2a68f636dbb1.png",
+    "bottle": "hf_20261002_023907_5657d8c2-4780-45b2-a6ad-d1975cf18adf.png",
+    "seagulls": "hf_20261002_023907_c357a14b-afea-4fd2-a3a9-e156aa8ffcec.png",
+    "rival": "hf_20261002_023907_8e50a872-9b56-4333-a735-80d7da099bcd.png",
+    "whirlpool": "hf_20261002_023907_fb0075b1-b9ef-4951-99db-a4a7bfe7dd93.png"
+  },
+  "sprite": {
+    "pirate-visor": "hf_20261002_024401_cd91ac8e-1158-496b-ae1f-04590a996c94.png",
+    "pirate-hook": "hf_20261002_024408_c0b69e27-d4a4-495f-adc2-ba2caaabc77a.png",
+    "pirate-3d": "hf_20261002_024409_dd88f8d6-fb89-4040-8ea9-020f44ca8270.png",
+    "pirate-shades": "hf_20261002_024410_bdb8d4a9-555d-4c63-9fb9-b4010ddf98c2.png",
+    "crab": "hf_20261002_024412_cfcce4a4-68a6-43f1-bbb7-cac062fb9ff5.png",
+    "gull": "hf_20261002_024413_8ce8475d-f582-465f-adbe-879f5c811754.png",
+    "skeleton": "hf_20261002_024414_7f270c5b-a938-4b0a-91eb-bb6c6e901606.png",
+    "kraken-boss": "hf_20261002_024415_45b02d28-25de-42d7-bf7f-a829324b2a46.png",
+    "items": "hf_20261002_024417_f3e62a6f-e876-4abe-baa7-9e9fa5862450.png",
+    "ship": "hf_20261002_024418_9acb5fef-8551-482f-affa-f4f226e2f84e.png",
+    "island": "hf_20261002_024420_fd71da52-94ac-44d0-875f-b3b49ad6fa8f.png",
+    "tentacle": "hf_20261002_024422_a5cd8d85-50bd-4ca3-8e48-438762d36504.png"
+  },
+  "sprite/pose": {
+    "pirate-visor-run1": "hf_20261002_114431_e5a3ac7f-7f37-4898-b1db-ff9dd1cee2ba.png",
+    "pirate-visor-run2": "hf_20261002_114437_359bd4ec-3d8e-4c1d-86d6-90cc1cbe1f75.png",
+    "pirate-visor-jump": "hf_20261002_114438_fee2468d-55f0-4aae-9ab8-37b0d2ab6a17.png",
+    "pirate-visor-swing": "hf_20261002_114440_84f5cd9b-f945-41a7-b36a-ff4e7a2ca206.png",
+    "pirate-hook-run1": "hf_20261002_114441_abef1ee8-7680-4d41-834f-c8b2d5122888.png",
+    "pirate-hook-run2": "hf_20261002_114443_d9f8e018-211e-4bf0-9413-88edec08e76c.png",
+    "pirate-hook-jump": "hf_20261002_114444_8a6e0bd5-2b07-404b-92dc-eb3e4f9cf59d.png",
+    "pirate-hook-swing": "hf_20261002_114447_85ebfd09-efa9-439a-a341-4a74cdd43001.png",
+    "pirate-3d-run1": "hf_20261002_114448_818a5d08-b856-4fb1-abc8-86089f082a0a.png",
+    "pirate-3d-run2": "hf_20261002_114450_e6ac7904-b388-46fb-83c0-e936ad4c9070.png",
+    "pirate-3d-jump": "hf_20261002_114451_5d872775-56a2-4396-b7c0-0e54744de0c5.png",
+    "pirate-3d-swing": "hf_20261002_114454_dfdee7de-5d71-4960-8211-c708037c2029.png",
+    "pirate-shades-run1": "hf_20261002_114456_22df44c5-c0d0-4a62-8f33-9ce5799b8e35.png",
+    "pirate-shades-run2": "hf_20261002_114457_c94731be-978e-434e-a6c0-20f10e7a2f2f.png",
+    "pirate-shades-jump": "hf_20261002_114459_b863e72f-a91f-4af9-b70f-7a30b4bc2bc8.png",
+    "pirate-shades-swing": "hf_20261002_114500_820cb15c-5cf6-49e9-b281-073ceeda6f15.png"
+  }
+}

@@ -308,6 +308,10 @@ function rpcOk(list) {
     "You declined to sign.",
     "Submitted, but not confirmed. Look this signature up before trying again.",
     "It could not be submitted.",
+    // The Solana Room's in-app "learn more" link (this PR) — REUSED from
+    // public/solana-wallet.html verbatim (already translated in all six dictionaries), so it is
+    // not a new key requiring translation, only a new render site for one that already exists.
+    "The full breakdown of that deposit, what changed recently, and the scam it invites →",
   ];
   // These must be the exact literals RentReclaim.jsx renders as user-visible text — extracted
   // independently here rather than just re-typing NEW_KEYS a second time, so a key renamed in the
@@ -346,7 +350,7 @@ function rpcOk(list) {
     JSON.stringify(extractedList) === JSON.stringify(expectedList),
     { extractedOnly: extractedList.filter((k) => !expectedList.includes(k)), listOnly: expectedList.filter((k) => !extracted.has(k)) });
 
-  for (const lang of ["es", "zh", "hi", "it", "pt", "vi"]) {
+  for (const lang of ["es", "zh", "hi", "it", "pt", "vi", "ko", "tr", "id"]) {
     const dict = JSON.parse(fs.readFileSync(path.join(ROOT, "public", "i18n", `${lang}.json`), "utf8"));
     const missing = NEW_KEYS.filter((k) => !Object.prototype.hasOwnProperty.call(dict, k));
     ok(`${lang}.json carries all 15 increment-2 keys`, missing.length === 0, missing);
