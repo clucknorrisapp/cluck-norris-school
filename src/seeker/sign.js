@@ -263,7 +263,7 @@ export async function checkUnsignedPending(rpc, { lastValidBlockHeight, recentBl
 // and a decline must never be reported as an error the person did not cause.
 export function isUserRejection(e) {
   const msg = String((e && e.message) || e || "").toLowerCase();
-  return msg.includes("user rejected") || msg.includes("declined") || (e && (e.code === 4001 || e.code === "4001"));
+  return msg.includes("user rejected") || msg.includes("declined") || /\b(user|wallet)\s+cancel+ed\b|cancel+ed by (the )?user/.test(msg) || (e && (e.code === 4001 || e.code === "4001"));
 }
 
 // (3). Call this immediately before building anything the wallet will sign — not at connect
@@ -376,6 +376,8 @@ export async function submitSigned(rpc, realTx, opts) {
 //   { status: "sent",        sig }
 //   { status: "failed",      sig?, error }      — nobody's tokens moved; retrying is safe
 //   { status: "unconfirmed", sig }              — MAY have landed; check the signature, do not retry blind
+//   { status: "unconfirmed", noSignature: true } — a send-capable wallet errored after it may have broadcast;
+//                                                  there is NO signature to look up. Never retry blind.
 //   { status: "declined" }                      — the person said no. Not an error.
 // `coSign(realTx, web3)` — for the one case with a SECOND signer (the Locker Room's ephemeral
 // escrow base key). It runs AFTER the wallet has signed and AFTER the byte diff (4), and before
@@ -466,6 +468,9 @@ export async function signSendConfirm({ provider, owner, build, coSign, skipPref
   // returns it — not when a node accepts it. So a submission that fails in TRANSPORT leaves us
   // holding the exact signature of a transaction that may already be in the cluster.
   let sig = null, localSig = null;
+  // True once a SEND-CAPABLE wallet call (signAndSendTransaction / MWA signAndSendTransactions) has
+  // been started: from then on the wallet may have broadcast, whatever it later throws or returns.
+  let walletMayHaveBroadcast = false;
   try {
     if (typeof provider.signTransaction === "function") {
       // Sign-first, then WE submit. This is the order Phantom's "may be malicious" warning
@@ -519,6 +524,7 @@ export async function signSendConfirm({ provider, owner, build, coSign, skipPref
       // missing a required signature. Say so rather than producing a confusing chain error.
       return { status: "failed", error: "This wallet can't sign this kind of transaction from here — try Phantom, Solflare, Backpack or Jupiter." };
     } else if (typeof provider.signAndSendTransaction === "function") {
+      walletMayHaveBroadcast = true;
       const res = await provider.signAndSendTransaction(tx);
       sig = (res && res.signature) || (typeof res === "string" ? res : null);
       // round 30 P2 — same persist-before-confirmation rule, for the one path that returns an
@@ -535,6 +541,15 @@ export async function signSendConfirm({ provider, owner, build, coSign, skipPref
     }
   } catch (e) {
     if (isUserRejection(e)) return { status: "declined" };
+    // ⚠️ Codex round 3 (re-review), P2 — an error from a SEND-CAPABLE wallet call is NOT a failure.
+    // A wallet that signs-and-sends in one operation can broadcast and then throw before it hands
+    // back the signature (a dropped bridge, a crashed wallet process, a malformed reply). We hold
+    // no signature to look up and the transaction may land, so the honest, retry-proof answer is
+    // `unconfirmed` WITHOUT a signature (`noSignature: true`) — never `failed`, which invites a
+    // second send. The one exception is an explicit user decline (above), which is provably before
+    // anything was signed. Sign-only wallets (signTransaction, then WE submit) are unaffected: an
+    // error before our submit is still a safe `failed`.
+    if (walletMayHaveBroadcast) return { status: "unconfirmed", noSignature: true, error: (e && e.message) || String(e) };
     // submitSigned() handles protection (5) and does not throw for a send failure, so anything
     // arriving here threw BEFORE the transaction reached a node: the wallet prompt itself, the
     // byte diff, coSign, or a signAndSendTransaction wallet (which never hands us a transaction
@@ -543,7 +558,12 @@ export async function signSendConfirm({ provider, owner, build, coSign, skipPref
   }
   // ⚠️ Never confirm(undefined): it burns the whole 30s poll and reports a transaction that WAS
   // submitted as if it never got a signature (airdrop-engine.js's own note, same trap).
-  if (!sig) return { status: "failed", error: "The wallet returned no signature." };
+  if (!sig) {
+    // Same rule as the catch above: a send-capable wallet that answered without a signature may
+    // still have broadcast.
+    if (walletMayHaveBroadcast) return { status: "unconfirmed", noSignature: true, error: "The wallet returned no signature." };
+    return { status: "failed", error: "The wallet returned no signature." };
+  }
 
   try {
     const landed = await confirmSignature(rpc, sig);

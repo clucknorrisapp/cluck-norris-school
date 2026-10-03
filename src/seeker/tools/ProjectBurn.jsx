@@ -115,7 +115,8 @@ function OutcomeCard({ o, onDismiss, onRetry, onCheckStatus }) {
         <>
           <p>{t("This was submitted but had no on-chain status after 30 seconds. It may still have landed — check before doing anything else. Resending it if it already landed would burn the tokens a second time.")}</p>
           <div className="seeker-burn-outcome-actions">
-            <button type="button" className="seeker-btn seeker-btn-quiet" disabled={o.checking} onClick={onCheckStatus}>{o.checking ? t("Checking…") : t("Check status")}</button>
+            {/* No signature (a send-capable wallet errored after it may have broadcast) = nothing to look up. */}
+            {o.sig ? <button type="button" className="seeker-btn seeker-btn-quiet" disabled={o.checking} onClick={onCheckStatus}>{o.checking ? t("Checking…") : t("Check status")}</button> : null}
           </div>
         </>
       ) : o.status === "failed" ? (
@@ -133,7 +134,7 @@ function OutcomeCard({ o, onDismiss, onRetry, onCheckStatus }) {
           </div>
         </>
       )}
-      {o.status !== "unconfirmed" ? (
+      {o.status !== "unconfirmed" || !o.sig ? (
         <div className="seeker-burn-outcome-actions">
           <button type="button" className="seeker-btn seeker-btn-quiet" onClick={onDismiss}>{t("OK")}</button>
         </div>

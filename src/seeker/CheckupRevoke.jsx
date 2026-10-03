@@ -155,9 +155,12 @@ export default function CheckupRevoke({ wallet, approvals, scannedAddress, onDon
       // Already saved at signing; re-save (keeping the original start time) as a belt for the
       // signAndSendTransaction path, where sign.js cannot stop a broadcast that already happened.
       const prev = loadRevokePending(wallet.address);
-      const rec = { sig: res.sig, accounts: base.accounts, recentBlockhash: base.recentBlockhash, lastValidBlockHeight: base.lastValidBlockHeight, wallet: wallet.address, at: prev && prev.sig === res.sig ? prev.at : Date.now() };
+      // Codex round 3 (re-review), P2: `res.noSignature` = a send-capable wallet errored after it may
+      // have broadcast. The sig:null record written before the prompt STAYS and Revoke stays off.
+      const sig = res.sig || null;
+      const rec = { sig, accounts: base.accounts, recentBlockhash: base.recentBlockhash, lastValidBlockHeight: base.lastValidBlockHeight, wallet: wallet.address, at: prev && (prev.sig || null) === sig ? prev.at : Date.now() };
       saveRevokePending(rec);
-      setOutcome({ ...base, status: "unconfirmed", sig: res.sig, wallet: rec.wallet, at: rec.at });
+      setOutcome({ ...base, status: "unconfirmed", sig, wallet: rec.wallet, at: rec.at });
     } else if (res.status === "declined") {
       setOutcome({ ...base, status: "declined" });
     } else {
@@ -187,6 +190,13 @@ export default function CheckupRevoke({ wallet, approvals, scannedAddress, onDon
       if (r.status === "sent") {
         clearRevokePending(outcome.wallet || walletAddr);
         setOutcome((o) => ({ ...o, status: "sent", checking: false, verifying: true }));
+      } else if (r.status === "expired" && !outcome.sig) {
+        // ⚠️ Codex round 3 (re-review #2), P2: a SIGNATURE-LESS attempt whose blockhash has expired can
+        // no longer land, but expiry cannot say whether it landed EARLIER — there is no signature to
+        // look up. So this is not "failed / did not land". The record is released and the delegate
+        // re-read below is the only claim made: all gone → cleared; some left → revocable again.
+        clearRevokePending(outcome.wallet || walletAddr);
+        setOutcome((o) => ({ ...o, status: "released", dead: true, checking: false, verifying: true }));
       } else if (r.status === "failed" || r.status === "expired") {
         clearRevokePending(outcome.wallet || walletAddr);
         setOutcome((o) => ({ ...o, status: "failed", dead: true, error: r.status === "failed" ? r.error : "", checking: false, verifying: true }));
@@ -270,6 +280,12 @@ export default function CheckupRevoke({ wallet, approvals, scannedAddress, onDon
                 </div>
               ) : null}
               {solscanTx(outcome.sig) ? <p><a className="seeker-forensic-link" href={solscanTx(outcome.sig)} target="_blank" rel="noopener noreferrer">{t("View transaction on Solscan")}</a></p> : null}
+            </>
+          ) : outcome.status === "released" ? (
+            <>
+              {/* No title and no "did not land": expiry of a signature-less attempt proves nothing
+                  about whether it landed earlier. Only the chain re-read speaks. */}
+              {verifyLines()}
             </>
           ) : outcome.status === "failed" ? (
             <>

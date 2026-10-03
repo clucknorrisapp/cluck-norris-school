@@ -235,6 +235,8 @@ function OutcomeCard({ o, onDismiss, onRetry }) {
           </p>
           {solscanTx(o.sig) ? <p><a className="seeker-listing-link" href={solscanTx(o.sig)} target="_blank" rel="noopener noreferrer">{t("View transaction on Solscan")}</a></p> : null}
         </>
+      ) : o.status === "unconfirmed" ? (
+        <p>{t("This was submitted but had no on-chain status after 30 seconds. It may still land — check before signing again.")}</p>
       ) : o.status === "expired" ? (
         <p>{t("This did not land before its expiry block height passed — it's safe to try again.")} {solscanTx(o.sig) ? <a className="seeker-listing-link" href={solscanTx(o.sig)} target="_blank" rel="noopener noreferrer">{t("View transaction on Solscan")}</a> : null}</p>
       ) : (
@@ -751,6 +753,11 @@ export default function SwapPane({ wallet }) {
     if (res.status === "sent") {
       setOutcome({ ...base, status: "sent", sig: res.sig });
       setBalTick((n) => n + 1); // re-read balances now that the swap landed
+      setSwapping(false);
+    } else if (res.status === "unconfirmed" && res.noSignature) {
+      // A send-capable wallet errored after it may have broadcast and gave us NO signature, so
+      // there is nothing to persist or poll. Say so plainly — never "failed", never a retry button.
+      setOutcome({ ...base, status: "unconfirmed" });
       setSwapping(false);
     } else if (res.status === "unconfirmed") {
       // onSigned already persisted the pending record above — nothing more to do here.

@@ -890,6 +890,7 @@ html, body {
 .seeker-revoke-outcome-title { font-family: var(--disp); font-weight: 400; font-size: 15px; color: var(--text); }
 .seeker-revoke-outcome-sent { border-color: rgba(110, 231, 183, .45); }
 .seeker-revoke-outcome-failed { border-color: rgba(239, 68, 68, .5); }
+.seeker-revoke-outcome-released { border-color: rgba(252, 211, 77, .5); }
 .seeker-revoke-outcome-unconfirmed { border-color: rgba(252, 211, 77, .5); }
 .seeker-revoke-warn { color: var(--gold); }
 
