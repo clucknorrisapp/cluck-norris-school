@@ -255,6 +255,20 @@ jobs:
       # build refuses "CluckWallet"). No live RPC, no real wallet — a fake window and rpc only.
       - name: Seeker app — Revoke approvals + Disconnect (byte-identical Revoke, chain re-read, seam-only signing, edition isolation)
         run: node scripts/seeker-revoke-test.cjs
+      # The attempt guard on Swap + Project Burn (Codex on #479, P1): the attempt is on record
+      # BEFORE the wallet is asked (sig:null, the transaction's blockhash and lifetime), a failed
+      # save means the wallet is never asked, a signature-less `unconfirmed` keeps the form OFF
+      # (no OK, no Review, no Burn) across remounts, and only the chain releases it — a blockhash
+      # proven dead frees the record with a balance re-read as the only claim, never "did not
+      # land". Node-only here (burn-pending.js + static pins); the rendered half runs in smoke-test.
+      - name: Seeker app — attempt guard on Swap + Project Burn (record before the prompt, no unlock on a missing signature)
+        run: node scripts/seeker-attempt-guard-test.cjs
+      # AHOY: PumpFunPirates holder gate, server side (pirates/routes.js) — tier decision, the
+      # wallet-bound session token (and its absence when no session secret is configured), stale
+      # price handling. Pure node against a fake JSON-RPC chain: no network, no browser. The client
+      # half (pirates/public/js/gate.js) runs in the smoke-test job's ahoy-smoke step.
+      - name: AHOY — holder gate (tiers, signed sessions, no-secret mode, stale price)
+        run: node pirates/test/ahoy-gate-test.cjs
       # The Airdropper's PLANNING decisions (public/airdrop-plan.js) — THIS MOVES USER FUNDS IN
       # BULK, and everything here happens before the wallet is asked to sign, which is the last
       # point at which a mistake is still free. Two sections exist because the desktop parser gets
@@ -752,7 +766,7 @@ jobs:
           # here too.
           CHANGED=$(git diff --name-only "$BASE"...HEAD)
           echo "$CHANGED"
-          if echo "$CHANGED" | grep -qE '^(src/|public/|hub-verify-src/|index\.html$|package(-lock)?\.json$|vite\.(hubverify\.)?config|seeker\.html$|store-edition/|scripts/smoke-test\.js$|scripts/(cuna-share|wallet-standard|hub-a11y|hub-verify-page|hub-og|hub-status|hub-wallet|hub-bundle|hub-compare|hub-print)-test\.cjs$|scripts/(seeker-app-boot|store-shell-boot)-test\.cjs$|normie-quest/|\.github/workflows/)'; then
+          if echo "$CHANGED" | grep -qE '^(src/|public/|hub-verify-src/|index\.html$|package(-lock)?\.json$|vite\.(hubverify\.)?config|seeker\.html$|store-edition/|scripts/smoke-test\.js$|scripts/(cuna-share|wallet-standard|hub-a11y|hub-verify-page|hub-og|hub-status|hub-wallet|hub-bundle|hub-compare|hub-print)-test\.cjs$|scripts/(seeker-app-boot|store-shell-boot)-test\.cjs$|pirates/|normie-quest/|\.github/workflows/)'; then
             echo "run=true" >> "$GITHUB_OUTPUT"; echo "gate: render-relevant change — full run"
           elif echo "$CHANGED" | grep -qE '^server\.js$' && git diff "$BASE"...HEAD -- server.js | grep -qiE 'sendFile|res\.render|index\.html|dist/|catch-all'; then
             echo "run=true" >> "$GITHUB_OUTPUT"; echo "gate: server.js diff touches page serving — full run"
@@ -977,6 +991,21 @@ jobs:
         env:
           REVOKE_RENDER_REQUIRED: "1"
         run: node scripts/seeker-revoke-test.cjs
+      # Swap + Project Burn attempt guard, rendered (Codex on #479, P1): the real panes bundled
+      # with only the wallet call scripted — a signature-less unconfirmed locks the form, a
+      # remount restores the lock, a dead blockhash releases it with a balance re-read.
+      - name: Seeker app — attempt guard, rendered (Swap + Project Burn stay locked on a missing signature)
+        if: steps.gate.outputs.run == 'true'
+        env:
+          ATTEMPT_RENDER_REQUIRED: "1"
+        run: node scripts/seeker-attempt-guard-test.cjs
+      # AHOY: PumpFunPirates, in a real browser: boots, plays every island, and — the part that
+      # guards money-adjacent access — the holder gate's client rules (a cached grant is not a
+      # grant, expiry at decision time, late answers after disconnect discarded, and the
+      # no-session-secret page-only grant). Needs Chromium, hence here and not in node-check.
+      - name: AHOY — headless playthrough + holder gate (client)
+        if: steps.gate.outputs.run == 'true'
+        run: node pirates/test/ahoy-smoke.cjs
       # The Seeker app, actually booted. seeker-build-test.cjs (node-check) proves the TARBALL is
       # well formed but never opens it, so an app that builds clean and renders a blank screen
       # would ship green — the same class of break the Normie Quest visual gate exists for. This

@@ -19,6 +19,11 @@
 //      row's, and its surplus shrinks by what really left.
 //   3. No proof means no hiding: an unknown tx slot, or no node at that slot after a few tries,
 //      leaves the row exactly as the scan returned it.
+//   4. (Codex round 3) The proof must also be NO OLDER THAN THE SCAN it overrides. The scan carries
+//      its own read slot (/api/burn-scan `slot`), and the proof read must satisfy
+//      context.slot >= max(txSlot, scanSlot). Close at 100, recreate at 250, scan at 300: a lagging
+//      proof node at 200 says "absent", which is true of 200 and says nothing about 300 — it must be
+//      refused, not believed. An unknown scanSlot is no proof at all.
 // The two-minute window only bounds how long a record lives.
 export const RECENT_MS = 120000;
 const TRIES = 3;
@@ -45,7 +50,8 @@ export async function reconcileRecent(list, recent, rpc, opts) {
   const sus = [];
   rows.forEach((a) => { const s = suspect(a, recent); if (s) sus.push({ a, ...s }); });
   if (!sus.length || typeof rpc !== "function") return rows;
-  const minSlot = Math.max(...sus.map((x) => x.txSlot));
+  if (!Number.isSafeInteger(o.scanSlot) || o.scanSlot < 0) return rows;   // unknown scan slot → no proof → hide nothing
+  const minSlot = Math.max(o.scanSlot, ...sus.map((x) => x.txSlot));
   let infos = null;
   for (let i = 0; i < TRIES && !infos; i++) {
     try {

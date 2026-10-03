@@ -109,7 +109,15 @@ function toInstruction(web3, d) {
 // build refuses — a Revoke signed by a different account than the one that owns the token
 // accounts fails on-chain anyway, but refusing here means the person is told why instead of
 // reading a raw program error.
-export async function runRevoke({ provider, owner, batch }) {
+//
+// ⚠️ Codex round 3, P2 (re-review) — the pending record must exist BEFORE THE WALLET IS ASKED, not
+// merely before the broadcast: a wallet that signs-and-sends in one operation (signAndSendTransaction,
+// MWA) has broadcast before any post-sign callback runs. `beforeSign({ accounts, recentBlockhash,
+// lastValidBlockHeight })` is run by sign.js after the transaction is built and before the prompt;
+// a throw or `false` means the wallet is never asked and the result is a `failed` that says so.
+// `onSigned({ sig, ... })` then fills the signature in (best effort — the record already exists and
+// blocks Revoke with `sig: null`). Absent callbacks change nothing.
+export async function runRevoke({ provider, owner, batch, beforeSign, onSigned }) {
   const accounts = (batch || []).map((r) => revocable(r)).filter(Boolean);
   if (!accounts.length) return { status: "failed", error: "Nothing to revoke.", accounts: [] };
   // The blockhash the transaction was built against, kept so an UNCONFIRMED send can later be
@@ -121,6 +129,8 @@ export async function runRevoke({ provider, owner, batch }) {
   const res = await signSendConfirm({
     provider,
     owner,
+    ...(typeof beforeSign === "function" ? { beforeSign: () => beforeSign({ accounts, recentBlockhash, lastValidBlockHeight }) } : {}),
+    ...(typeof onSigned === "function" ? { onSigned: (sig) => { onSigned({ sig, accounts, recentBlockhash, lastValidBlockHeight }); } } : {}),
     build: (web3, blockhash, live, meta) => {
       recentBlockhash = blockhash;
       lastValidBlockHeight = meta && typeof meta.lastValidBlockHeight === "number" ? meta.lastValidBlockHeight : null;
@@ -146,7 +156,7 @@ export async function runRevoke({ provider, owner, batch }) {
 // mount. It is cleared only when the send is RESOLVED (landed, failed on chain, or expired by
 // sign.js's strict rule) or dismissed through the 10-minute "stop watching" escape hatch.
 //
-// Record: { sig, accounts:[{tokenAccount, program, mint, delegate}], recentBlockhash,
+// Record: { sig (null until the wallet has signed — the record is written BEFORE the prompt), accounts:[{tokenAccount, program, mint, delegate}], recentBlockhash,
 //           lastValidBlockHeight, wallet, at }. Every storage touch is try/catch: storage that is
 // full or unavailable must never break the pane (it simply falls back to in-memory only).
 export const REVOKE_PENDING_KEY = "clkn_seeker_revoke_pending";
@@ -178,9 +188,9 @@ function writePendingMap(m) {
 export function loadRevokePending(wallet) {
   if (!wallet) return null;
   const rec = readPendingMap()[wallet];
-  if (!rec || typeof rec !== "object" || !rec.sig || rec.wallet !== wallet || !Array.isArray(rec.accounts) || !rec.accounts.length) return null;
+  if (!rec || typeof rec !== "object" || rec.wallet !== wallet || !Array.isArray(rec.accounts) || !rec.accounts.length) return null;
   return {
-    sig: String(rec.sig),
+    sig: rec.sig ? String(rec.sig) : null,
     accounts: rec.accounts.map((a) => revocable(a)).filter(Boolean),
     recentBlockhash: rec.recentBlockhash || null,
     lastValidBlockHeight: typeof rec.lastValidBlockHeight === "number" ? rec.lastValidBlockHeight : null,
@@ -189,10 +199,10 @@ export function loadRevokePending(wallet) {
   };
 }
 export function saveRevokePending(rec) {
-  if (!rec || !rec.wallet || !rec.sig) return false;
+  if (!rec || !rec.wallet) return false;
   const m = readPendingMap();
   m[rec.wallet] = {
-    sig: rec.sig,
+    sig: rec.sig ? String(rec.sig) : null,
     accounts: (rec.accounts || []).map((a) => ({ tokenAccount: a.tokenAccount, program: a.program, mint: a.mint || null, delegate: a.delegate || null })),
     recentBlockhash: rec.recentBlockhash || null,
     lastValidBlockHeight: typeof rec.lastValidBlockHeight === "number" ? rec.lastValidBlockHeight : null,
