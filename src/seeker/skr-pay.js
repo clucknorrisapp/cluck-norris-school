@@ -123,29 +123,50 @@ export function buildSkrPayTx(web3, spl, { payer, quote, source, blockhash }) {
 // ── signing ────────────────────────────────────────────────────────────────────
 // The one call the pass sheet makes to put the payment on chain: signSendConfirm (the shared seam —
 // the connected wallet signs, nobody else, and it keeps landed / failed / unconfirmed / declined
-// apart), with the recovery record persisted from `onSigned` — i.e. AFTER the wallet signed and
-// BEFORE the transaction is submitted — and `requireOnSigned`, so a record that could not be
-// stored stops the broadcast: nothing is sent that cannot be recovered afterwards.
+// apart).
+//
+// ⚠️ THE RECOVERY RECORD IS SAVED BEFORE THE WALLET IS ASKED TO SIGN (review of #421): a wallet that
+// can only signAndSendTransaction BROADCASTS INSIDE that call, so "persist from onSigned" is too late
+// for it — the signature is unknown until after the money has moved. So the record goes in from
+// build() — which signSendConfirm runs before the wallet is ever touched — as an ATTEMPT (paySig
+// null, with the blockhash, the receiver's account and the amount so the chain can be searched for
+// it). If that save fails, build throws and the wallet is never asked. onSigned then fills in the
+// signature (and, with requireOnSigned, still stops a signTransaction wallet's broadcast if THAT
+// write fails).
 //   { status:"sent", sig }          landed and succeeded → the caller redeems the stored record
-//   { status:"unconfirmed", sig }   MAY have landed; the record stays → "Check payment"
+//   { status:"unconfirmed", sig? }  MAY have landed; the record stays → "Check payment". `sig` is null
+//                                   for a send-only wallet that threw without telling us anything.
 //   { status:"failed", error }      the node refused it, or it landed and FAILED: nobody was paid;
 //                                   the record is cleared and a retry is safe
 //   { status:"declined" }           the person said no
 export async function paySkr({ provider, owner, quote, source, payIntent, storage }) {
-  let blockhash = null, lastValid = null;
+  let attempt = null;
   const res = await signSendConfirm({
     provider, owner,
     build: (web3, bh, live, life) => {
-      blockhash = bh; lastValid = life && life.lastValidBlockHeight;
-      return buildSkrPayTx(web3, splTokenShim(), { payer: live, quote, source, blockhash: bh });
+      const tx = buildSkrPayTx(web3, splTokenShim(), { payer: live, quote, source, blockhash: bh });
+      const rec = { wallet: owner, paySig: null, attempt: true, skrQuote: quote.quote, payIntent, at: Date.now(),
+        recentBlockhash: bh, lastValidBlockHeight: life && life.lastValidBlockHeight, amountUi: quote.amountUi,
+        amountRaw: String(quote.amountRaw), receiverAta: quote.receiverAta };
+      saveRecord(storage, rec);   // throws → build throws → signSendConfirm returns "failed"; the wallet is never asked
+      attempt = rec;              // only once it is really stored (a failed save must not look like an in-flight attempt)
+      return tx;
     },
     onSigned: (sig) => {
       if (!sig) throw new Error("no signature to record");
-      saveRecord(storage, { wallet: owner, paySig: sig, skrQuote: quote.quote, payIntent, at: Date.now(), recentBlockhash: blockhash, lastValidBlockHeight: lastValid, amountUi: quote.amountUi });
+      saveRecord(storage, { ...attempt, paySig: sig, attempt: false });
     },
     requireOnSigned: true,
   });
-  if (res.status === "failed" || res.status === "declined") clearRecord(storage, owner);
+  if (res.status === "declined") clearRecord(storage, owner);
+  else if (res.status === "failed") {
+    // No signature + a wallet that only signs-and-sends: it may have broadcast before it threw, and
+    // the seam cannot know. Keep the attempt; "Check payment" searches the chain and only a dead
+    // blockhash releases it. Everything else that failed moved nothing.
+    const sendOnly = typeof provider.signTransaction !== "function";
+    if (sendOnly && !res.sig && attempt) return { status: "unconfirmed", sig: null, error: res.error };
+    clearRecord(storage, owner);
+  }
   return res;
 }
 
@@ -163,7 +184,8 @@ export function loadRecord(storage, wallet, now = Date.now()) {
     const raw = storage.getItem(PAY_KEY + wallet);
     if (!raw) return null;
     const r = JSON.parse(raw);
-    if (!r || r.wallet !== wallet || !r.paySig || !(now - r.at < RECORD_MAX_AGE_MS)) return null;
+    // paySig is null for an ATTEMPT (saved before the wallet was asked; the signature not known yet).
+    if (!r || r.wallet !== wallet || !(r.paySig || r.attempt === true) || !(now - r.at < RECORD_MAX_AGE_MS)) return null;
     return r;
   } catch (_) { return null; }
 }
@@ -206,6 +228,8 @@ export function dismissStuck(storage, wallet, paySig) {
 export async function redeemRecord({ fetchFn, storage, wallet, refreshIntent }) {
   let rec = loadRecord(storage, wallet);
   if (!rec) return { kind: "none" };
+  // An attempt has no signature to redeem yet — "Check payment" finds it on the chain first.
+  if (!rec.paySig) return { kind: "retry", error: null };
   const post = async () => {
     let r, j = null;
     try {
@@ -249,14 +273,53 @@ export async function redeemRecord({ fetchFn, storage, wallet, refreshIntent }) 
   return { kind: "retry", error: (j && j.error) || null, status };
 }
 
+// Did the wallet's attempt reach the chain? Looks through the payer's most recent signatures for a
+// parsed SPL TransferChecked of SKR from this wallet to the quote's receiving account for exactly the
+// quoted amount, after the attempt began. → the signature, or null. Throws on an RPC failure (the
+// caller then says "cannot tell", never "it did not happen").
+async function findAttempt(rpc, rec) {
+  const sigs = await rpc("getSignaturesForAddress", [rec.wallet, { limit: 25 }]);
+  if (!Array.isArray(sigs)) throw new Error("no signature list");
+  for (const s of sigs) {
+    if (!s || s.err || !s.signature) continue;
+    if (s.blockTime && s.blockTime * 1000 < rec.at - 120e3) continue;
+    const tx = await rpc("getTransaction", [s.signature, { encoding: "jsonParsed", maxSupportedTransactionVersion: 0, commitment: "confirmed" }]);
+    if (!tx || !tx.meta || tx.meta.err) continue;
+    const ixs = ((tx.transaction && tx.transaction.message && tx.transaction.message.instructions) || []).slice();
+    for (const g of tx.meta.innerInstructions || []) ixs.push(...(g.instructions || []));
+    for (const ix of ixs) {
+      const p = ix && ix.parsed, i = p && p.info;
+      if (p && p.type === "transferChecked" && i && i.mint === SKR_MINT && i.destination === rec.receiverAta
+          && i.authority === rec.wallet && i.tokenAmount && String(i.tokenAmount.amount) === String(rec.amountRaw)) return s.signature;
+    }
+  }
+  return null;
+}
+
 // "Check payment": redeem; if the chain has not shown it, ask whether the transaction can still
 // land. Only a blockhash the node reports dead (checkPendingSwap → "expired"), or a transaction
 // that landed and FAILED, releases the record as "never paid" — everything else keeps it.
+// An ATTEMPT (saved before the wallet was asked; no signature yet) is resolved the same way, except
+// that the chain is SEARCHED for the signature: only after the blockhash is proven dead — so nothing
+// can land any more — does an empty search release it.
 //   → redeemRecord's kinds, plus { kind:"never-landed" }
 export async function checkPayment({ fetchFn, storage, wallet, rpc, refreshIntent }) {
+  let rec = loadRecord(storage, wallet);
+  if (rec && !rec.paySig) {
+    let dead = false;
+    try {
+      const [h, valid] = await Promise.all([rpc("getBlockHeight", [{ commitment: "confirmed" }]), rec.recentBlockhash ? rpc("isBlockhashValid", [rec.recentBlockhash, { commitment: "confirmed" }]) : null]);
+      dead = typeof h === "number" && rec.lastValidBlockHeight != null && h > rec.lastValidBlockHeight && !!valid && valid.value === false;
+    } catch (_) { return { kind: "retry", error: null }; }
+    let found;
+    try { found = await findAttempt(rpc, rec); } catch (_) { return { kind: "retry", error: null }; }
+    if (found) { rec = { ...rec, paySig: found, attempt: false }; try { saveRecord(storage, rec); } catch (_) { /* redeem below still works from memory? no — keep the attempt */ return { kind: "retry", error: null }; } }
+    else if (dead) { clearRecord(storage, wallet); return { kind: "never-landed", error: null }; }
+    else return { kind: "retry", error: null };
+  }
   const first = await redeemRecord({ fetchFn, storage, wallet, refreshIntent });
   if (first.kind !== "retry") return first;
-  const rec = loadRecord(storage, wallet);
+  rec = loadRecord(storage, wallet);
   if (!rec) return first;
   let st;
   try { st = await checkPendingSwap(rpc, { signature: rec.paySig, lastValidBlockHeight: rec.lastValidBlockHeight, recentBlockhash: rec.recentBlockhash }); }

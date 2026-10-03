@@ -191,7 +191,12 @@ const T22 = "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb";
     const fetchFn = async (u, o) => { events.push("session"); return fetchImpl(u, o); };
     let res, out = null;
     try {
-      res = await mod.paySkr({ provider: prov || provider(), owner: PAYER, quote, source, payIntent: INTENT, storage });
+      // Log the moment the wallet is actually ASKED to sign / sign-and-send.
+      const base = prov || provider();
+      const wrapped = { ...base };
+      if (typeof base.signTransaction === "function") wrapped.signTransaction = async (tx) => { events.push("sign"); return base.signTransaction(tx); };
+      if (typeof base.signAndSendTransaction === "function") wrapped.signAndSendTransaction = async (tx) => { events.push("wallet"); return base.signAndSendTransaction(tx); };
+      res = await mod.paySkr({ provider: wrapped, owner: PAYER, quote, source, payIntent: INTENT, storage });
       if (res.status === "sent") out = await mod.redeemRecord({ fetchFn, storage, wallet: PAYER, refreshIntent });
     } finally { global.window.CluckUtil.rpc = origRpc; }
     return { res, out, events };
@@ -202,20 +207,81 @@ const T22 = "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb";
     const bodies = [];
     const { res, out, events } = await payAndRedeem({ storage: st, fetchImpl: async (u, o) => { bodies.push(JSON.parse(o.body)); return resp(200, grantBody); } });
     ok("landed → status 'sent'", res.status === "sent" && !!res.sig, res);
-    ok("ORDER: save → send → session (record before submit, submit before redemption)", events.join(",") === "save,send,session", events);
+    ok("ORDER: save (the ATTEMPT) → wallet asked to sign → save (the signature) → send → session", events.join(",") === "save,sign,save,send,session", events);
     const sent = web3.Transaction.from(Buffer.from(state.sent[0], "base64"));
     ok("the submitted transaction is the built one: 2 instructions, signed by the payer alone", sent.instructions.length === 2 && sent.verifySignatures() && sent.signatures.length === 1 && sent.feePayer.toBase58() === PAYER);
     ok("the session request carries wallet, payIntent, paySig, payKind:'skr' and the quote token", bodies[0].wallet === PAYER && bodies[0].payIntent === INTENT && bodies[0].paySig === res.sig && bodies[0].payKind === "skr" && bodies[0].skrQuote === "body.mac", bodies[0]);
     ok("a grant clears the record and returns the pass", out.kind === "granted" && out.pass === "t:abc.def" && mod.loadRecord(st, PAYER) === null, out);
   }
   {
-    // A record that cannot be stored must STOP the broadcast.
+    // A record that cannot be stored means the WALLET IS NEVER ASKED (review of #421: a signAndSend
+    // wallet broadcasts inside the call, so the save has to come before it, not after).
     reset(); const st = memStorage({ throwOnSet: true });
     const { res, events } = await payAndRedeem({ storage: st, fetchImpl: async () => resp(200, grantBody) });
-    ok("storage throws → nothing is sent: status 'failed', sendTransaction NEVER called", res.status === "failed" && !events.includes("send") && state.sent.length === 0, { res, events });
+    ok("storage throws → the wallet is NEVER asked to sign, nothing is sent: status 'failed'", res.status === "failed" && !events.includes("sign") && !events.includes("send") && state.sent.length === 0, { res, events });
     reset(); const st2 = memStorage({ silentDrop: true });
     const r2 = await payAndRedeem({ storage: st2, fetchImpl: async () => resp(200, grantBody) });
-    ok("storage that silently drops the write (read-back mismatch) → nothing is sent either", r2.res.status === "failed" && state.sent.length === 0, r2.res);
+    ok("storage that silently drops the write (read-back mismatch) → the wallet is never asked either", r2.res.status === "failed" && !r2.events.includes("sign") && state.sent.length === 0, r2);
+  }
+  console.log("\n4b. a wallet that can ONLY signAndSendTransaction (it broadcasts inside the call)\n");
+  {
+    // Fake send-only wallet: signs and "broadcasts" in one call and hands back the signature.
+    const bs58 = require("bs58");
+    const sendOnly = (over = {}) => ({ publicKey: { toString: () => PAYER }, signAndSendTransaction: async (tx) => { tx.partialSign(payerKp); return { signature: bs58.encode(tx.signature) }; }, ...over });
+    reset(); let st = memStorage();
+    let r = await payAndRedeem({ storage: st, prov: sendOnly(), fetchImpl: async () => resp(200, grantBody) });
+    ok("send-only wallet: the ATTEMPT is saved BEFORE the wallet is asked (save → wallet → save → session)", r.events.join(",") === "save,wallet,save,session", r.events);
+    ok("…and the signature is filled in once the wallet returns it; a grant clears it", r.res.status === "sent" && r.out.kind === "granted" && mod.loadRecord(st, PAYER) === null, r);
+    reset(); st = memStorage({ throwOnSet: true });
+    r = await payAndRedeem({ storage: st, prov: sendOnly(), fetchImpl: async () => resp(200, grantBody) });
+    ok("send-only wallet + a save failure → the wallet is NEVER asked (it would have broadcast with nothing recoverable)", r.res.status === "failed" && !r.events.includes("wallet"), r);
+    reset(); st = memStorage();
+    r = await payAndRedeem({ storage: st, prov: sendOnly({ signAndSendTransaction: async (tx) => { tx.partialSign(payerKp); throw new Error("the wallet connection dropped after sending"); } }), fetchImpl: async () => resp(200, grantBody) });
+    const kept = mod.loadRecord(st, PAYER);
+    ok("send-only wallet throws AFTER possibly broadcasting → 'unconfirmed' with NO signature, the attempt record KEPT (not cleared as 'failed')", r.res.status === "unconfirmed" && r.res.sig === null && kept && kept.attempt === true && kept.paySig === null, { res: r.res, kept });
+    // …and a send-only wallet that cleanly declines.
+    reset(); st = memStorage();
+    r = await payAndRedeem({ storage: st, prov: sendOnly({ signAndSendTransaction: async () => { const e = new Error("User rejected the request."); e.code = 4001; throw e; } }), fetchImpl: async () => resp(200, grantBody) });
+    ok("send-only wallet declines → 'declined', the attempt is cleared", r.res.status === "declined" && mod.loadRecord(st, PAYER) === null, r);
+  }
+  console.log("\n4c. resolving an ATTEMPT (no signature yet) with Check payment\n");
+  {
+    const mkAttempt = (over = {}) => { const st = memStorage(); mod.saveRecord(st, { wallet: PAYER, paySig: null, attempt: true, skrQuote: "q.t", payIntent: INTENT, at: Date.now(), recentBlockhash: randHash(), lastValidBlockHeight: 1000, amountUi: "50", amountRaw: "50000000", receiverAta: quote.receiverAta, ...over }); return st; };
+    const FOUND = "F".repeat(88);
+    const ixOf = (o = {}) => ({ parsed: { type: "transferChecked", info: { mint: SKR_MINT, destination: quote.receiverAta, authority: PAYER, tokenAmount: { amount: "50000000" }, ...o } } });
+    const chainRpc = (opts) => async (method, params) => {
+      if (method === "getBlockHeight") return opts.height;
+      if (method === "isBlockhashValid") return { value: opts.valid };
+      if (method === "getSignaturesForAddress") { if (opts.sigsThrow) throw new Error("rpc"); return opts.sigs || []; }
+      if (method === "getTransaction") return opts.txs[params[0]] || null;
+      throw new Error("unexpected " + method);
+    };
+    const tx = (ix) => ({ meta: { err: null, innerInstructions: [] }, transaction: { message: { instructions: [ix] } } });
+    const nf = async () => resp(200, grantBody);
+    let st = mkAttempt();
+    ok("an attempt cannot be redeemed (no signature) → retry, nothing posted", (await mod.redeemRecord({ fetchFn: async () => { throw new Error("must not post"); }, storage: st, wallet: PAYER })).kind === "retry");
+    // found on chain → signature recorded → redeemed
+    let posted = null;
+    let out = await mod.checkPayment({ fetchFn: async (u, o) => { posted = JSON.parse(o.body); return resp(200, grantBody); }, storage: st, wallet: PAYER,
+      rpc: chainRpc({ height: 100, valid: true, sigs: [{ signature: FOUND, err: null, blockTime: Math.floor(Date.now() / 1000) }], txs: { [FOUND]: tx(ixOf()) } }) });
+    ok("the chain search finds the wallet's payment (right mint, right account, right amount, authority = the wallet) → redeemed with THAT signature", out.kind === "granted" && posted && posted.paySig === FOUND, { out, posted });
+    for (const [label, ix] of [["another amount", ixOf({ tokenAmount: { amount: "49999999" } })], ["another destination", ixOf({ destination: "SomeOtherAccount1111111111111111111111111111" })], ["another authority", ixOf({ authority: web3.Keypair.generate().publicKey.toBase58() })], ["another mint", ixOf({ mint: web3.Keypair.generate().publicKey.toBase58() })]]) {
+      st = mkAttempt();
+      out = await mod.checkPayment({ fetchFn: nf, storage: st, wallet: PAYER, rpc: chainRpc({ height: 100, valid: true, sigs: [{ signature: FOUND, err: null, blockTime: Math.floor(Date.now() / 1000) }], txs: { [FOUND]: tx(ix) } }) });
+      ok("a lookalike transaction (" + label + ") is not taken for the payment; blockhash still live → KEPT", out.kind === "retry" && !!mod.loadRecord(st, PAYER), out);
+    }
+    st = mkAttempt();
+    out = await mod.checkPayment({ fetchFn: nf, storage: st, wallet: PAYER, rpc: chainRpc({ height: 5000, valid: false, sigs: [], txs: {} }) });
+    ok("nothing on chain AND the blockhash proven dead → 'never-landed', attempt cleared", out.kind === "never-landed" && mod.loadRecord(st, PAYER) === null, out);
+    st = mkAttempt();
+    out = await mod.checkPayment({ fetchFn: nf, storage: st, wallet: PAYER, rpc: chainRpc({ height: 5000, valid: true, sigs: [], txs: {} }) });
+    ok("nothing found but the blockhash is still valid → KEPT", out.kind === "retry" && !!mod.loadRecord(st, PAYER), out);
+    st = mkAttempt();
+    out = await mod.checkPayment({ fetchFn: nf, storage: st, wallet: PAYER, rpc: chainRpc({ height: 5000, valid: false, sigsThrow: true, txs: {} }) });
+    ok("the search itself fails (RPC) → 'cannot tell' → KEPT, never 'it did not happen'", out.kind === "retry" && !!mod.loadRecord(st, PAYER), out);
+    st = mkAttempt();
+    out = await mod.checkPayment({ fetchFn: nf, storage: st, wallet: PAYER, rpc: chainRpc({ height: 5000, valid: false, sigs: [{ signature: FOUND, err: null, blockTime: Math.floor(Date.now() / 1000) }], txs: { [FOUND]: tx(ixOf()) } }) });
+    ok("dead blockhash but the payment IS on chain → found and redeemed, not released", out.kind === "granted", out);
   }
 
   // ═══ 5. the four outcomes stay apart ═══════════════════════════════════════════════════════

@@ -11,9 +11,11 @@
 > 2026-10-03 00:00 UTC (the design's 09-25 predates the build); (5) a quote that is presented but
 > does not verify is a 401 on an UNCONSUMED signature and is ignored (recovery proceeds) on a
 > CONSUMED one; (6) the redemption responses carry `definitive` and `code` so the app never regexes
-> an English sentence; (7) the app persists the recovery record from `signSendConfirm`'s `onSigned`
-> with `requireOnSigned` (the broadcast is stopped if the record cannot be stored), and "Check
-> payment" releases a record as never-landed only when the node proves the blockhash dead; (8) after
+> an English sentence; (7) the app saves the recovery record as an ATTEMPT (no signature yet) from
+> `build()` — BEFORE the wallet is asked to sign, because a signAndSend-only wallet broadcasts inside
+> the call — and fills the signature in from `onSigned` (with `requireOnSigned`); a failed save means
+> the wallet is never asked. "Check payment" searches the chain for an attempt and releases a record
+> as never-landed only when the node proves the blockhash dead; (8) after
 > the adversarial review of #421: one payer per transaction (more than one owner's SKR falling is
 > refused for everyone), a durable `skrpayer:`/`skr:` record written before the shared commit key so
 > recovery is per wallet AND per leg, the quote's own price history guard (3 ticks, 3× the 24 h
