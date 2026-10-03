@@ -15,10 +15,15 @@
 > `build()` — BEFORE the wallet is asked to sign, because a signAndSend-only wallet broadcasts inside
 > the call — and fills the signature in from `onSigned` (with `requireOnSigned`); a failed save means
 > the wallet is never asked. "Check payment" searches the chain for an attempt and releases a record
-> as never-landed only when the node proves the blockhash dead; (8) after
+> as never-landed only when the blockhash is proven dead AND the search was provably complete (paged
+> back past a SERVER-time bound — the quote's `issuedAt` minus a margin, never the phone's clock — with
+> every candidate read and no RPC failure; anything less is "cannot confirm", kept); the support entry
+> is stored BEFORE a refused payment's active record is cleared; (8) after
 > the adversarial review of #421: one payer per transaction (more than one owner's SKR falling is
-> refused for everyone), a durable `skrpayer:`/`skr:` record written before the shared commit key so
-> recovery is per wallet AND per leg, the quote's own price history guard (3 ticks, 3× the 24 h
+> refused for everyone), an atomic LEG CLAIM (`sigStore.claimLeg`, one durable entry
+> `leg:<sig>|<kind>|<wallet>`) as the first write of every redemption — SOL, SKR and the public
+> verify route read it first — so recovery is per wallet AND per kind even across a crash between writes
+> (round 2 replaced the earlier `skrpayer:`/`skr:` pair with it), the quote's own price history guard (3 ticks, 3× the 24 h
 > median, a 5-minute warm-up read so a quiet server fills it; `TOOLGATE_SKR_WARMUP_OFF=1` disables),
 > client freshness from a stopwatch and not the phone clock, landed-but-unredeemable payments kept
 > as a "needs attention" entry with their signature, and absent token balances treated as
