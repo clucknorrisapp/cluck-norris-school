@@ -200,7 +200,18 @@ AHOY.Gate = (function () {
     const sigBytes = sig && (sig.signature || sig);
     const r = await (await fetch(API + "/verify", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ wallet, nonce: ch.nonce, signature: b58(new Uint8Array(sigBytes)) }) })).json(); stale();
     if (!r.ok) throw new Error(r.error || "Check failed.");
-    const exp = Math.min(Number(r.expiresAt) || 0, Date.now() + MAX_GRANT_MS);
+    // ⚠️ Codex round 3, P2 — NO-SESSION-SECRET MODE. When the server has no session secret
+    // (AHOY_SESSION_SECRET and PREMIUM_ACCESS_KEY both unset) /verify still verifies the signature
+    // and reads the chain, but returns token:null, expiresAt:null. Coercing that null to expiry 0
+    // made the very next decision (expireIfDue) throw away a grant the server had just confirmed
+    // (NFT sign-in answered nft, the next tier check answered free). With no token there is nothing
+    // that could be stored or re-checked, so the verified tier is kept for THIS PAGE SESSION only:
+    // in memory (persist() writes nothing without a token, so a reload asks to verify again), bound
+    // to this generation (disconnect / expiry / a newer connect void it, and a late answer is
+    // dropped by stale() above), and capped at the same one-day life a token would have. The token
+    // mode below is unchanged: its expiry still comes from the server.
+    const tokenless = !r.token;
+    const exp = tokenless ? Date.now() + MAX_GRANT_MS : Math.min(Number(r.expiresAt) || 0, Date.now() + MAX_GRANT_MS);
     st = { tier: r.tier, wallet, ahoy: r.ahoy || 0, usd: r.usd || 0, nfts: r.nfts || [], demo: false, token: r.token || null, exp, checkedAt: Date.now(), confirmed: true, unavailable: !!r.unavailable };
     persist();
     return st;
