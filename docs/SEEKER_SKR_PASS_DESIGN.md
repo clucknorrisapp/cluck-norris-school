@@ -13,7 +13,14 @@
 > CONSUMED one; (6) the redemption responses carry `definitive` and `code` so the app never regexes
 > an English sentence; (7) the app persists the recovery record from `signSendConfirm`'s `onSigned`
 > with `requireOnSigned` (the broadcast is stopped if the record cannot be stored), and "Check
-> payment" releases a record as never-landed only when the node proves the blockhash dead. Pinned
+> payment" releases a record as never-landed only when the node proves the blockhash dead; (8) after
+> the adversarial review of #421: one payer per transaction (more than one owner's SKR falling is
+> refused for everyone), a durable `skrpayer:`/`skr:` record written before the shared commit key so
+> recovery is per wallet AND per leg, the quote's own price history guard (3 ticks, 3× the 24 h
+> median, a 5-minute warm-up read so a quiet server fills it; `TOOLGATE_SKR_WARMUP_OFF=1` disables),
+> client freshness from a stopwatch and not the phone clock, landed-but-unredeemable payments kept
+> as a "needs attention" entry with their signature, and absent token balances treated as
+> unavailable. Pinned
 > by `scripts/tool-pass-skr-test.cjs`, `scripts/seeker-skr-pay-test.cjs`, `scripts/tool-pass-terms-test.cjs`.
 
 **Owner decision, 2026-09-24:** *"a dollar in SKR would be plenty for 7 day pass."* And, same
