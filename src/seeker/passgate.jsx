@@ -18,10 +18,19 @@
 // server-issued token, what counts as proof, which errors mean "the pass died" — comes from
 // window.CluckGate via src/seeker/pass.js, which is deliberately a thin binding over the one
 // pass client the whole platform uses. See that file's header.
+//
+// The SKR-PAID pass (docs/SEEKER_SKR_PASS_DESIGN.md) is the one addition that moves money from
+// here. Its logic — the quote check, the transaction, the recovery record, the redemption and its
+// definitive-vs-retryable classification — is src/seeker/skr-pay.js (pure, unit-tested); the
+// signing is src/seeker/sign.js's signSendConfirm, the same seam every signing pane uses. This
+// file only renders it.
 import React from "react";
 import { Link } from "react-router-dom";
 import { t, tf } from "./i18n.js";
 import { shortAddr } from "./addr.js";
+import { Confirm } from "./pane.jsx";
+import { rpcFn } from "./sign.js";
+import { fetchQuote, quoteStale, readSkrAccounts, paySkr, loadRecord, loadStuck, dismissStuck, redeemRecord, checkPayment, rawToUi } from "./skr-pay.js";
 
 export function passGateWindow() {
   try { return (typeof window !== "undefined" && window.CluckGate) || null; } catch (_) { return null; }
@@ -45,6 +54,11 @@ export async function gatedToolFetch(gatedFetch, url) {
 }
 
 function fmtInt(n) { return Math.round(Number(n) || 0).toLocaleString(); }
+// A dollar figure from the server's config/quote: whole numbers plain ("1"), fractions to cents.
+// Never fmtInt for this — a $0.50 pass must not read as "$1".
+function fmtUsd(n) { const v = Number(n) || 0; return Number.isInteger(v) ? String(v) : v.toFixed(2); }
+function store() { try { return window.localStorage; } catch (_) { return null; } }
+const httpFetch = (u, o) => fetch(u, o);
 
 // The native sheet §5 asks for. Renders live terms from usePass().config — never a hardcoded
 // amount, price or duration; a null config (gate down / pricing outage) is handled upstream by
@@ -72,23 +86,33 @@ export function PassGate({ pass, wallet, tool, onUnlocked, onClose }) {
   const [busy, setBusy] = React.useState(false);
   const [err, setErr] = React.useState(null);
   const [needPay, setNeedPay] = React.useState(null);
+  // The SKR-paid pass. `skr` is the quote + the payer's source account while the Confirm sheet is
+  // up; `rec` mirrors the stored recovery record for this wallet (a payment that was signed and
+  // may or may not have landed); `payNote` is the last outcome line; `short` = not enough SKR.
+  const [skr, setSkr] = React.useState(null);          // { quote, source }
+  const [skrBusy, setSkrBusy] = React.useState(null);  // null | "quote" | "sign" | "check"
+  const [rec, setRec] = React.useState(null);
+  const [payNote, setPayNote] = React.useState(null);  // { tone: "ok"|"warn"|"err", text }
+  const [short, setShort] = React.useState(null);      // { have, need }
+  const [stuck, setStuck] = React.useState([]);        // payments that landed but cannot buy a pass
 
-  async function checkHolder() {
+  // One signed sign-in: challenge → signMessage → session. Used by "Check my wallet" and, when a
+  // stored payIntent has expired, by "Check payment". Returns
+  //   { kind:"granted", j } | { kind:"needpay", detail, payIntent } | { kind:"error", message }
+  async function signSession() {
     const g = passGateWindow();
-    if (!g) { setErr(t("The pass service isn't available right now.")); return; }
+    if (!g) return { kind: "error", message: t("The pass service isn't available right now.") };
     if (!wallet.provider || typeof wallet.provider.signMessage !== "function") {
-      setErr(t("This wallet can't sign messages — try Phantom, Solflare, Backpack or Jupiter."));
-      return;
+      return { kind: "error", message: t("This wallet can't sign messages — try Phantom, Solflare, Backpack or Jupiter.") };
     }
-    setBusy(true); setErr(null); setNeedPay(null);
     try {
       const chR = await fetch(`/api/tool-gate/challenge?wallet=${encodeURIComponent(wallet.address)}`);
       const ch = await chR.json().catch(() => null);
-      if (!ch || !ch.success || !ch.message) { setErr(t("Could not reach the pass service. Try again shortly.")); setBusy(false); return; }
+      if (!ch || !ch.success || !ch.message) return { kind: "error", message: t("Could not reach the pass service. Try again shortly.") };
       const enc = new TextEncoder().encode(ch.message);
       let sig;
       try { sig = await wallet.provider.signMessage(enc, "utf8"); }
-      catch (_e) { setErr(t("Signature request was rejected or failed.")); setBusy(false); return; }
+      catch (_e) { return { kind: "error", message: t("Signature request was rejected or failed.") }; }
       let bytes = (sig && sig.signature) ? sig.signature : sig;
       if (bytes && bytes.data && !bytes.length) bytes = bytes.data;
       const arr = new Uint8Array(bytes);
@@ -102,14 +126,159 @@ export function PassGate({ pass, wallet, tool, onUnlocked, onClose }) {
         body: JSON.stringify({ wallet: wallet.address, message: ch.message, signature: b64, doors: ["skr"] }),
       });
       const j = await sessR.json().catch(() => null);
-      if (j && j.success && j.pass) { g.grant(j.days || 1, j.via || "holder", j.pass); setBusy(false); onUnlocked(); return; }
-      if (j && j.error === "insufficient_holdings") { setNeedPay({ detail: j.detail }); setBusy(false); return; }
-      setErr((j && (j.detail || j.error)) || t("Could not verify this wallet."));
-    } catch (_e) { setErr(t("Could not reach the pass service. Try again shortly.")); }
+      if (j && j.success && j.pass) return { kind: "granted", j };
+      if (j && j.error === "insufficient_holdings") return { kind: "needpay", detail: j.detail, payIntent: j.payIntent || null };
+      return { kind: "error", message: (j && (j.detail || j.error)) || t("Could not verify this wallet.") };
+    } catch (_e) { return { kind: "error", message: t("Could not reach the pass service. Try again shortly.") }; }
+  }
+
+  async function checkHolder() {
+    setBusy(true); setErr(null); setNeedPay(null); setPayNote(null); setShort(null);
+    const r = await signSession();
+    if (r.kind === "granted") { passGateWindow().grant(r.j.days || 1, r.j.via || "holder", r.j.pass); setBusy(false); onUnlocked(); return; }
+    if (r.kind === "needpay") setNeedPay({ detail: r.detail, payIntent: r.payIntent });
+    else setErr(r.message);
     setBusy(false);
   }
 
+  // ── the SKR payment ────────────────────────────────────────────────────────────────────────
+  // A fresh payIntent for a stored payment whose intent expired: one more signed sign-in. If that
+  // sign-in finds the wallet now qualifies on holdings, it simply unlocks (and returns null).
+  async function refreshIntent() {
+    const r = await signSession();
+    if (r.kind === "granted") { passGateWindow().grant(r.j.days || 1, r.j.via || "holder", r.j.pass); onUnlocked(); return null; }
+    if (r.kind === "needpay" && r.payIntent) { setNeedPay({ detail: r.detail, payIntent: r.payIntent }); return r.payIntent; }
+    return null;
+  }
+
+  // Everything a redemption can come back as, said honestly. A grant unlocks; a definitive refusal
+  // names its reason (that transfer will never buy a pass); anything else keeps the record and says
+  // the payment is not lost.
+  function applyOutcome(out) {
+    const g = passGateWindow();
+    if (out.kind === "granted") {
+      setRec(null); setSkr(null);
+      if (g) g.grant(out.days, "paid-skr", out.pass);
+      setPayNote({ tone: "ok", text: tf("Paid — every heavy tool is unlocked for {days} days.", { days: out.days }) });
+      onUnlocked();
+    } else if (out.kind === "refused" && out.keptActive) {
+      // The support entry could not be stored (storage full?), so the active record was NOT cleared:
+      // it still carries the signature. Show the support state straight from this answer.
+      setRec(loadRecord(store(), wallet.address));
+      setPayNote({ tone: "err", text: tf("A payment of {amount} SKR was sent but could not buy a pass: {reason}. Keep this signature and contact support: {sig}", { amount: out.amountUi || "?", reason: out.error || out.code || "?", sig: out.sig }) });
+    } else if (out.kind === "cannot-confirm") {
+      // The search for a payment we could not see was not complete (or an RPC call failed): kept, never released.
+      setRec(loadRecord(store(), wallet.address));
+      setPayNote({ tone: "warn", text: t("We can't tell yet whether this payment went through. If SKR left your wallet, look in your wallet's history and contact support.") });
+    } else if (out.kind === "refused") {
+      setRec(null);
+      setStuck(loadStuck(store(), wallet.address));   // a payment that landed is kept, with its signature
+      setPayNote({ tone: "err", text: tf("That payment can't buy a pass: {reason}", { reason: out.error || out.code || "?" }) });
+    } else if (out.kind === "never-landed") {
+      setRec(null);
+      setPayNote({ tone: "warn", text: t("That payment never landed — nothing was charged. You can pay again.") });
+    } else if (out.kind === "signin") {
+      setRec(loadRecord(store(), wallet.address));
+      setPayNote({ tone: "warn", text: t("Your payment may still be landing — check it before paying again.") });
+    } else if (out.kind === "retry") {
+      setRec(loadRecord(store(), wallet.address));
+      setPayNote({ tone: "warn", text: t("Your payment is sent, but the pass service could not confirm it yet. Nothing new was charged — check it again in a moment.") });
+    }
+  }
+
+  async function startSkrPay() {
+    if (!store() || !wallet.connected || !needPay || !needPay.payIntent) { setErr(t("Check your wallet first, then pay.")); return; }
+    setSkrBusy("quote"); setErr(null); setPayNote(null); setShort(null);
+    try {
+      const q = await fetchQuote(httpFetch, wallet.address);
+      if (!q.ok) {
+        setErr(q.kind === "price" ? t("SKR pricing is unavailable right now — try again in a minute.")
+          : q.kind === "offline" ? t("Could not reach the pass service. Try again shortly.")
+          : t("Could not get an SKR quote. Try again shortly."));
+        return;
+      }
+      let accts;
+      try { accts = await readSkrAccounts(rpcFn(), wallet.address); }
+      catch (_) { setErr(t("Could not read your SKR balance. Try again shortly.")); return; }
+      const need = BigInt(q.quote.amountRaw);
+      if (!accts.best || accts.best.raw < need) {
+        setShort({ have: rawToUi(accts.total.toString(), q.quote.decimals), need: q.quote.amountUi });
+        return;
+      }
+      setSkr({ quote: q.quote, source: accts.best.pubkey });
+    } finally { setSkrBusy(null); }
+  }
+
+  async function confirmSkrPay() {
+    const st = store();
+    const { quote, source } = skr;
+    // A sheet left open past the quote's life is re-priced, not paid at the old number.
+    if (quoteStale(quote)) {
+      setSkr(null); setSkrBusy("quote");
+      const q = await fetchQuote(httpFetch, wallet.address);
+      setSkrBusy(null);
+      if (!q.ok) { setErr(t("SKR pricing is unavailable right now — try again in a minute.")); return; }
+      setSkr({ quote: q.quote, source });
+      setPayNote({ tone: "warn", text: t("The quote was refreshed — review it and confirm again.") });
+      return;
+    }
+    setSkr(null); setSkrBusy("sign"); setErr(null); setPayNote(null);
+    try {
+      // skr-pay.js paySkr: signSendConfirm with the recovery record persisted BEFORE submission.
+      const res = await paySkr({ provider: wallet.provider, owner: wallet.address, quote, source, payIntent: needPay.payIntent, storage: st });
+      if (res.status === "declined") { setPayNote({ tone: "warn", text: t("You declined in your wallet — nothing was sent.") }); return; }
+      if (res.status === "failed") {
+        // The node refused it, or it landed and FAILED on-chain: nobody was paid, a retry is safe
+        // (paySkr already cleared the record).
+        setErr(tf("The payment did not go through — nothing was charged. {reason}", { reason: res.error || "" }));
+        return;
+      }
+      setRec(loadRecord(st, wallet.address));
+      if (res.status === "unconfirmed") {
+        setPayNote({ tone: "warn", text: t("Your payment may still be landing — check it before paying again.") });
+        return;
+      }
+      // "sent": landed. Redeem it now; the record is already stored, so a failure here loses nothing.
+      setSkrBusy("check");
+      applyOutcome(await redeemRecord({ fetchFn: httpFetch, storage: st, wallet: wallet.address, refreshIntent }));
+    } catch (e) {
+      setErr((e && e.message) || t("Could not reach the pass service. Try again shortly."));
+    } finally { setSkrBusy(null); }
+  }
+
+  async function checkStored() {
+    setSkrBusy("check"); setErr(null);
+    try {
+      applyOutcome(await checkPayment({ fetchFn: httpFetch, storage: store(), wallet: wallet.address, rpc: rpcFn(), refreshIntent }));
+    } catch (_) { setErr(t("Could not reach the pass service. Try again shortly.")); }
+    finally { setSkrBusy(null); }
+  }
+
+  // Reopening with a stored payment for this wallet re-posts it automatically, before anything
+  // else — with the stored payIntent only (an expired one waits for the "Check payment" tap, since
+  // refreshing it needs a signature and a prompt should never appear unasked).
+  React.useEffect(() => {
+    if (!wallet.connected || !wallet.address || !store()) { setRec(null); setStuck([]); return undefined; }
+    const stored = loadRecord(store(), wallet.address);
+    setRec(stored);
+    setStuck(loadStuck(store(), wallet.address));
+    if (!stored) return undefined;
+    let alive = true;
+    (async () => {
+      setSkrBusy("check");
+      try {
+        const out = await redeemRecord({ fetchFn: httpFetch, storage: store(), wallet: wallet.address, refreshIntent: null });
+        if (alive) applyOutcome(out);
+      } catch (_) { /* the Check payment button remains */ }
+      finally { if (alive) setSkrBusy(null); }
+    })();
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wallet.connected, wallet.address]);
+
   const cfg = pass.config;
+  const skrPass = cfg && cfg.skr && cfg.skr.pass ? cfg.skr.pass : null;
+  const payBusy = !!skrBusy;
   return (
     <div className="seeker-confirm-wrap" role="dialog" aria-modal="true" aria-label={t("Unlock the tools pass")}>
       <div className="seeker-confirm seeker-passgate">
@@ -159,24 +328,93 @@ export function PassGate({ pass, wallet, tool, onUnlocked, onClose }) {
         ) : (
           <>
             <p className="seeker-passgate-wallet">{shortAddr(wallet.address)}</p>
-            <button type="button" className="seeker-btn" disabled={busy} onClick={checkHolder}>
+            <button type="button" className="seeker-btn" disabled={busy || payBusy} onClick={checkHolder}>
               {busy ? t("Checking…") : t("Check my wallet")}
             </button>
           </>
         )}
 
+        {/* A payment that was signed and may or may not have landed: shown first, and while it
+            exists nothing else offers to pay (a second payment is how someone pays twice). */}
+        {wallet.connected && rec ? (
+          <div className="seeker-burn-outcome seeker-burn-outcome-unconfirmed" role="status">
+            <p className="seeker-burn-outcome-title">⏳ {t("Unconfirmed")}</p>
+            <p>{t("Your payment may still be landing — check it before paying again.")}</p>
+            <div className="seeker-burn-outcome-actions">
+              <button type="button" className="seeker-btn" disabled={payBusy} onClick={checkStored}>
+                {skrBusy === "check" ? t("Checking…") : t("Check payment")}
+              </button>
+            </div>
+          </div>
+        ) : null}
+
+        {/* A payment that LANDED but could not buy a pass (an expired quote window, a rotated key, a
+            transaction that paid for more than one wallet…). Never dropped silently: the signature
+            stays here, with the reason, until the person dismisses it. Does not block a new payment. */}
+        {wallet.connected ? stuck.map((s) => (
+          <div key={s.paySig} className="seeker-burn-outcome seeker-burn-outcome-failed" role="alert">
+            <p className="seeker-burn-outcome-title">⚠️ {t("Needs attention")}</p>
+            <p>{tf("A payment of {amount} SKR was sent but could not buy a pass: {reason}. Keep this signature and contact support: {sig}",
+                   { amount: s.amountUi || "?", reason: s.error || s.code || "?", sig: s.paySig })}</p>
+            <div className="seeker-burn-outcome-actions">
+              <button type="button" className="seeker-btn seeker-btn-quiet" onClick={() => { dismissStuck(store(), wallet.address, s.paySig); setStuck(loadStuck(store(), wallet.address)); }}>{t("Dismiss")}</button>
+            </div>
+          </div>
+        )) : null}
+
         {needPay ? (
           <p className="seeker-passgate-needpay" role="alert">
             {needPay.detail || t("This wallet doesn't hold enough CLKN or SKR for the free tier.")}{" "}
-            {t("Paying in SOL from the full site at clucknorris.app also unlocks the pass — that payment flow isn't built into this app yet.")}
+            {skrPass ? null : t("Paying in SOL from the full site at clucknorris.app also unlocks the pass.")}
           </p>
         ) : null}
+
+        {/* Pay in SKR: only after the wallet proved itself and did not qualify (that answer carries
+            the payIntent the redemption needs), only when the server's config offers it, and never
+            while an earlier payment is unresolved. The figures are the server's — the exact amount
+            is the quote's, shown on the confirm sheet. */}
+        {needPay && needPay.payIntent && skrPass && !rec ? (
+          <div className="seeker-passgate-skr">
+            <p className="seeker-tool-note">
+              {skrPass.skrNeeded
+                ? tf("Pay about {skr} SKR (around ${usd}) for a {days}-day pass to all of them, in this app.",
+                     { skr: fmtInt(skrPass.skrNeeded), usd: fmtUsd(skrPass.usd), days: skrPass.days })
+                : tf("Pay about ${usd} worth of SKR for a {days}-day pass to all of them, in this app.",
+                     { usd: fmtUsd(skrPass.usd), days: skrPass.days })}
+            </p>
+            <button type="button" className="seeker-btn" disabled={payBusy} onClick={startSkrPay}>
+              {skrBusy === "quote" ? t("Getting a quote…") : skrBusy === "sign" ? t("Waiting for your wallet…") : t("Pay in SKR")}
+            </button>
+            {short ? (
+              <p className="seeker-tool-note seeker-passgate-err" role="alert">
+                {tf("You hold about {have} SKR — this pass needs {need}. Swap for SKR in this app, then come back.", { have: short.have, need: short.need })}{" "}
+                <Link to="/tools/swap?out=SKR" className="seeker-listing-link">{t("Swap for SKR in this app")}</Link>
+              </p>
+            ) : null}
+          </div>
+        ) : null}
+
+        {payNote ? <p className={"seeker-tool-note" + (payNote.tone === "err" ? " seeker-passgate-err" : "")} role={payNote.tone === "ok" ? "status" : "alert"}>{payNote.text}</p> : null}
         {err ? <p className="seeker-tool-note seeker-passgate-err" role="alert">{err}</p> : null}
 
         <div className="seeker-confirm-actions">
           <button type="button" className="seeker-btn seeker-btn-quiet" onClick={onClose}>{t("Not now")}</button>
         </div>
       </div>
+
+      <Confirm
+        open={!!skr}
+        title="Pay for the tools pass in SKR"
+        lines={skr ? [
+          tf("Pay {amount} SKR (about ${usd}) for a {days}-day pass to all the heavy tools.", { amount: skr.quote.amountUi, usd: fmtUsd(skr.quote.usd), days: skr.quote.days }),
+          tf("To: {receiver}", { receiver: shortAddr(skr.quote.receiver) }),
+          skr.quote.receiverAtaExists === true ? null : t("About 0.002 SOL once, to open the receiving account."),
+          t("This sends SKR from your wallet and can't be undone."),
+        ].filter(Boolean) : []}
+        confirmLabel="Pay in SKR"
+        onConfirm={confirmSkrPay}
+        onCancel={() => setSkr(null)}
+      />
     </div>
   );
 }

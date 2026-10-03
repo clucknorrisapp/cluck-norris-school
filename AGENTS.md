@@ -399,6 +399,30 @@ in one click, or sign a message where the gate is *ownership* rather than paymen
   rule guards what either mint's price refresh may persist (finite, positive, inside the 10× band of
   a recent last-good). It is a PRODUCT boundary, not a security one — a hand-made request with the
   door gets what a CLKN holder already gets — and **nothing is gated behind SKR**.
+  **The SKR-PAID pass (owner 2026-09-24 "a dollar in SKR would be plenty for 7 day pass", built
+  2026-10-03; `docs/SEEKER_SKR_PASS_DESIGN.md`, Seeker app only):** the same 7-day all-tools pass,
+  paid in SKR at `TOOLGATE.skrPass.usd` (the schedule entry's `skr: { usd }`, env
+  `TOOLGATE_SKR_PASS_USD` overrides quoting only) live-priced from the same sanity-banded SKR price
+  the holdings door uses. A dollar price in a moving token is pinned by a **server-signed quote**
+  (`GET /api/tool-gate/skr-quote`, HMAC `{wallet, amountRaw, iat, exp}`, 10 min); the app pays exactly
+  that and posts `{paySig, skrQuote}` (or `payKind:"skr"` to recover) to the session route.
+  `lib/tool-pass-skr.js` verifies on chain: the payer is the wallet whose SKR balance FELL (never the
+  fee payer), the SKR rose at `SOL_UNLOCK_WALLET`, and a parsed SPL transfer between them is the
+  second witness; the payment must sit inside the quote's two-sided window on CHAIN time (the quote is
+  authenticated without a clock check); it shares the `"sol:" + sig` consumed-signature namespace with
+  the SOL pass. **One payment, one pass, one payer** (reviews of #421): a transaction in which more than
+  one owner's SKR fell is refused for everyone, and the FIRST write of any redemption — SOL pass, SKR
+  pass or `/api/verify-sol-payment` — is an atomic **leg claim** (`sigStore.claimLeg(sig, kind, wallet)`,
+  one durable `"leg:"+sig+"|"+kind+"|"+wallet` entry) that every leg reads before anything else: a
+  signature belongs to the first kind + wallet to claim it, recovery is only for that kind + wallet, and
+  the shared `"sol:"+sig` key is the commit that follows. So a redemption that dies half-way can only be
+  finished by the same kind and wallet — never by a co-signer or the other leg. **The quote has its own price guard**
+  (`quotePriceGate`): at least 3 accepted ticks in the last 24 h and the price within 3× of their median —
+  `acceptPrice`'s single 6 h anchor lets a cold start or a re-anchoring ratchet through, which is fine for
+  the free-tier door and not for an amount to send. No SKR price → no quote (503) — SKR never graces; an RPC outage is `unavailable`, never
+  a denial or a grant. The website and the store editions do not offer it (`skr-quote` is in the
+  store edition's `forbidden`; the endpoint is in `SEEKER_API_RE`). Tests:
+  `scripts/tool-pass-skr-test.cjs` (server end to end), `scripts/seeker-skr-pay-test.cjs` (client).
 - premium forensics — holder-gated at 2M, re-checked live on every run (NOT part of the pass)
 - transcript Tier-2 — connect & sign with `minHold: 0` (a graduate may hold no CLKN)
 - The Hatchery is the one place you can still **pay** in CLKN, ~30% cheaper than the SOL price.

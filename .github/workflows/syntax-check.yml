@@ -367,6 +367,24 @@ jobs:
       # throwing changes nothing.
       - name: Tools pass — paid redemption + recovery (fault injection)
         run: node scripts/tool-pass-redeem-test.cjs
+      # The Seeker app's SKR-paid pass (docs/SEEKER_SKR_PASS_DESIGN.md) — a money path, pinned three
+      # ways: the library (BigInt amount, HMAC quote, balance + instruction evidence against fixture
+      # transactions), the SKR leg of redemption (two-sided payment window, recovery, fail-closed
+      # store), and the REAL server booted against a stub JSON-RPC node with a real ed25519 wallet
+      # (wrong mint / destination / short / other payer / expired / forged quote / replay / RPC
+      # outage / stale price). No outside network.
+      # The CLIENT half: instruction bytes diffed against @solana/spl-token (classic + Token-2022),
+      # the quote validated before signing, the recovery record written AFTER the wallet signs and
+      # BEFORE submission and before any redemption (a record that cannot be stored stops the
+      # broadcast), landed/failed/unconfirmed/declined kept apart, retryable refusals keeping the
+      # record and definitive ones clearing it with their reason, and "Check payment" releasing a
+      # payment only when the node proves its blockhash dead. Driven through the REAL signing seam.
+      - name: Seeker app — SKR pass payment client (record-before-submit, outcomes, redemption)
+        run: node scripts/seeker-skr-pay-test.cjs
+      - name: Tools pass — terms schedule is append-only, the SKR term sits on a new entry
+        run: node scripts/tool-pass-terms-test.cjs
+      - name: Tools pass — SKR payment (quote, on-chain evidence, redemption, server end to end)
+        run: node scripts/tool-pass-skr-test.cjs
       # The free-tier DECISION (lib/tool-pass-qualify.js): CLKN first, the Seeker app's SKR door
       # only when asked for, fail open on OUR outages and never on a verified zero, thresholds
       # live-priced. Two doors × three outage policies is exactly the branching that goes wrong

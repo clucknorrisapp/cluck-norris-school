@@ -217,6 +217,13 @@ retake against a live server before they are demo-ready.
   sent only by the Seeker app's pass sheet) is on PR #395, held for Codex's re-review; once that
   merges the demo reads `skr.holdUsd` / `skr.skrNeeded` from the same endpoint — still never a
   literal.
+- **The pass sheet now SIGNS: it can pay the 7-day pass in SKR** (design of record
+  `docs/SEEKER_SKR_PASS_DESIGN.md`; owner 2026-09-24 "a dollar in SKR would be plenty for 7 day
+  pass", "build it" 2026-10-03). Row: pass sheet — signs: **yes** (the SKR pass payment, through
+  `signSendConfirm`; the connected wallet is the only signer). The terms are live from
+  `/api/tool-gate/config` → `skr.pass { usd, days, skrNeeded }` and the exact amount is the
+  server-signed quote from `GET /api/tool-gate/skr-quote?wallet=` — never a literal in a demo
+  script or the app. Seeker app only: the website and both store editions do not offer it.
 - **Seven languages** — AGENTS.md: en / es / hi / it / pt / vi / zh. Confirmed on disk:
   `public/i18n/{es,hi,it,pt,vi,zh}.json` (English is the source keys, uncatalogued as its own
   file).
