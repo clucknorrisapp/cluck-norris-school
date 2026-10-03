@@ -30,7 +30,7 @@ import { t, tf } from "./i18n.js";
 import { shortAddr } from "./addr.js";
 import { Confirm } from "./pane.jsx";
 import { rpcFn } from "./sign.js";
-import { fetchQuote, readSkrAccounts, paySkr, loadRecord, redeemRecord, checkPayment, rawToUi } from "./skr-pay.js";
+import { fetchQuote, quoteStale, readSkrAccounts, paySkr, loadRecord, loadStuck, dismissStuck, redeemRecord, checkPayment, rawToUi } from "./skr-pay.js";
 
 export function passGateWindow() {
   try { return (typeof window !== "undefined" && window.CluckGate) || null; } catch (_) { return null; }
@@ -94,6 +94,7 @@ export function PassGate({ pass, wallet, tool, onUnlocked, onClose }) {
   const [rec, setRec] = React.useState(null);
   const [payNote, setPayNote] = React.useState(null);  // { tone: "ok"|"warn"|"err", text }
   const [short, setShort] = React.useState(null);      // { have, need }
+  const [stuck, setStuck] = React.useState([]);        // payments that landed but cannot buy a pass
 
   // One signed sign-in: challenge → signMessage → session. Used by "Check my wallet" and, when a
   // stored payIntent has expired, by "Check payment". Returns
@@ -162,6 +163,7 @@ export function PassGate({ pass, wallet, tool, onUnlocked, onClose }) {
       onUnlocked();
     } else if (out.kind === "refused") {
       setRec(null);
+      setStuck(loadStuck(store(), wallet.address));   // a payment that landed is kept, with its signature
       setPayNote({ tone: "err", text: tf("That payment can't buy a pass: {reason}", { reason: out.error || out.code || "?" }) });
     } else if (out.kind === "never-landed") {
       setRec(null);
@@ -202,7 +204,7 @@ export function PassGate({ pass, wallet, tool, onUnlocked, onClose }) {
     const st = store();
     const { quote, source } = skr;
     // A sheet left open past the quote's life is re-priced, not paid at the old number.
-    if (Date.now() >= quote.expiresAt - 60e3) {
+    if (quoteStale(quote)) {
       setSkr(null); setSkrBusy("quote");
       const q = await fetchQuote(httpFetch, wallet.address);
       setSkrBusy(null);
@@ -247,9 +249,10 @@ export function PassGate({ pass, wallet, tool, onUnlocked, onClose }) {
   // else — with the stored payIntent only (an expired one waits for the "Check payment" tap, since
   // refreshing it needs a signature and a prompt should never appear unasked).
   React.useEffect(() => {
-    if (!wallet.connected || !wallet.address || !store()) { setRec(null); return undefined; }
+    if (!wallet.connected || !wallet.address || !store()) { setRec(null); setStuck([]); return undefined; }
     const stored = loadRecord(store(), wallet.address);
     setRec(stored);
+    setStuck(loadStuck(store(), wallet.address));
     if (!stored) return undefined;
     let alive = true;
     (async () => {
@@ -335,6 +338,20 @@ export function PassGate({ pass, wallet, tool, onUnlocked, onClose }) {
             </div>
           </div>
         ) : null}
+
+        {/* A payment that LANDED but could not buy a pass (an expired quote window, a rotated key, a
+            transaction that paid for more than one wallet…). Never dropped silently: the signature
+            stays here, with the reason, until the person dismisses it. Does not block a new payment. */}
+        {wallet.connected ? stuck.map((s) => (
+          <div key={s.paySig} className="seeker-burn-outcome seeker-burn-outcome-failed" role="alert">
+            <p className="seeker-burn-outcome-title">⚠️ {t("Needs attention")}</p>
+            <p>{tf("A payment of {amount} SKR was sent but could not buy a pass: {reason}. Your SKR is not lost — keep this signature and contact support: {sig}",
+                   { amount: s.amountUi || "?", reason: s.error || s.code || "?", sig: s.paySig })}</p>
+            <div className="seeker-burn-outcome-actions">
+              <button type="button" className="seeker-btn seeker-btn-quiet" onClick={() => { dismissStuck(store(), wallet.address, s.paySig); setStuck(loadStuck(store(), wallet.address)); }}>{t("Dismiss")}</button>
+            </div>
+          </div>
+        )) : null}
 
         {needPay ? (
           <p className="seeker-passgate-needpay" role="alert">

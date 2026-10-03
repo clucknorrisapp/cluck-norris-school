@@ -145,6 +145,50 @@ const ev = (tx, wallet = W) => SKR.evaluateSkrPayment(tx, { mint: SKR_MINT, rece
   ok("the receiver cannot be its own payer", r.ok === false && r.code === "self_payment", r);
   r = ev({ blockTime: 1, transaction: { message: {} }, meta: null });
   ok("a transaction with no meta is unavailable, not a denial", r.ok === false && r.unavailable === true && r.retry === true && !r.definitive, r);
+  // Review of #421, P3-5: absent token-balance arrays are an incomplete answer, not "no SKR moved".
+  for (const drop of ["preTokenBalances", "postTokenBalances"]) {
+    const t0 = fixtureTx(); delete t0.meta[drop];
+    r = ev(t0);
+    ok("absent " + drop + " → unavailable/retry (NOT a final no_payment_to_receiver)", r.ok === false && r.unavailable === true && r.retry === true && !r.definitive && r.code !== "no_payment_to_receiver", r);
+  }
+  // Review of #421, P1: more than one owner's SKR fell → refused for EVERYONE, definitively.
+  {
+    const W2 = pk(), tb = (i, owner, amt) => ({ accountIndex: i, mint: SKR_MINT, owner, uiTokenAmount: { amount: String(amt), decimals: 6 } });
+    const poc = fixtureTx({ srcOwner: W, amount: "50000000" });
+    poc.meta.preTokenBalances.push(tb(7, W2, 1)); poc.meta.postTokenBalances.push(tb(7, W2, 0));
+    poc.meta.postTokenBalances.find((b) => b.owner === RECEIVER).uiTokenAmount.amount = "50000001";
+    const keys = poc.transaction.message.accountKeys.map((k) => k.pubkey);
+    keys[7] = "W2Account111111111111111111111111111111111111";
+    poc.transaction.message.accountKeys = keys.map((k) => ({ pubkey: k }));
+    const dstKey = keys[2];
+    poc.transaction.message.instructions.push({ program: "spl-token", programId: SKR.TOKEN_CLASSIC, parsed: { type: "transfer", info: { source: keys[7], destination: dstKey, authority: W2, amount: "1" } } });
+    const rW = ev(poc, W), rW2 = ev(poc, W2);
+    ok("P1 PoC: a transaction where TWO owners' SKR fell is refused for the payer…", rW.ok === false && rW.code === "multiple_payers" && rW.definitive === true, rW);
+    ok("…and for the 1-unit co-signer leg, who used to be named the payer and 'recover' the pass", rW2.ok === false && rW2.code === "multiple_payers", rW2);
+    // The receiver's own outflow is not a second payer (the netting case stays valid).
+    const net = fixtureTx({ amount: "50000000", dstAfter: 30_000_000 });
+    ok("a receiver that also sends SKR out is not a second payer", ev(net).ok === true);
+  }
+}
+
+console.log("\nA5. the quote's own price guard — history, median, 3× (review of #421, P2)\n");
+{
+  const now = 1_800_000_000_000, h = 3600e3;
+  const hist = (...ps) => ps.map((p, i) => [p, now - (ps.length - i) * h]);
+  ok("cold start (no history) → refuses to quote", SKR.quotePriceGate({ anchors: [], current: 0.05, now }).ok === false);
+  ok("two ticks are not enough", SKR.quotePriceGate({ anchors: hist(0.05, 0.05), current: 0.05, now }).ok === false);
+  ok("three agreeing ticks → quotes", SKR.quotePriceGate({ anchors: hist(0.05, 0.05, 0.05), current: 0.05, now }).ok === true);
+  ok("a 10× spike against the median → refuses (the band that does not apply on a cold start)", SKR.quotePriceGate({ anchors: hist(0.05, 0.05, 0.05), current: 0.5, now }).ok === false);
+  ok("a 10× collapse → refuses", SKR.quotePriceGate({ anchors: hist(0.05, 0.05, 0.05), current: 0.005, now }).ok === false);
+  ok("2.9× is inside the band, 3.1× is outside", SKR.quotePriceGate({ anchors: hist(0.05, 0.05, 0.05), current: 0.145, now }).ok === true && SKR.quotePriceGate({ anchors: hist(0.05, 0.05, 0.05), current: 0.155, now }).ok === false);
+  ok("ticks older than 24 h do not count", SKR.quotePriceGate({ anchors: [[0.05, now - 25 * h], [0.05, now - 26 * h], [0.05, now - 27 * h]], current: 0.05, now }).ok === false);
+  // A ratchet: every minute the price steps ~2× up (each step passes a per-tick 10× band). The median
+  // of the 24 h that came before does not follow it.
+  let list = hist(0.05, 0.05, 0.05, 0.05, 0.05), price = 0.05, t = now;
+  for (let i = 0; i < 4; i++) { price *= 2; t += 61e3; list = SKR.pushAnchor(list, price, t); }
+  ok("a 2×-per-minute ratchet is refused by the time it has moved 3× from the median", SKR.quotePriceGate({ anchors: list, current: price, now: t }).ok === false, { price });
+  ok("pushAnchor: drops ticks closer than a minute, ignores junk, prunes >24 h", SKR.pushAnchor([[0.05, now - 10e3]], 0.06, now).length === 1 && SKR.pushAnchor([], NaN, now).length === 0 && SKR.pushAnchor([[0.05, now - 25 * h]], 0.06, now).length === 1);
+  ok("garbage anchors in storage are ignored, not thrown on", SKR.quotePriceGate({ anchors: [null, "x", [NaN, 1], [0.05, now - h], [0.05, now - 2 * h], [0.05, now - 3 * h]], current: 0.05, now }).ok === true);
 }
 
 console.log("\nA4. RPC trouble is `unavailable` — never a grant, never a denial\n");
@@ -174,7 +218,7 @@ console.log("\nA4. RPC trouble is `unavailable` — never a grant, never a denia
     const s = fakeSigStore(), kv = fakeKv();
     const a = run({ sigStore: s, kv });
     ok("exact quoted amount is honoured; the term is the schedule's days from the BLOCK time", a.ok && a.recovered === false && a.kind === "skr" && a.termDays === 7 && a.expiresAt === NOW - 30e3 + 7 * DAY_MS, a);
-    ok("consumed in the SAME namespace the SOL pass uses ('sol:' + sig)", s.has("sol:" + SIG) && s.size() === 1);
+    ok("consumed in the SAME namespace the SOL pass uses ('sol:' + sig)", s.has("sol:" + SIG) && s.has("skr:" + SIG) && s.has("skrpayer:" + SIG + ":" + W) && s.size() === 3);
     const audit = kv.raw.get("toolPassPaid:" + SIG);
     ok("audit line records kind, paid amount and the quote's amount", audit && audit.kind === "skr" && audit.amountRaw === "50000000" && audit.quoteAmountRaw === "50000000", audit);
     ok("an overpayment is honoured too", run({ sigStore: fakeSigStore(), verified: skrV({ amountRaw: "99999999" }) }).ok === true);
@@ -209,7 +253,7 @@ console.log("\nA4. RPC trouble is `unavailable` — never a grant, never a denia
     r = run({ sigStore: s, quote: null });
     ok("unconsumed + no quote → 400 'skr payment needs its quote', nothing consumed", !r.ok && r.status === 400 && r.error === "skr payment needs its quote" && s.size() === 0, r);
     r = run({ sigStore: s, quote: null, quoteInvalid: true });
-    ok("unconsumed + a quote that did not verify → 401, nothing consumed", !r.ok && r.status === 401 && r.code === "skr_quote_invalid" && s.size() === 0, r);
+    ok("unconsumed + a quote that did not verify → 401, DEFINITIVE (a rotated key must not loop forever), nothing consumed", !r.ok && r.status === 401 && r.code === "skr_quote_invalid" && r.definitive === true && s.size() === 0, r);
     r = run({ sigStore: s, termsAt: () => ({ from: 0, days: 7, lamports: 50_000_000 }) });
     ok("a payment landing when the schedule had no `skr` term is refused", !r.ok && r.code === "no_skr_terms" && s.size() === 0, r);
     r = run({ sigStore: s, verified: { ok: false, status: 503, retry: true, unavailable: true, code: "skr_unavailable", error: "down" } });
@@ -222,7 +266,7 @@ console.log("\nA4. RPC trouble is `unavailable` — never a grant, never a denia
     ok("RECOVERY with no quote after consumption: same payer, same expiry, recovered:true", later.ok && later.recovered === true && later.expiresAt === a.expiresAt, later);
     ok("…and a different wallet is still refused", !run({ sigStore: s, quote: null, wallet: pk() }).ok);
     const again = run({ sigStore: s, quote: null, verified: skrV({ amountRaw: "1" }), now: NOW + 7200e3 });
-    ok("recovery never re-extends: still the one pass, one consumed signature", again.ok && again.expiresAt === a.expiresAt && s.size() === 1, again);
+    ok("recovery never re-extends: still the one pass (one shared key, one leg marker, one payer record)", again.ok && again.expiresAt === a.expiresAt && s.size() === 3, again);
   }
   {
     const s = fakeSigStore(); s.add("hub-access:" + SIG);
@@ -230,6 +274,66 @@ console.log("\nA4. RPC trouble is `unavailable` — never a grant, never a denia
     ok("a platform-access month's signature cannot also buy a pass → 409", !r.ok && r.status === 409, r);
     const r2 = run({ sigStore: fakeSigStore(), usedElsewhere: (x) => x === SIG });
     ok("…nor one the hub REGISTRY holds → 409", !r2.ok && r2.status === 409, r2);
+  }
+  console.log("\nB2. one payment, one pass, one payer (review of #421, P1)\n");
+  {
+    // The PoC from the review, verbatim in spirit: W1 pays 1 SKR, W2 has a 1-unit leg in the SAME tx.
+    const W1 = pk(), W2 = pk();
+    const tb = (i, owner, amt) => ({ accountIndex: i, mint: SKR_MINT, owner, uiTokenAmount: { amount: String(amt) } });
+    const bt = Math.floor(NOW / 1000) - 30;
+    const poc = { blockTime: bt, meta: { err: null, preTokenBalances: [tb(1, W1, 2000000), tb(2, W2, 1), tb(3, RECEIVER, 0)], postTokenBalances: [tb(1, W1, 1000000), tb(2, W2, 0), tb(3, RECEIVER, 1000001)], innerInstructions: [] },
+      transaction: { message: { accountKeys: [W1, "A1", "A2", "RA"].map((p) => ({ pubkey: p })), instructions: [
+        { programId: SKR.TOKEN_CLASSIC, program: "spl-token", parsed: { type: "transfer", info: { source: "A1", destination: "RA", amount: "1000000" } } },
+        { programId: SKR.TOKEN_CLASSIC, program: "spl-token", parsed: { type: "transfer", info: { source: "A2", destination: "RA", amount: "1" } } } ] } } };
+    const s = fakeSigStore();
+    const mk = (w) => SKR.evaluateSkrPayment(poc, { mint: SKR_MINT, receiver: RECEIVER, wallet: w });
+    const q1 = SKR.verifySkrQuote({ secret: KEY, token: SKR.issueSkrQuote({ secret: KEY, wallet: W1, amountRaw: "1000000", now: NOW - 60e3 }).token, wallet: W1 });
+    const first = redeemPaidPass({ paySig: SIG, wallet: W1, verified: mk(W1), sigStore: s, quote: q1, now: NOW });
+    const second = redeemPaidPass({ paySig: SIG, wallet: W2, verified: mk(W2), sigStore: s, quote: null, now: NOW });
+    ok("PoC end to end: neither wallet gets a pass off a two-payer transaction", !first.ok && !second.ok && s.size() === 0, { first, second });
+  }
+  {
+    // Independent of the evaluator: even if a verifier named another wallet as payer for a signature
+    // that is already consumed, only the RECORDED payer recovers it.
+    const W1 = pk(), W2 = pk(), s = fakeSigStore();
+    const a = run({ sigStore: s, wallet: W1, verified: skrV({ payer: W1 }), quote: QUOTE });
+    ok("setup: the real payer redeems", a.ok && a.recovered === false && s.has("skrpayer:" + SIG + ":" + W1) && s.has("skr:" + SIG) && s.has("sol:" + SIG), a);
+    const b = run({ sigStore: s, wallet: W2, verified: skrV({ payer: W2, amountRaw: "1" }), quote: null });
+    ok("another wallet (verified as 'payer' with a 1-unit leg) 'recovering' the consumed signature → refused, not recovered", !b.ok && b.code === "already_redeemed" && b.status === 409 && b.definitive === true, b);
+    const b2 = run({ sigStore: s, wallet: W2, verified: skrV({ payer: W2 }), quote: QUOTE });
+    ok("…even holding a quote of its own for that amount", !b2.ok && b2.code === "already_redeemed", b2);
+    ok("the recorded payer still recovers (same expiry)", run({ sigStore: s, wallet: W1, verified: skrV({ payer: W1 }), quote: null }).recovered === true);
+    ok("exactly one signature consumed, one payer record", s.size() === 3);
+  }
+  {
+    // Cross-kind. A SOL-consumed signature never recovers on the SKR leg; an SKR-consumed one never on the SOL leg.
+    const s = fakeSigStore(), cur = TERMS.current(NOW);
+    const sol = redeemPaidPass({ paySig: SIG, wallet: W, verified: { ok: true, lamports: cur.lamports, payer: W, blockTimeMs: NOW - 30e3 }, sigStore: s, now: NOW });
+    ok("setup: a SOL-pass redemption consumes the signature", sol.ok && s.has("sol:" + SIG) && !s.has("skr:" + SIG), sol);
+    const co = pk();
+    const viaSkr = run({ sigStore: s, wallet: co, verified: skrV({ payer: co, amountRaw: "1" }), quote: null });
+    ok("a co-signer's 1-unit SKR leg cannot recover a SOL-consumed signature (no SKR checks were ever run on it)", !viaSkr.ok && viaSkr.code === "already_redeemed", viaSkr);
+    const viaSkrSamePayer = run({ sigStore: s, wallet: W, verified: skrV({ payer: W }), quote: null });
+    ok("…nor can the SOL payer themselves, on the SKR leg", !viaSkrSamePayer.ok && viaSkrSamePayer.code === "already_redeemed", viaSkrSamePayer);
+    const s2 = fakeSigStore();
+    ok("setup: an SKR redemption consumes the signature", run({ sigStore: s2, verified: skrV(), quote: QUOTE }).ok === true);
+    const solAfter = redeemPaidPass({ paySig: SIG, wallet: W, verified: { ok: true, lamports: cur.lamports, payer: W, blockTimeMs: NOW - 30e3 }, sigStore: s2, now: NOW });
+    ok("an SKR-consumed signature is refused on the SOL leg", !solAfter.ok && solAfter.code === "already_redeemed", solAfter);
+    ok("the SOL leg still recovers its own signature (unchanged)", redeemPaidPass({ paySig: SIG, wallet: W, verified: { ok: true, lamports: cur.lamports, payer: W, blockTimeMs: NOW - 30e3 }, sigStore: s, now: NOW + 1000 }).recovered === true);
+  }
+  {
+    // The payer record and leg marker are written BEFORE the shared key (the commit point): a store
+    // that dies after them leaves the signature unconsumed, and the same payer simply redeems again.
+    const writes = [], set = new Set();
+    const s = { add: (k) => { if (set.has(k)) return false; if (k.startsWith("sol:")) return false; set.add(k); writes.push(k); return true; }, has: (k) => set.has(k) };
+    const r = run({ sigStore: s });
+    ok("a store that cannot write the shared key → 503, signature NOT consumed", !r.ok && r.status === 503 && !set.has("sol:" + SIG), r);
+    ok("the payer record and leg marker were written first, shared key last (it is the commit point)", writes.length === 2 && writes[0].startsWith("skrpayer:") && writes[1].startsWith("skr:"), writes);
+    s.add = (k) => { if (set.has(k)) return false; set.add(k); return true; };
+    const r2 = run({ sigStore: s });
+    ok("…and the same payer redeems on retry", r2.ok && r2.recovered === false, r2);
+    let dead = true; const s3 = { add: (k) => (dead ? false : true), has: () => false };
+    ok("a store that cannot record the payer record → 503, nothing consumed", run({ sigStore: s3 }).status === 503);
   }
   {
     const s = fakeSigStore(); s.fail(true);
@@ -291,7 +395,7 @@ console.log("\nA4. RPC trouble is `unavailable` — never a grant, never a denia
   async function boot(port, seed) {
     const DIR = fs.mkdtempSync(path.join(os.tmpdir(), "skr-pass-test-"));
     if (seed) fs.writeFileSync(path.join(DIR, "app-state.json"), JSON.stringify(seed));
-    const env = { ...process.env, PORT: String(port), DATA_DIR: DIR, PREMIUM_ACCESS_KEY: KEY, TOOLGATE_OFF: "", TOOLGATE_SKR_PASS_USD: "",
+    const env = { ...process.env, PORT: String(port), DATA_DIR: DIR, PREMIUM_ACCESS_KEY: KEY, TOOLGATE_OFF: "", TOOLGATE_SKR_PASS_USD: "", TOOLGATE_SKR_WARMUP_OFF: "1",
       TELEGRAM_BOT_TOKEN: "", TELEGRAM_CHAT_ID: "", HELIUS_API_KEY: "", HELIUS_API_KEY_2: "", MM_OPERATOR_SECRET: "", MM_OPERATOR_SECRET_TREASURY: "", FALLBACK_RPC_URL: stubUrl };
     const srv = spawn(process.execPath, ["server.js"], { cwd: path.join(__dirname, ".."), env, stdio: "ignore" });
     const base = `http://127.0.0.1:${port}`;
@@ -303,13 +407,13 @@ console.log("\nA4. RPC trouble is `unavailable` — never a grant, never a denia
   }
 
   const P1 = Number(process.env.SKR_PASS_TEST_PORT || 3157);
-  const A = await boot(P1, { toolGateSkrUsd: 0.05, toolGateSkrUsdAt: Date.now() });
-  let B = null;
+  // Seeds: the price the server boots with, and (review of #421, P2) the 24 h history of accepted
+  // ticks the QUOTE path requires — three agreeing ticks, as a server that has been up a while has.
+  const hrs = (n) => Date.now() - n * 3600e3;
+  const goodHistory = [[0.05, hrs(3)], [0.05, hrs(2)], [0.05, hrs(1)]];
+  const A = await boot(P1, { toolGateSkrUsd: 0.05, toolGateSkrUsdAt: Date.now(), toolGateSkrAnchors: goodHistory });
+  let B = null, C = null, D = null;
   try {
-    const cfg = await call(A.base, "GET", "/api/tool-gate/config");
-    const pass = cfg.body && cfg.body.skr && cfg.body.skr.pass;
-    ok("config publishes the SKR pass terms from the schedule (usd 1, days 7) — the app renders them, never hardcodes", pass && pass.usd === 1 && pass.days === 7, cfg.body && cfg.body.skr);
-    ok("config's skrNeeded is derived from a finite positive live price, or null", pass && (pass.skrNeeded === null || (Number.isFinite(cfg.body.skr.priceUsd) && pass.skrNeeded === Math.ceil(1 / cfg.body.skr.priceUsd))), pass);
 
     // ── quote ──
     let q = await call(A.base, "GET", "/api/tool-gate/skr-quote");
@@ -394,12 +498,40 @@ console.log("\nA4. RPC trouble is `unavailable` — never a grant, never a denia
     const fresh = await redeem(wallet.pub, hSig, { skrQuote: nq2.body.quote });
     ok("a NEWER quote does not buy a second term for the same signature", fresh.body.success && fresh.body.recovered === true, fresh);
 
+    // config LAST: its first read starts a live price refresh, which must not run under the cases above.
+    const cfg = await call(A.base, "GET", "/api/tool-gate/config");
+    const pass = cfg.body && cfg.body.skr && cfg.body.skr.pass;
+    ok("config publishes the SKR pass terms from the schedule (usd 1, days 7) — the app renders them, never hardcodes", pass && pass.usd === 1 && pass.days === 7, cfg.body && cfg.body.skr);
+    ok("config's skrNeeded is derived from a finite positive live price, or null", pass && (pass.skrNeeded === null || (Number.isFinite(cfg.body.skr.priceUsd) && pass.skrNeeded === Math.ceil(1 / cfg.body.skr.priceUsd))), pass);
+
+    // ── P1 end to end: a two-payer transaction pays for no one ──
+    {
+      const W2 = pk(), tb = (i, owner, amt) => ({ accountIndex: i, mint: SKR_MINT, owner, uiTokenAmount: { amount: String(amt), decimals: 6 } });
+      const sig = newSig();
+      const t0 = fixtureTx({ srcOwner: wallet.pub, blockTime: Math.floor(Date.now() / 1000), amount: Q.amountRaw });
+      t0.meta.preTokenBalances.push(tb(7, W2, 1)); t0.meta.postTokenBalances.push(tb(7, W2, 0));
+      t0.meta.postTokenBalances.find((b) => b.owner === RECEIVER).uiTokenAmount.amount = String(BigInt(Q.amountRaw) + 1n);
+      fixtures.set(sig, t0);
+      const w2q = await call(A.base, "GET", "/api/tool-gate/skr-quote?wallet=" + W2);
+      const r1 = await redeem(wallet.pub, sig, { skrQuote: Q.quote });
+      const r2 = await redeem(W2, sig, { skrQuote: w2q.body.quote });
+      ok("two owners' SKR fell in one transaction → neither wallet gets a pass", !r1.body.success && !r2.body.success && r1.body.code === "multiple_payers" && r2.body.code === "multiple_payers", { r1: r1.body, r2: r2.body });
+    }
+
     // ── stale price → no quote (separate server: last accepted tick 2 h old, far outside any live band) ──
-    B = await boot(P1 + 1, { toolGateSkrUsd: 1e6, toolGateSkrUsdAt: Date.now() - 2 * 3600e3 });
+    B = await boot(P1 + 1, { toolGateSkrUsd: 1e6, toolGateSkrUsdAt: Date.now() - 2 * 3600e3, toolGateSkrAnchors: goodHistory });
     const sq = await call(B.base, "GET", "/api/tool-gate/skr-quote?wallet=" + wallet.pub);
     ok("STALE SKR PRICE → 503 skr_price_unavailable, NO quote, NO amount (SKR never graces)", sq.status === 503 && sq.body.error === "skr_price_unavailable" && !sq.body.quote && !sq.body.amountRaw, sq);
+
+    // ── P2: the quote's own guard (a fresh, in-band-looking price that is NOT backed by history) ──
+    C = await boot(P1 + 2, { toolGateSkrUsd: 0.05, toolGateSkrUsdAt: Date.now() });   // cold start: no history at all
+    const cq = await call(C.base, "GET", "/api/tool-gate/skr-quote?wallet=" + wallet.pub);
+    ok("COLD START (fresh price, no accepted-tick history) → 503, NO amount", cq.status === 503 && cq.body.error === "skr_price_unavailable" && !cq.body.quote && !cq.body.amountRaw, cq);
+    D = await boot(P1 + 3, { toolGateSkrUsd: 0.5, toolGateSkrUsdAt: Date.now(), toolGateSkrAnchors: goodHistory });   // 10× the median
+    const dq = await call(D.base, "GET", "/api/tool-gate/skr-quote?wallet=" + wallet.pub);
+    ok("PRICE 10× THE 24 h MEDIAN (a spike / ratchet that the 6 h single-anchor band let through) → 503, NO amount (quote would have been ~0.1 SKR of value)", dq.status === 503 && !dq.body.quote && !dq.body.amountRaw, dq);
   } finally {
-    A.stop(); if (B) B.stop(); stub.close();
+    A.stop(); if (B) B.stop(); if (C) C.stop(); if (D) D.stop(); stub.close();
   }
   console.log(failures ? `\n${failures} FAILED` : "\nall passed");
   process.exit(failures ? 1 : 0);

@@ -50,7 +50,23 @@ export async function fetchQuote(fetchFn, wallet) {
   if (!r.ok || !j || !j.success) return { ok: false, kind: "error", error: (j && j.error) || ("status " + r.status) };
   const bad = validateQuote(j);
   if (bad) return { ok: false, kind: "error", error: bad };
-  return { ok: true, quote: j };
+  // Two LOCAL stopwatches started the moment the quote arrived (see quoteStale). They live on the
+  // object only; the server never sees them and the quote token is untouched.
+  return { ok: true, quote: { ...j, _perf0: perfNow(), _wall0: Date.now() } };
+}
+const perfNow = () => { try { return (typeof performance !== "undefined" && performance.now()) || 0; } catch (_) { return 0; } };
+// Is this quote too old to pay at? Judged by how long it has been HERE since it arrived — never by
+// comparing the phone's clock to the server's `expiresAt` (review of #421, P3: a slow clock saw a
+// dead quote as fresh and paid late into a final refusal). The quote's life is the server's own
+// span, `expiresAt − issuedAt` (both server time, so clock skew cancels); the larger of the
+// monotonic and wall-clock elapsed times counts, so a device that slept or a clock that jumped
+// can only make this stricter.
+export function quoteStale(quote, marginMs = 60e3) {
+  const life = Number(quote.expiresAt) - Number(quote.issuedAt);
+  if (!(life > 0)) return true;
+  const perf = perfNow() - Number(quote._perf0), wall = Date.now() - Number(quote._wall0);
+  const elapsed = Math.max(Number.isFinite(perf) ? perf : Infinity, Number.isFinite(wall) ? wall : Infinity);
+  return !(elapsed < life - marginMs);
 }
 // Everything the wallet will be asked to sign is derived from these fields, so they are checked
 // here, before the Confirm sheet, rather than trusted: right mint, a known token program, an
@@ -62,7 +78,7 @@ export function validateQuote(q) {
   if (!RAW_RE.test(String(q.amountRaw))) return "the quote has a bad amount";
   if (rawToUi(q.amountRaw, q.decimals) !== String(q.amountUi)) return "the quote's amount is not self-consistent";
   if (!ADDR_RE.test(String(q.receiver || "")) || !ADDR_RE.test(String(q.receiverAta || ""))) return "the quote has a bad receiver";
-  if (!q.quote || typeof q.quote !== "string" || !Number.isFinite(q.expiresAt)) return "the quote is incomplete";
+  if (!q.quote || typeof q.quote !== "string" || !Number.isFinite(q.expiresAt) || !Number.isFinite(q.issuedAt) || !(q.expiresAt > q.issuedAt)) return "the quote is incomplete";
   return null;
 }
 
@@ -153,6 +169,30 @@ export function loadRecord(storage, wallet, now = Date.now()) {
 }
 export function clearRecord(storage, wallet) { try { storage.removeItem(PAY_KEY + wallet); } catch (_) {} }
 
+// ── payments that landed but cannot buy a pass ("needs attention") ─────────────────────────────
+// { wallet, paySig, amountUi, code, error, at }[] per wallet, newest last, at most 5. Never cleared
+// by anything but the person's own Dismiss — the signature is their evidence for support.
+const STUCK_KEY = "clkn_seeker_skrstuck:";
+export function loadStuck(storage, wallet) {
+  try {
+    const l = JSON.parse(storage.getItem(STUCK_KEY + wallet) || "[]");
+    return Array.isArray(l) ? l.filter((r) => r && r.wallet === wallet && r.paySig) : [];
+  } catch (_) { return []; }
+}
+export function saveStuck(storage, entry) {
+  const l = loadStuck(storage, entry.wallet).filter((r) => r.paySig !== entry.paySig);
+  l.push(entry);
+  const json = JSON.stringify(l.slice(-5));
+  storage.setItem(STUCK_KEY + entry.wallet, json);
+  if (storage.getItem(STUCK_KEY + entry.wallet) !== json) throw new Error("Could not verify the saved record.");
+}
+export function dismissStuck(storage, wallet, paySig) {
+  try {
+    const l = loadStuck(storage, wallet).filter((r) => r.paySig !== paySig);
+    if (l.length) storage.setItem(STUCK_KEY + wallet, JSON.stringify(l)); else storage.removeItem(STUCK_KEY + wallet);
+  } catch (_) {}
+}
+
 // ── redemption ─────────────────────────────────────────────────────────────────
 // Posts the stored record to the session route and classifies the answer.
 //   { kind:"granted", pass, days, recovered }       record cleared
@@ -192,8 +232,17 @@ export async function redeemRecord({ fetchFn, storage, wallet, refreshIntent }) 
     return { kind: "granted", pass: j.pass, days: j.days || j.termDays || 7, recovered: !!j.recovered };
   }
   if (j && j.definitive === true) {
+    // The ACTIVE record is released (that transfer will never buy a pass, and it must not block a
+    // new payment) — but a payment that may have LANDED is never dropped silently: it moves to the
+    // "needs attention" list with its signature, reason and amount, shown until the person
+    // dismisses it (review of #421, P3: an outside_window refusal used to clear a paid record).
+    // Only a transaction that FAILED on chain moved nothing and has nothing to keep.
+    const code = j.code || "";
+    if (code !== "tx_failed") {
+      try { saveStuck(storage, { wallet, paySig: rec.paySig, amountUi: rec.amountUi || null, code, error: j.error || "", at: Date.now() }); } catch (_) { /* the refusal is still shown */ }
+    }
     clearRecord(storage, wallet);
-    return { kind: "refused", error: j.error || "", code: j.code || "" };
+    return { kind: "refused", error: j.error || "", code, sig: rec.paySig, stuck: code !== "tx_failed" };
   }
   // Everything else — 5xx, an unavailable chain read, "not visible yet", a store that could not
   // record, a malformed body — is "not yet", and the record stays.

@@ -9960,10 +9960,25 @@ function refreshSkrPrice(now) {
       if (!a.ok) { console.warn("[tool-gate] SKR price refresh rejected: " + a.reason); return; }
       toolGatePrice.skrUsd = a.price;
       kv.set("toolGateSkrUsd", a.price); kv.set("toolGateSkrUsdAt", now);
+      noteSkrAnchor(a.price, now);   // observe only — the quote path's own history (see below); the door is unchanged
     } catch (e) { console.warn("[tool-gate] SKR price refresh failed:", e.message); }
     finally { toolGatePrice.skrP = null; }
   })();
   return toolGatePrice.skrP;
+}
+// The SKR-paid pass QUOTES from its own price history, not from acceptPrice()'s single re-anchoring
+// last-good (review of #421, P2; lib/tool-pass-skr.js quotePriceGate). Every tick the door accepts
+// is also noted here, persisted so a restart does not forget it.
+function skrAnchors() { const a = kv.get("toolGateSkrAnchors", []); return Array.isArray(a) ? a : []; }
+function noteSkrAnchor(price, now) {
+  try { kv.set("toolGateSkrAnchors", TOOL_PASS_SKR.pushAnchor(skrAnchors(), price, now)); } catch (_) { /* history only */ }
+}
+// Keep the history filling without waiting for traffic: a quote needs several accepted ticks, and
+// a quiet server (a fresh deploy) would otherwise answer 503 until enough people had opened the
+// pass sheet. One Jupiter read every 5 minutes. TOOLGATE_SKR_WARMUP_OFF=1 disables it (tests).
+if (!/^(1|true|yes)$/i.test(process.env.TOOLGATE_OFF || "") && !/^(1|true|yes)$/i.test(process.env.TOOLGATE_SKR_WARMUP_OFF || "")) {
+  setTimeout(() => { refreshSkrPrice(Date.now()); }, 20e3).unref();
+  setInterval(() => { refreshSkrPrice(Date.now()); }, 5 * 60e3).unref();
 }
 
 // SERVER-SIDE enforcement of the tools pass (2026-09-10, reworked the same night after a
@@ -10188,6 +10203,10 @@ app.get("/api/tool-gate/skr-quote", rateLimit("pay", { windowMs: 60000, max: 30 
   if (!(Number.isFinite(price) && price > 0) || !(priceAge() <= SKR_QUOTE_PRICE_MAX_AGE_MS)) {
     return res.status(503).json({ success: false, error: "skr_price_unavailable" });
   }
+  // The quote's own guard: enough accepted ticks in the last 24 h, and this price within 3× of
+  // their median. A cold start or a ratcheted/spiked tick refuses to quote — no amount.
+  const gate = TOOL_PASS_SKR.quotePriceGate({ anchors: skrAnchors(), current: price, now: Date.now() });
+  if (!gate.ok) { console.warn("[tool-gate] SKR quote refused: " + gate.reason); return res.status(503).json({ success: false, error: "skr_price_unavailable" }); }
   let info, amountRaw, ata;
   try { info = await skrMintInfo(); } catch (e) { console.warn("[tool-gate] SKR mint read failed:", e.message); return res.status(503).json({ success: false, error: "skr_chain_unavailable" }); }
   try {
