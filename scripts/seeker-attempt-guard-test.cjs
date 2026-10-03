@@ -42,7 +42,11 @@ const ok = (name, cond, detail) => {
 const B58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
 const pk = () => Array.from(crypto.randomBytes(44)).map((b) => B58[b % 58]).join("");
 const NOSIG_RE = /No signature came back from your wallet/;
+// Codex round 2 on #479, P2: two released sentences — "was just re-read" ONLY after a successful
+// balance read, "could not be re-read" when that read failed. Never the first on a failed read.
 const RELEASED_RE = /That attempt can no longer land/;
+const RELEASED_READ_RE = /Your balance was just re-read from the chain/;
+const RELEASED_FAIL_RE = /Your balance could not be re-read just now/;
 const SAVE_FAIL_RE = /Could not save the recovery record/;
 
 (async () => {
@@ -88,19 +92,28 @@ const SAVE_FAIL_RE = /Could not save the recovery record/;
     ok("Project Burn's OK button is never offered on an unconfirmed card (sig or not)", /\{o\.status !== "unconfirmed" \? \(/.test(burn) && !/o\.status !== "unconfirmed" \|\| !o\.sig/.test(burn));
     ok("Project Burn's Check status button is unconditional on an unconfirmed card", !/\{o\.sig \? <button[^>]*onClick=\{onCheckStatus\}/.test(burn));
     ok("Project Burn resolves through sign.js's checkPendingSwap / checkUnsignedPending, not a private status read", /checkPendingSwap\(rpcFn\(\)/.test(burn) && /checkUnsignedPending\(rpcFn\(\)/.test(burn) && !/confirmSignature\(/.test(burn));
-    ok("both panes share the two sentences from attempt-copy.js (one key text, no drift)", /from "\.\.\/attempt-copy\.js"/.test(swap) && /from "\.\.\/attempt-copy\.js"/.test(burn));
+    ok("both panes share the sentences from attempt-copy.js (one key text, no drift)", /from "\.\.\/attempt-copy\.js"/.test(swap) && /from "\.\.\/attempt-copy\.js"/.test(burn));
     const copy = fs.readFileSync(path.join(SEEKER, "attempt-copy.js"), "utf8");
     const literals = (copy.match(/t\("([^"]+)"\)/g) || []).join("\n");
-    ok("attempt-copy.js carries exactly the two sentences, and neither claims the transaction did not land", (copy.match(/t\("/g) || []).length === 2 && !/did not land|nothing was|failed/i.test(literals), literals);
-    // The two new keys reach every shipped dictionary (nine languages) and the store-edition prune.
+    ok("attempt-copy.js carries exactly the three sentences, and none claims the transaction did not land", (copy.match(/t\("/g) || []).length === 3 && !/did not land|nothing was|failed/i.test(literals), literals);
+    // Codex round 2 on #479: P1 — the Burn restore effect lets the connected wallet's record win
+    // over any card left on screen, and every outcome names its wallet; P2 — Swap's released card
+    // follows the balance read's own phase and marks the read in flight before releasing.
+    ok("Burn: on a wallet change the connected wallet's record ALWAYS wins over a card already on screen", /if \(rec\) return o && o\.status === "unconfirmed" && o\.wallet === walletAddr \? o : outcomeFromRecord\(rec\);/.test(burn));
+    ok("Burn: every settled outcome names its wallet, and another wallet's card is dropped on a switch", /wallet: wallet\.address,/.test(burn) && /if \(o && o\.wallet && o\.wallet !== walletAddr\) return null;/.test(burn));
+    ok("Swap: the released card claims a re-read only when balPhase is loaded, says 'could not' when unavailable, and shows Reading balance… meanwhile",
+       /balPhase === "loaded" \? <p>\{releasedSentence\(true\)\}<\/p>/.test(swap) && /balPhase === "unavailable" \? <p>\{releasedSentence\(false\)\}<\/p>/.test(swap) && /<Loading label=\{t\("Reading balance…"\)\} \/>/.test(swap));
+    ok("Swap: the balance read is marked in flight synchronously before the record is released", /setBalIn\(\{ phase: "loading", raw: null \}\);\s*\n\s*setBalTick\(\(n\) => n \+ 1\);\s*\n\s*await resolvePending\(\{ status: "released" \}\);/.test(swap));
+    // The new keys reach every shipped dictionary (nine languages) and the store-edition prune.
     const keys = ["No signature came back from your wallet. If it already sent this, it may still land — check before trying again.",
-                  "That attempt can no longer land, and with no signature there is nothing to look up — whether it landed earlier can't be said from here. Your balance was just re-read from the chain; that is the record."];
+                  "That attempt can no longer land, and with no signature there is nothing to look up — whether it landed earlier can't be said from here. Your balance was just re-read from the chain; that is the record.",
+                  "That attempt can no longer land, and with no signature there is nothing to look up — whether it landed earlier can't be said from here. Your balance could not be re-read just now; check it before trying again."];
     const missing = [];
     for (const l of ["es", "hi", "it", "pt", "vi", "zh", "ko", "tr", "id"]) {
       const d = JSON.parse(fs.readFileSync(path.join(ROOT, "public", "i18n", l + ".json"), "utf8"));
       for (const k of keys) if (!d[k] || d[k] === k) missing.push(l + ":" + k.slice(0, 20));
     }
-    ok("both sentences are translated in all nine dictionaries", missing.length === 0, missing);
+    ok("all three sentences are translated in all nine dictionaries", missing.length === 0, missing);
     const excl = JSON.parse(fs.readFileSync(path.join(ROOT, "store-edition", "store-edition.json"), "utf8")).excludeKeys || [];
     ok("…and pruned from the education-only store bundles", keys.every((k) => excl.includes(k)));
   }
@@ -163,9 +176,15 @@ const SAVE_FAIL_RE = /Could not save the recovery record/;
         import React from "react";
         import { createRoot } from "react-dom/client";
         import ProjectBurnPane from "./tools/ProjectBurn.jsx";
-        const wallet = { connected: true, address: window.__ADDR, provider: { publicKey: { toString: () => window.__ADDR } } };
+        // The connected wallet can change under the pane (round 2, P1): window.__setWallet(addr).
+        function Host() {
+          const [addr, setAddr] = React.useState(window.__ADDR);
+          window.__setWallet = setAddr;
+          const wallet = { connected: true, address: addr, provider: { publicKey: { toString: () => addr } } };
+          return <ProjectBurnPane wallet={wallet} />;
+        }
         let root = null;
-        window.__mount = () => { root = createRoot(document.getElementById("root")); root.render(<ProjectBurnPane wallet={wallet} />); };
+        window.__mount = () => { root = createRoot(document.getElementById("root")); root.render(<Host />); };
         window.__unmount = () => { if (root) root.unmount(); root = null; };
         window.__mount();
       `, [signShim(/ProjectBurn\.jsx$/, `export const splTokenShim = () => ({ getAssociatedTokenAddressSync: () => ({}), createBurnCheckedInstruction: () => ({}) });`)]);
@@ -252,7 +271,7 @@ const SAVE_FAIL_RE = /Could not save the recovery record/;
         await checkStatus(page);
         await page.waitForSelector(".seeker-burn-outcome-released", { timeout: 10000 });
         const rel = await body(page);
-        ok("blockhash proven dead: the card is 'released' and says exactly that", RELEASED_RE.test(rel), rel.slice(0, 400));
+        ok("blockhash proven dead: the card is 'released' and says the balance was re-read (it renders only inside a LOADED token card)", RELEASED_READ_RE.test(rel) && !RELEASED_FAIL_RE.test(rel), rel.slice(0, 400));
         ok("…and NEVER says it did not land or that nothing was burned", !/did not land|Nothing was burned|Burn failed/.test(rel), rel.slice(0, 400));
         ok("…the balance was re-read from the chain and is what's shown", (await page.evaluate(() => window.__state.fetchCount)) > before && /90 TKN/.test(rel), rel.slice(0, 400));
         ok("…and the record is released", (await stored(page)) === null, await stored(page));
@@ -311,6 +330,31 @@ const SAVE_FAIL_RE = /Could not save the recovery record/;
         await checkStatus(page);
         await page.waitForSelector(".seeker-burn-outcome-sent", { timeout: 10000 });
         ok("Check status → confirmed: Burned, receipt fetched, record cleared", (await stored(page)) === null && (await page.evaluate(() => window.__state.receiptCount)) === 1);
+        await page.close();
+      }
+      {
+        // ⚠️ Codex round 2 on #479, P1 — wallet A's declined card is on screen; wallet B (with an
+        // unresolved burn on record, blockhash still live) connects. The first cut kept A's card,
+        // whose OK brought the burn form back for B. Now B's record wins the moment B connects.
+        const B = pk();
+        const { page, errors } = await open({ mode: "declined" });
+        await loadAndBurn(page);
+        await page.waitForSelector(".seeker-burn-outcome-declined", { timeout: 10000 });
+        await page.evaluate(({ k, B, MINT, BH }) => {
+          window.localStorage.setItem(k, JSON.stringify({ [B]: { sig: null, mint: MINT, symbol: "TKN", decimals: 6, rawAmt: "5000000", amount: 5, isFullBalance: false, recentBlockhash: BH, lastValidBlockHeight: 900, wallet: B, at: Date.now() } }));
+          window.__state.walletAsked = false;
+          window.__setWallet(B);
+        }, { k: KEY, B, MINT, BH });
+        await page.waitForSelector(".seeker-burn-outcome-unconfirmed", { timeout: 10000 });
+        ok("wallet switch onto an unresolved record: B's watching card replaces A's declined card", !(await page.$(".seeker-burn-outcome-declined")) && NOSIG_RE.test(await body(page)));
+        ok("…no OK, no Burn — nothing on screen can start a second attempt for B", !(await okBtnInCard(page)) && !(await burnBtn(page)));
+        const recB = JSON.parse((await stored(page)) || "null");
+        ok("…B's original record is untouched (still sig:null, same blockhash) and the wallet was never asked", recB && recB[B] && recB[B].sig === null && recB[B].recentBlockhash === BH && recB[B].rawAmt === "5000000" && (await page.evaluate(() => window.__state.walletAsked)) === false, recB);
+        // Switching back to A (no record) must not carry B's card onto A's screen.
+        await page.evaluate((A) => window.__setWallet(A), ADDR);
+        await page.waitForFunction(() => !document.querySelector(".seeker-burn-outcome-unconfirmed"), null, { timeout: 10000 });
+        ok("switching back to a wallet with no record drops B's card (and A's old declined card is gone too)", !(await page.$(".seeker-burn-outcome")));
+        ok("wallet-switch flow: no uncaught exception", errors.length === 0, errors.join(" | "));
         await page.close();
       }
       {
@@ -379,7 +423,7 @@ const SAVE_FAIL_RE = /Could not save the recovery record/;
           return { status: "unconfirmed", sig: SIG };
         };
         window.CluckUtil = { rpc: async (m) => {
-          if (m === "getBalance") { s.balanceReads++; return { value: 1000000000 }; }
+          if (m === "getBalance") { s.balanceReads++; if (s.balanceFail) throw new Error("rpc down"); return { value: 1000000000 }; }
           if (m === "getTokenAccountsByOwner") return { value: [] };
           if (m === "getSignatureStatuses") return { value: [s.sigStatus] };
           if (m === "getBlockHeight") return s.height;
@@ -434,12 +478,30 @@ const SAVE_FAIL_RE = /Could not save the recovery record/;
         const reads = await page.evaluate(() => window.__state.balanceReads);
         await set(page, { height: LVB + 10, blockhashValid: false });
         await page.waitForSelector(".seeker-burn-outcome-released", { timeout: 10000 });
-        const rel = await body(page);
-        ok("blockhash proven dead: a 'released' card with exactly the released sentence", RELEASED_RE.test(rel), rel.slice(0, 500));
+        let rel = await body(page);
+        await page.waitForFunction(() => /Your balance was just re-read from the chain/.test(document.body.innerText), null, { timeout: 10000 });
+        ok("blockhash proven dead: a 'released' card that says the balance was re-read — once the read succeeded", RELEASED_READ_RE.test(rel = await body(page)) && !RELEASED_FAIL_RE.test(rel), rel.slice(0, 500));
         ok("…that never says it did not land / safe to try again", !/did not land|safe to try again|Swap failed/.test(rel), rel.slice(0, 500));
         ok("…the balance was re-read from the chain", (await page.evaluate(() => window.__state.balanceReads)) > reads);
         ok("…the record is released and the form is usable again", (await stored(page)) === null && (await amountDisabled(page)) === false);
         ok("swap no-signature flow: no uncaught exception", errors.length === 0, errors.join(" | "));
+        await page.close();
+      }
+      {
+        // ⚠️ Codex round 2 on #479, P2 — the same release, but the balance re-read FAILS. The
+        // card used to say "Your balance was just re-read from the chain" beside "Balance
+        // unavailable". Now it says the read failed, and never claims a re-read.
+        const { page } = await open({ mode: "noSignature" });
+        await quoteAndConfirm(page);
+        await page.waitForFunction(() => window.__state.walletAsked === true, null, { timeout: 10000 });
+        await page.waitForFunction(() => !/Approve the swap in your wallet/.test(document.body.innerText), null, { timeout: 10000 });
+        await set(page, { balanceFail: true, height: LVB + 10, blockhashValid: false });
+        await page.waitForSelector(".seeker-burn-outcome-released", { timeout: 10000 });
+        await page.waitForFunction(() => /Balance unavailable/.test(document.body.innerText), null, { timeout: 10000 });
+        const txt = await body(page);
+        ok("released while the balance read FAILS: the card says the balance could not be re-read", RELEASED_FAIL_RE.test(txt), txt.slice(0, 600));
+        ok("…and NEVER claims it was just re-read", !RELEASED_READ_RE.test(txt), txt.slice(0, 600));
+        ok("…the form's own balance line agrees (Balance unavailable), the record is released", /Balance unavailable/.test(txt) && (await stored(page)) === null);
         await page.close();
       }
       {

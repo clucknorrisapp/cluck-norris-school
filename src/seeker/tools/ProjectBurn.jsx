@@ -164,7 +164,9 @@ function OutcomeCard({ o, onDismiss, onRetry, onCheckStatus, onStopWatching }) {
         // A signature-less attempt whose blockhash is proven dead. No title, no "nothing was
         // burned": the balance on the card above was re-read when this was released, and that
         // is the only record there is.
-        <p>{releasedSentence()}</p>
+        // `true`: this card renders only inside a LOADED token card (phase === "loaded"), so the
+        // balance shown above it is a real read, never the pre-release figure.
+        <p>{releasedSentence(true)}</p>
       ) : o.status === "failed" ? (
         <>
           <p>{t("Nothing was burned — the transaction did not land.")}{o.error ? ` ${o.error}` : ""}</p>
@@ -222,9 +224,17 @@ export default function ProjectBurnPane({ wallet }) {
   const walletAddr = wallet.connected && wallet.address ? wallet.address : null;
   React.useEffect(() => {
     const rec = walletAddr ? loadBurnPending(walletAddr) : null;
+    // ⚠️ Codex round 2 on #479 (e3d3effa), P1 — THE RECORD ALWAYS WINS. The first cut kept any
+    // declined / sent / failed card that happened to be on screen, so switching from wallet A
+    // (its declined card still open) to wallet B (an unresolved burn on record) showed A's card,
+    // whose OK brought the burn form back for B while B's blockhash was still live — a second
+    // prompt, and B's original record overwritten. Now: a record for the connected wallet is
+    // restored unconditionally (keeping an unconfirmed card already showing for that wallet, so
+    // a Check status in flight is not reset); without one, an outcome that belongs to a
+    // different wallet is dropped rather than carried onto this one's screen.
     setBurnOutcome((o) => {
-      if (o && o.status === "unconfirmed" && o.wallet && o.wallet !== walletAddr) return rec ? outcomeFromRecord(rec) : null;
-      if (!o && rec) return outcomeFromRecord(rec);
+      if (rec) return o && o.status === "unconfirmed" && o.wallet === walletAddr ? o : outcomeFromRecord(rec);
+      if (o && o.wallet && o.wallet !== walletAddr) return null;
       return o;
     });
     if (rec) {
@@ -415,6 +425,7 @@ export default function ProjectBurnPane({ wallet }) {
 
   async function settleOutcome(res, frozen) {
     const base = {
+      wallet: wallet.address, // every outcome names its wallet — a switch drops another wallet's card (round 2, P1)
       amount: frozen.amtNum, symbol: frozen.symbol, mint: frozen.mint,
       usdValue: frozen.priceUsd != null ? frozen.amtNum * frozen.priceUsd : null,
       pctSupply: frozen.supply ? (frozen.amtNum / frozen.supply) * 100 : null,

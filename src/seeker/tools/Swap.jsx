@@ -212,7 +212,9 @@ function outcomeTitle(status) {
   return t("Unconfirmed");
 }
 
-function OutcomeCard({ o, onDismiss, onRetry }) {
+// `balPhase` — the pay-mint balance read's phase (idle|loading|loaded|unavailable): the "released"
+// card may only claim a balance re-read when one actually succeeded (Codex round 2 on #479, P2).
+function OutcomeCard({ o, onDismiss, onRetry, balPhase }) {
   return (
     <div className={"seeker-burn-outcome seeker-burn-outcome-" + o.status} role={o.status === "failed" || o.status === "expired" ? "alert" : "status"}>
       <p className="seeker-burn-outcome-title">
@@ -242,8 +244,11 @@ function OutcomeCard({ o, onDismiss, onRetry }) {
         <p>{t("This was submitted but had no on-chain status after 30 seconds. It may still land — check before signing again.")}</p>
       ) : o.status === "released" ? (
         // A signature-less attempt whose blockhash is proven dead. No "did not land": only the
-        // balance line above this card (re-read when the record was released) speaks.
-        <p>{releasedSentence()}</p>
+        // balance line above this card speaks — and only once its re-read has actually answered.
+        // While it is in flight, say so; if it failed, say THAT, never "was just re-read".
+        balPhase === "loaded" ? <p>{releasedSentence(true)}</p>
+          : balPhase === "unavailable" ? <p>{releasedSentence(false)}</p>
+          : <Loading label={t("Reading balance…")} />
       ) : o.status === "expired" ? (
         <p>{t("This did not land before its expiry block height passed — it's safe to try again.")} {solscanTx(o.sig) ? <a className="seeker-listing-link" href={solscanTx(o.sig)} target="_blank" rel="noopener noreferrer">{t("View transaction on Solscan")}</a> : null}</p>
       ) : (
@@ -406,6 +411,11 @@ export default function SwapPane({ wallet }) {
         // (the only record there is) and say exactly that; never "did not land".
         const r = await checkUnsignedPending(rpcFn(), { lastValidBlockHeight: pending.lastValidBlockHeight, recentBlockhash: pending.recentBlockhash });
         if (r.status !== "expired") return; // keep polling
+        // The balance read is the only record of what happened. Mark it IN FLIGHT synchronously
+        // (the effect that performs it runs after this render) so the released card can never
+        // show the pre-release figure as "just re-read", and let the card follow the read's own
+        // outcome (Codex round 2 on #479, P2).
+        setBalIn({ phase: "loading", raw: null });
         setBalTick((n) => n + 1);
         await resolvePending({ status: "released" });
         return;
@@ -899,7 +909,7 @@ export default function SwapPane({ wallet }) {
         <div className="seeker-swap-form">
           {swapping ? <Loading label={t("Approve the swap in your wallet…")} /> : null}
           {pending ? <PendingCard p={pending} onDismiss={dismissPending} /> : null}
-          {outcome ? <OutcomeCard o={outcome} onDismiss={dismissOutcome} onRetry={retryFromOutcome} /> : null}
+          {outcome ? <OutcomeCard o={outcome} onDismiss={dismissOutcome} onRetry={retryFromOutcome} balPhase={balIn.phase} /> : null}
 
           {!swapping ? (
             <>
