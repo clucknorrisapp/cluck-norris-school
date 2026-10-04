@@ -612,6 +612,7 @@
     "Third-party risk check (DD.xyz)",
     "This account is not controlled by the connected wallet, so this was refused.",
     "This account no longer exists — it was already closed.",
+    "This app has an in-app swap, in the Toolkit and on the Swap tab. This page isn't telling you to use it — only that it exists.",
     "This app itself is published on the Solana dApp Store — a second Android app store, built specifically for apps that use wallets, tokens and other on-chain features.",
     "This app never asks for, receives, or stores a seed phrase or a private key — not in Seed Vault, not anywhere. Every action that moves funds or signs anything is built here, then handed to your wallet app to approve and sign, exactly the way Mobile Wallet Adapter works.",
     "This app you're reading this page in is that same listing. An update to it is published to the dApp Store the same way any app update is published to any store; the store checks for and delivers it, not this app itself.",

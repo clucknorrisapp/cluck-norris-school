@@ -61,7 +61,10 @@ function SkrDoorFacts({ swapAvailable }) {
         <div className="seeker-solana-fact">{t("Today's SKR figure couldn't be loaded right now — no number is shown here rather than guessing one.")}</div>
       )}
       {swapAvailable ? (
-        <div className="seeker-solana-fact">{t("An in-app swap between tokens is planned for a future release. This page isn't telling you to use it — only that it exists.")}</div>
+        // The swap SHIPPED (#420) and is a tab now; the earlier "planned for a future release" line
+        // was written before it existed and would have read as false the moment the route list
+        // (full.jsx REGISTERED_ROUTES) was corrected to include it. Still no nudge to use it.
+        <div className="seeker-solana-fact">{t("This app has an in-app swap, in the Toolkit and on the Swap tab. This page isn't telling you to use it — only that it exists.")}</div>
       ) : null}
     </>
   );

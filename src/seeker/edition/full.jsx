@@ -182,12 +182,20 @@ function FullCheckup({ wallet }) {
 // ⚠️ THE SCHOOL LEADS. AGENTS.md records the owner's flagship list — "the school, the LP lab,
 // the airdropper, the locker room, the fire pit, project burn" — and the school is first. The app
 // shipped landing on /tools with no school in it at all; do not put the toolkit back in front.
+//
+// ⚠️ THE BAR IS FOR PLACES YOU GO EVERY DAY (owner, 2026-10-04, on his Seeker: "those things at the
+// bottom should be things you use every day … Rent reclaim sure as heck shouldn't be a focus").
+// Rent Reclaim and Wallet Checkup had tabs only because they were the first three increments
+// built, and the bar was never revisited when the school and the toolkit arrived. Both keep their
+// routes and their Toolkit cards (Rent also its School-home card); they are a chore and a check,
+// not a daily place. LP Lab is a course INSIDE the school, not a tab. Swap is the owner's "connect
+// your wallet and buy CLKN or SKR" focus and what opens the pass. Daily is daily by definition.
 export const TABS = [
   { to: "/school", label: "School", icon: "🎓" },
   { to: "/tools", label: "Toolkit", icon: "🧰" },
-  { to: "/rent", label: "Rent", icon: "💰" },
+  { to: "/tools/alpha", label: "Daily", icon: "📅" },
+  { to: "/tools/swap", label: "Swap", icon: "🔁" },
   { to: "/ask", label: "Ask", i18nKey: "Ask (tab)", icon: "🐔" },
-  { to: "/checkup", label: "Checkup", icon: <ShieldIcon /> },
 ];
 
 // The routes THIS edition registers — kept as data so a doc-mentioned, not-yet-shipped feature
@@ -197,9 +205,14 @@ export const TABS = [
 export const REGISTERED_ROUTES = [
   "/", "/school", "/school/:courseId", "/school/:courseId/:lessonId",
   "/solana", "/solana/:pageId", "/solana/seeker/:pageId",
-  "/tools", "/rent", "/ask", "/checkup",
+  "/tools", "/rent", "/ask", "/checkup", "/library",
   "/tools/listing", "/tools/alpha", "/tools/firepit", "/tools/burn", "/tools/lock",
   "/tools/xray", "/tools/holders", "/tools/trace", "/tools/airdrop", "/tools/hatchery",
+  // ⚠️ /tools/swap and /library were routed (#420, #440) but never added here, so SWAP_AVAILABLE
+  // read false and the Solana Room's Seeker wing told people the in-app swap did not exist while
+  // the Toolkit offered it. Found 2026-10-04 reading the tab bar; the list IS the truth the wing
+  // reads, so a new <Route> below is not shipped until it is also listed here.
+  "/tools/swap",
 ];
 const SWAP_AVAILABLE = REGISTERED_ROUTES.includes("/tools/swap");
 

@@ -3072,5 +3072,6 @@
   "A payment of {amount} SKR was sent but could not buy a pass: {reason}. Keep this signature and contact support: {sig}": "一笔 {amount} SKR 的付款已发出，但未能兑换通行证：{reason}。请保存这个签名并联系支持：{sig}",
   "Dismiss": "忽略",
   "Needs attention": "需要处理",
-  "We can't tell yet whether this payment went through. If SKR left your wallet, look in your wallet's history and contact support.": "目前还无法确定这笔付款是否成功。如果 SKR 已经从你的钱包转出，请查看钱包的交易记录并联系支持。"
+  "We can't tell yet whether this payment went through. If SKR left your wallet, look in your wallet's history and contact support.": "目前还无法确定这笔付款是否成功。如果 SKR 已经从你的钱包转出，请查看钱包的交易记录并联系支持。",
+  "This app has an in-app swap, in the Toolkit and on the Swap tab. This page isn't telling you to use it — only that it exists.": "本应用内置代币兑换功能，位于工具包和“Swap”标签页。本页并非要求你使用它——只是说明它的存在。"
 }

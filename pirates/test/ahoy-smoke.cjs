@@ -91,6 +91,30 @@ function chromiumPath() {
   })));
   for (const r of layoutReport) check((r.exit || r.boss) && r.width > 2000 && r.piece, `layout ${r.id}: width ${r.width}, exit ${r.exit || r.boss}, secrets ${r.secrets}`);
 
+  // Difficulty (data.js AHOY.DIFF, owner 2026-10-04 "needs to be more challenging overall"): tier 1
+  // is exactly the game as it shipped — these are the numbers the scenes used before the tier table
+  // existed — so Bonding Curve Bay, where this test plays, is unchanged by the rest of this file.
+  const diff = await page.evaluate(() => {
+    const hard0 = AHOY.Save.get().hardtack; AHOY.Save.set({ hardtack: false });
+    const p1 = AHOY.DIFF.p(1), p4 = AHOY.DIFF.p(4);
+    const tiers = AHOY.SEAS.map((s) => [s.id, AHOY.DIFF.tier(s)]);
+    AHOY.Save.set({ hardtack: true }); const hardTier = AHOY.DIFF.tier(AHOY.SEAS[0]), hardMul = AHOY.DIFF.p(AHOY.DIFF.tier(AHOY.SEAS[0])).bootyMul;
+    AHOY.Save.set({ hardtack: hard0 });
+    const drops = AHOY.buildLayout(AHOY.SEAS[0].islands[1].layout).drops.length;
+    return { p1, p4, tiers, hardTier, hardMul, drops };
+  });
+  const b = diff.p1, m = b.mishap;
+  check(b.hearts === 3 && b.invuln === 1300 && b.enemySpeed === 1 && b.skelHp === 2 && b.crabHp === 1 && b.moverSpeed === 110 && b.checkpoints >= 3
+    && !b.restartOnWipeout && !b.gullDive && !b.skelLunge && !b.crumble && !b.drops && b.tentacleWarn === 850 && b.tentacleWindow === 1700 && b.rugGap[0] === 3200 && b.rugGap[1] === 4600
+    && m.stormGap === 700 && m.stormWarn === 850 && m.stormMaxHits === 1 && m.stormLoss === 4 && m.krakenWindow === 1150 && m.krakenGap === 650 && m.krakenNeed === 10 && m.krakenLoss === 2
+    && m.gullGap === 520 && m.gullPace === 1 && m.gullNeed === 12 && m.rivalZone === 110 && m.rivalSpeed === 620 && m.rivalGap === 2300 && m.rivalLoss === 3 && m.whirlDecay === 14 && m.sirenLoss === 6 && b.bootyMul === 1,
+    "tier 1 is the game as it shipped (every number matches the pre-tier constants)");
+  check(diff.tiers.map((t) => t.join(":")).join(",") === "bay:1,straits:2,reef:3,glacier:3,deep:4,uptober:4,cove:4", "sea tiers: " + diff.tiers.map((t) => t.join(":")).join(","));
+  check(diff.p4.enemySpeed > 1.7 && diff.p4.skelHp === 3 && diff.p4.crabHp === 2 && diff.p4.restartOnWipeout && diff.p4.gullDive && diff.p4.skelLunge && diff.p4.crumble && diff.p4.drops && diff.p4.checkpoints === 1
+    && diff.p4.mishap.krakenWindow < 900 && diff.p4.mishap.stormMaxHits === 0, "tier 4 is harder on every axis");
+  check(diff.hardTier === 2 && diff.hardMul === 2, "Hardtack: Bay becomes tier 2 and booty doubles");
+  check(diff.drops === 1, "the D chunk builds a drop stretch (Palm Jungle)");
+
   const go = async (key, data) => {
     await page.evaluate(([k, d]) => {
       const g = window.__AHOY_GAME;
@@ -195,6 +219,19 @@ function chromiumPath() {
     const isTreasure = await page.evaluate(([si, ii]) => !!AHOY.SEAS[si].islands[ii].treasure, [r.si, r.ii]);
     if (isTreasure) { await page.waitForFunction(() => window.__AHOY_GAME.scene.isActive("Dig"), null, { timeout: 5000 }).catch(() => {}); check((await active()).includes("Dig"), `treasure island ${r.id} → Dig`); if (r.si === 0) await shot("07-dig"); }
   }
+  // Wipeouts by tier: Bay (tier 1) sends you back to the flag with hearts refilled; Rug Kraken's
+  // Deep (tier 4) loses the island and its booty and starts it over.
+  await go("Level", { sea: 0, island: 0 });
+  const bayWipe = await page.evaluate(() => { const L = window.__AHOY_LEVEL; L.state.coins = 9; L.state.hp = 1; L.state.invulnUntil = 0; L.hurt(false); return { hp: L.state.hp, coins: L.state.coins, restarting: !!L.state.restarting, done: L.state.done }; });
+  check(bayWipe.hp === 3 && bayWipe.coins === 4 && !bayWipe.restarting && !bayWipe.done, `tier-1 wipeout: back to the flag, hearts refilled, five coins lost (${JSON.stringify(bayWipe)})`);
+  await go("Level", { sea: 4, island: 0 });
+  const deepTier = await page.evaluate(() => window.__AHOY_LEVEL.P.tier);
+  const deepWipe = await page.evaluate(() => { const L = window.__AHOY_LEVEL; L.state.coins = 9; L.state.hp = 1; L.state.invulnUntil = 0; L.hurt(false); return { restarting: !!L.state.restarting, done: L.state.done, startedAt: L.state.startedAt }; });
+  await wait(1700);
+  const afterRestart = await page.evaluate(() => { const L = window.__AHOY_LEVEL; return { hp: L.state.hp, coins: L.state.coins, startedAt: L.state.startedAt, active: window.__AHOY_GAME.scene.isActive("Level") }; });
+  check(deepTier === 4 && deepWipe.restarting && deepWipe.done && afterRestart.active && afterRestart.hp === 3 && afterRestart.coins === 0 && afterRestart.startedAt !== deepWipe.startedAt,
+    `tier-4 wipeout restarts the island with its booty gone (tier ${deepTier}, ${JSON.stringify(afterRestart)})`);
+
   // The dig: dig until the chest, then the summary.
   await go("Dig", { sea: 0, island: 4, coins: 0 });
   for (let i = 0; i < 20; i++) { await page.keyboard.press("Space"); await wait(120); }

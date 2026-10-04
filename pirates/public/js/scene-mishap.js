@@ -5,7 +5,12 @@
 
   class MishapScene extends Phaser.Scene {
     constructor() { super("Mishap"); }
-    init(d) { this.d = d; this.key = d.key; this.delta = 0; this.over = false; }
+    init(d) {
+      this.d = d; this.key = d.key; this.delta = 0; this.over = false;
+      // Timers, windows, thresholds and losses come from the sea's tier (data.js AHOY.DIFF); tier 1
+      // is exactly the game before 2026-10-04. Rewards are multiplied in Hardtack mode.
+      const P = AHOY.DIFF.p(AHOY.DIFF.tier(AHOY.SEAS[d.sea])); this.M = P.mishap; this.mul = P.bootyMul; this.tierName = P.name + (P.hardtack ? " · HARDTACK" : "");
+    }
     create() {
       this.cameras.main.fadeIn(200);
       const m = AHOY.MISHAPS[this.key];
@@ -18,6 +23,7 @@
       intro.add(UI.title(this, 640, 545, m.title, 70));
       intro.add(UI.text(this, 640, 615, m.text, 34, "#ffffff", { wrap: 1100 }));
       if (m.how) intro.add(UI.text(this, 640, 665, m.how, 28, "#ffcd77"));
+      intro.add(UI.text(this, 640, 30, "⚓ " + this.tierName, 24, "#fff7e0", { stroke: "#2b1b12", strokeThickness: 5 }));
       let went = false;
       const go = () => { if (went) return; went = true; intro.destroy(); this.start(); };
       this.time.delayedCall(2300, go);
@@ -62,17 +68,17 @@
         const x = Phaser.Math.Clamp(ship.x + Phaser.Math.Between(-260, 260), 80, 1200);
         const warn = this.add.rectangle(x, 360, 90, 720, 0xffe066, 0.25).setDepth(5);
         this.tweens.add({ targets: warn, alpha: 0.55, duration: 160, yoyo: true, repeat: 2 });
-        this.time.delayedCall(850, () => {
+        this.time.delayedCall(this.M.stormWarn, () => {
           warn.destroy(); if (this.over) return;
           const bolt = this.add.graphics().setDepth(20); bolt.lineStyle(14, 0xfff6a0, 1); bolt.beginPath(); bolt.moveTo(x, 0);
           let yy = 0, xx = x; while (yy < 640) { yy += 70; xx += Phaser.Math.Between(-30, 30); bolt.lineTo(xx, yy); } bolt.strokePath();
           this.cameras.main.flash(120, 255, 255, 220); AHOY.Audio.play("thunder");
-          if (Math.abs(ship.x - x) < 80) { hits++; this.delta -= 4; this.hud.setText("Hits: " + hits); this.cameras.main.shake(250, 0.012); AHOY.Audio.play("hit"); }
+          if (Math.abs(ship.x - x) < 80) { hits++; this.delta -= this.M.stormLoss; this.hud.setText("Hits: " + hits); this.cameras.main.shake(250, 0.012); AHOY.Audio.play("hit"); }
           this.time.delayedCall(180, () => bolt.destroy());
         });
       };
-      this.spawnEv = this.time.addEvent({ delay: 700, loop: true, callback: strike });
-      this.clock(13, () => this.finish(hits <= 1 ? 12 : 0, hits <= 1 ? "You threaded the storm!" : `Battered by ${hits} strikes.`));
+      this.spawnEv = this.time.addEvent({ delay: this.M.stormGap, loop: true, callback: strike });
+      this.clock(13, () => this.finish(hits <= this.M.stormMaxHits ? 12 : 0, hits <= this.M.stormMaxHits ? "You threaded the storm!" : `Battered by ${hits} strikes.`));
     }
 
     // ── Rug Kraken: tentacles pop up around the ship — whack them before they slap. ──
@@ -90,13 +96,14 @@
           if (!alive) return; alive = false; whacked++; this.hud.setText("Whacked: " + whacked); AHOY.Audio.play("stomp");
           this.tweens.add({ targets: t, y: y + 160, alpha: 0, duration: 200, onComplete: () => t.destroy() });
         });
-        this.time.delayedCall(1150, () => {
-          if (!alive) return; alive = false; slapped++; this.delta -= 2; AHOY.Audio.play("hit"); this.cameras.main.shake(150, 0.008);
+        this.time.delayedCall(this.M.krakenWindow, () => {
+          if (!alive) return; alive = false; slapped++; this.delta -= this.M.krakenLoss; AHOY.Audio.play("hit"); this.cameras.main.shake(150, 0.008);
           this.tweens.add({ targets: t, angle: -30, y: y + 160, alpha: 0, duration: 260, onComplete: () => t.destroy() });
         });
       };
-      this.spawnEv = this.time.addEvent({ delay: 650, loop: true, callback: pop });
-      this.clock(14, () => this.finish(whacked >= 10 ? 15 : whacked >= 6 ? 6 : 0, whacked >= 10 ? "The kraken slinks back to the deep!" : `You whacked ${whacked} tentacles.`));
+      this.spawnEv = this.time.addEvent({ delay: this.M.krakenGap, loop: true, callback: pop });
+      const need = this.M.krakenNeed;
+      this.clock(14, () => this.finish(whacked >= need ? 15 : whacked >= Math.ceil(need * 0.6) ? 6 : 0, whacked >= need ? "The kraken slinks back to the deep!" : `You whacked ${whacked} tentacles.`));
     }
 
     // ── Jeeter gulls: swat them before they fly off with your booty. ──
@@ -108,7 +115,7 @@
         const fromLeft = Math.random() < 0.5, y = Phaser.Math.Between(140, 520);
         const g = this.add.image(fromLeft ? -80 : 1360, y, "gull").setScale(0.24).setFlipX(fromLeft).setDepth(8).setInteractive({ useHandCursor: true });
         let alive = true;
-        this.tweens.add({ targets: g, x: fromLeft ? 1360 : -80, y: y + Phaser.Math.Between(-80, 80), duration: Phaser.Math.Between(1800, 2600), onComplete: () => {
+        this.tweens.add({ targets: g, x: fromLeft ? 1360 : -80, y: y + Phaser.Math.Between(-80, 80), duration: Phaser.Math.Between(1800, 2600) * this.M.gullPace, onComplete: () => {
           if (alive) { lost++; this.delta -= 1; } g.destroy();
         } });
         g.on("pointerdown", () => {
@@ -118,8 +125,9 @@
           this.tweens.killTweensOf(g); this.tweens.add({ targets: g, angle: 200, y: 760, duration: 500, onComplete: () => g.destroy() });
         });
       };
-      this.spawnEv = this.time.addEvent({ delay: 520, loop: true, callback: spawn });
-      this.clock(13, () => this.finish(swatted >= 12 ? 12 : 3, swatted >= 12 ? "Not a coin lost to the jeeters!" : `${lost} gulls got away with booty.`));
+      this.spawnEv = this.time.addEvent({ delay: this.M.gullGap, loop: true, callback: spawn });
+      const need = this.M.gullNeed;
+      this.clock(13, () => this.finish(swatted >= need ? 12 : 3, swatted >= need ? "Not a coin lost to the jeeters!" : `${lost} gulls got away with booty.`));
     }
 
     // ── The Sirens: choose to follow the song or steer away. Two songs. ──
@@ -140,9 +148,9 @@
         layer.add([follow, away]);
         const answer = (good) => {
           layer.removeAll(true);
-          if (good) { wise++; AHOY.Audio.play("good"); } else { this.delta -= 6; AHOY.Audio.play("hit"); this.cameras.main.shake(300, 0.01); }
+          if (good) { wise++; AHOY.Audio.play("good"); } else { this.delta -= this.M.sirenLoss; AHOY.Audio.play("hit"); this.cameras.main.shake(300, 0.01); }
           layer.add(this.add.rectangle(640, 560, 1180, 280, 0x000000, 0.6));
-          layer.add(UI.text(this, 640, 500, good ? "Smart. You sail on." : "CRUNCH! Shipwrecked on the rocks (−6 booty).", 40, good ? "#9effa0" : "#ff8a8a", { wrap: 1100 }));
+          layer.add(UI.text(this, 640, 500, good ? "Smart. You sail on." : `CRUNCH! Shipwrecked on the rocks (−${this.M.sirenLoss} booty).`, 40, good ? "#9effa0" : "#ff8a8a", { wrap: 1100 }));
           layer.add(UI.text(this, 640, 570, s.truth, 32, "#ffffff", { wrap: 1100 }));
           layer.add(UI.button(this, 640, 650, round + 1 < songs.length ? "NEXT SONG" : "SAIL ON", () => { round++; ask(); }, { w: 260, h: 60, size: 32 }));
         };
@@ -170,10 +178,10 @@
       const g = this.add.graphics().setDepth(40);
       g.fillStyle(0x2b1b12, 1).fillRoundedRect(barX - barW / 2 - 6, barY - 26, barW + 12, 52, 12);
       g.fillStyle(0x8a5530, 1).fillRoundedRect(barX - barW / 2, barY - 20, barW, 40, 10);
-      const zoneW = 110; let zoneX = barX;
+      const zoneW = this.M.rivalZone; let zoneX = barX;
       const zone = this.add.rectangle(zoneX, barY, zoneW, 40, 0xffc93c).setDepth(41);
       const needle = this.add.rectangle(barX - barW / 2, barY, 10, 64, 0xffffff).setDepth(42).setStrokeStyle(3, 0x2b1b12);
-      let dir = 1, speed = 620, hits = 0, taken = 0, cooldown = 0;
+      let dir = 1, speed = this.M.rivalSpeed, hits = 0, taken = 0, cooldown = 0;
       this.hud.setText("Hits on rival: 0/3");
       const fireBtn = UI.button(this, 1120, 560, "FIRE!", () => fire(), { w: 200, h: 80, size: 46, fill: 0xc0392b }).setDepth(45);
       const fire = () => {
@@ -195,8 +203,8 @@
         if (needle.x > barX + barW / 2) { needle.x = barX + barW / 2; dir = -1; }
         if (needle.x < barX - barW / 2) { needle.x = barX - barW / 2; dir = 1; }
       };
-      this.spawnEv = this.time.addEvent({ delay: 2300, loop: true, callback: () => {
-        if (this.over) return; taken++; this.delta -= 3; AHOY.Audio.play("boom"); this.cameras.main.shake(260, 0.014);
+      this.spawnEv = this.time.addEvent({ delay: this.M.rivalGap, loop: true, callback: () => {
+        if (this.over) return; taken++; this.delta -= this.M.rivalLoss; AHOY.Audio.play("boom"); this.cameras.main.shake(260, 0.014);
         const s = this.add.circle(Phaser.Math.Between(200, 420), Phaser.Math.Between(420, 560), 60, 0xffffff, 0.7).setDepth(31);
         this.tweens.add({ targets: s, scale: 2, alpha: 0, duration: 500, onComplete: () => s.destroy() });
       } });
@@ -215,7 +223,7 @@
       UI.button(this, 1100, 600, "ROW!", row, { w: 220, h: 90, size: 50, fill: 0x2e7d32 }).setDepth(45);
       this.hud.setText("Row out of the pool!");
       this.stepFn = (dt) => {
-        meter = Math.max(0, meter - 14 * dt);
+        meter = Math.max(0, meter - this.M.whirlDecay * dt);
         g.clear(); g.fillStyle(0x2b1b12, 1).fillRoundedRect(240, 620, 800, 44, 12); g.fillStyle(meter > 66 ? 0x2e7d32 : meter > 33 ? 0xffc93c : 0xc0392b, 1).fillRoundedRect(246, 626, 788 * meter / 100, 32, 10);
         ship.setScale(0.18 + 0.12 * (meter / 100));
         if (meter >= 100 && !this.over) this.finish(10, "You rowed clear of the pool!");
@@ -232,7 +240,7 @@
     finish(reward, msg) {
       if (this.over) return; this.over = true; this.navOff = false;
       this.spawnEv && this.spawnEv.remove(); this.clockEv && this.clockEv.remove();
-      const net = reward + this.delta;
+      const net = reward * this.mul + this.delta;
       AHOY.Save.addBooty(net);
       AHOY.Audio.play(net >= 0 ? "chest" : "bad");
       const layer = this.add.container(0, 0).setDepth(200);

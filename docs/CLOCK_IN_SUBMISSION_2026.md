@@ -95,6 +95,9 @@ native `CluckMWA` plugin — see §3.
 
 ### What the app is today (counted from the code, not from any doc)
 
+- **Bottom bar (bundle 1.0.2, owner 2026-10-04): School · Toolkit · Daily · Swap · Ask** — "the
+  bar is for places you go every day"; Rent Reclaim and Wallet Checkup are Toolkit cards, LP Lab a
+  course inside the school.
 - **Tools: 15** registry entries (`src/seeker/tools/registry.js`): Rent Reclaim, The Solana Room,
   Ask Cluck, Wallet Checkup, Firepit, Locker Room, Project Burn, Listing Checkup, Daily, Wallet
   X-Ray, Holders, Trace, Airdropper, Hatchery, Swap. Tiers: 5 free, 6 wallet, 3 tools-pass, 1 paid.
@@ -115,7 +118,7 @@ native `CluckMWA` plugin — see §3.
   LP Lab lessons plus 10 Library reading pieces), Deep Dives 11. The 235 questions sit in the 43
   lessons that carry a quiz; the Library pieces have none. History, from the committed curriculum
   file at each commit: 58 lessons / 200 questions before #459 → 63 / 230 after #459 (+5 safety
-  lessons) → 64 / 235 after #464 (+1 LP Lab lesson). **Production `main` still has 58.**
+  lessons) → 64 / 235 after #464 (+1 LP Lab lesson). **On production since 2026-10-04.**
 - **Languages: the app and the school ship in ten — en / es / hi / it / pt / vi / zh / ko / tr /
   id.** The Seeker bundle (`store-edition/seeker-edition.json`, which has no `excludeLangs`)
   carries `public/i18n.js` with all ten picker entries, nine non-English UI dictionaries and nine
@@ -124,8 +127,7 @@ native `CluckMWA` plugin — see §3.
   dictionary files). Every one of the app's 1,291 own strings (`scripts/seeker-i18n-keys.cjs`) is
   present in all nine dictionaries. **The Play and iOS education bundles are different: pinned at
   seven** (ko/tr/id are cut by `excludeLangs` in `store-edition/store-edition.json`).
-  **Production `main` is also seven** (no ko/tr/id in `main`'s `public/i18n.js`) — ten is
-  `develop` only.
+  **Production is ten since 2026-10-04.**
 
 ## 3. Solana Mobile Stack usage
 
@@ -169,8 +171,10 @@ native `CluckMWA` plugin — see §3.
   `doors:["skr"]`; the website and the store editions never grow the door. SKR only ever *adds* a
   grant on a verified qualifying balance — a missing or stale SKR price is a denial, never a free
   pass (Codex round 13, `lib/tool-pass-qualify.js`, `scripts/tool-pass-qualify-test.cjs`).
-- **In-app SKR/CLKN/SOL/USDC swap — MERGED to `develop` 2026-09-29 (PR #420, merge `ec977c0f`);
-  NOT on `main`, so not on production.** Design of record: `docs/SEEKER_SWAP_DESIGN.md`.
+- **In-app SKR/CLKN/SOL/USDC swap — ON PRODUCTION since 2026-10-04** (PR #420, merge `ec977c0f`
+  to `develop` 2026-09-29; promoted with #482, main `1e4b7ac5`; `GET https://clucknorris.app/api/seeker/swap/config`
+  answers). It is the **Swap tab** of the bottom bar since bundle 1.0.2. Design of record:
+  `docs/SEEKER_SWAP_DESIGN.md`.
   - *Server* (`server.js` ~15483–15700): three public routes, no admin key, nothing server-signed
     — `GET /api/seeker/swap/config` (the four-mint allowlist, slippage options, `platformFeeBps:
     0`), `GET /api/seeker/swap/quote` (validated amount, allowlisted distinct mints, keyed Jupiter
@@ -192,17 +196,26 @@ native `CluckMWA` plugin — see §3.
   - *Tests that exist and pass today:* `seeker-swap-test` (54), `seeker-swap-verify-test` (60),
     `seeker-swap-simulate-test` (91), `seeker-pending-swap-test` (29), `seeker-sign-versioned-test`
     (50) — all run 2026-10-03.
-  - *Production status, checked 2026-10-03:* `GET https://clucknorris.app/api/seeker/swap/config`
-    answers `{"success":false,"error":"not_found"}`. Until the owner promotes `develop` to `main`,
-    the Swap pane in an APK has no server to talk to.
-- **Paying the 7-day tools pass in SKR — PLANNED, design only, PR #421, still OPEN and unmerged.**
-  The only file in the PR is `docs/SEEKER_SKR_PASS_DESIGN.md`, and that file is **not on
-  `develop`** (it lives on the PR branch `claude/seeker-skr-pass`). There is **no code** for it
-  anywhere — `server.js`, `lib/tool-pass-terms.js` and `src/seeker/passgate.jsx` contain no SKR
-  payment path. Owner decision recorded in the swap design: the price is "a dollar in SKR"
-  (2026-09-24). Not claimed as shipped.
+  - *Production status:* live since the 2026-10-04 promotion. The 2026-10-03 `not_found` is history.
+  - *Attempt guard (#479, Codex-cleared `7fa82c47`):* the pending record is written BEFORE the
+    wallet is asked, a wallet that broadcasts and then loses the signature never unlocks the form,
+    and a dead blockhash releases only after a balance re-read.
+- **Paying the 7-day tools pass in SKR — SHIPPED, on production since 2026-10-04** (PR #421,
+  Codex-cleared `32b79650`, merged `2709fd7a`, promoted with #482). Seeker app only. The dollar
+  price (`TOOLGATE.skrPass.usd`, never stated in copy) is pinned by a **server-signed quote**
+  (`GET /api/tool-gate/skr-quote`, HMAC over wallet + amount + validity, ten minutes; answered a
+  signed quote on production at 15:11 UTC) priced from the same sanity-banded SKR price the
+  holdings door uses, with its own guard (three accepted ticks in 24 h, within 3× of their
+  median — no price, no quote, a 503, never a grace). `lib/tool-pass-skr.js` verifies on chain:
+  the payer is the wallet whose SKR fell, the SKR rose at the receiver, a parsed SPL transfer is
+  the second witness, the payment sits inside the quote's window on chain time. **One payment,
+  one pass, one payer:** an atomic leg claim shared with the SOL pass means a signature belongs
+  to the first kind + wallet to claim it. Client (`src/seeker/skr-pay.js`, `passgate.jsx`): an
+  attempt record before the wallet is asked, recovery by signature, and a refused payment that
+  may still be landing is "watching", never a free form. Tests: `scripts/tool-pass-skr-test.cjs`,
+  `scripts/seeker-skr-pay-test.cjs` (129).
 - **Swap tie-in to the pass sheet:** the sheet links to the swap for SKR (`/tools/swap?out=SKR`,
-  `src/seeker/passgate.jsx:153`), which only works once the swap is on production.
+  `src/seeker/passgate.jsx`), live.
 
 ## 5. AI
 
@@ -297,35 +310,22 @@ connection, and the beacon is fire-and-forget with a durable retry queue.
 
 | Item | Status (2026-10-03) |
 |---|---|
-| Functional Android APK, direct download link | **Dev APK buildable today; release APK not possible yet.** The wrapper repo's `android-build.yml` job **`seeker-dev-apk`** builds the Seeker frontend from this repo's `develop` (input `platform_ref`, default `develop`), runs the seeker content scan, and produces a **debug** APK under appId `app.clucknorris.seeker.dev`. Latest green run: 37123392776 (2026-10-03 12:35 UTC), artifact `cluck-seeker-dev-apk`, 11,963,881 bytes — a GitHub Actions artifact, so downloading it needs a GitHub login and it expires (30-day retention); it is **not** a public direct link. A **release** APK (`npm run build:seeker`, appId `app.clucknorris.seeker`) refuses to build without a pinned, checksummed `store-seeker-v*` release of this repo; **none exists** (this repo's release tags are `store-google-*` and `store-ios-*` only) and the wrapper's `store-edition.lock` has no `seeker` entry. Cutting one is the owner's act (a tag a cloud session cannot push). The hosted release link is therefore still a placeholder. |
+| Functional Android APK, direct download link | **Release APK buildable since 2026-10-04.** Releases `store-seeker-v1.0.1` (main `3bba62b1`) and, pending, `store-seeker-v1.0.2` (the daily bar) exist; the wrapper's `store-edition.lock` pins the seeker entry. The Mac builds it with `npm run build:seeker-update` — package `app.clucknorris.school`, versionCode 10 / 2.0.0, signed with the ORIGINAL listing key, which the owner recovered on 2026-10-04 (wrapper `docs/CLOCK_IN_MAC_RUNBOOK.md` §2.0) — so it installs over the live 1.0 and ships as that listing's update. **Direct link: TODO** — the owner attaches `cluck-norris-seeker-2.0.0.apk` to a GitHub release on `CLKN-SEEKER`; that asset URL goes here. |
 | Public GitHub repo with source | **Both public** (checked 2026-10-03): `https://github.com/clucknorrisapp/cluck-norris-school` (the app: `seeker.html`, `src/seeker/*`) and `https://github.com/clucknorrisapp/CLKN-SEEKER` (packaging + the MWA plugin). For judges, access = the public URLs. ⚠️ **In `CLKN-SEEKER`, the `seeker` target, the `CluckMWA` plugin, `docs/MWA_PLUGIN.md`, the `seeker-dev-apk` job and the dApp Store draft are on the branch `claude/seeker-integration` (42 commits ahead of that repo's `main`), not on its default branch.** A judge opening that repo's front page sees none of it. Merge the branch, or put its URL (`https://github.com/clucknorrisapp/CLKN-SEEKER/tree/claude/seeker-integration`) in the submission — the owner's call. |
-| Demo video (≤ shows functionality) | **TODO.** The shot list is written: `docs/SEEKER_DEMO_STORYBOARD.md` (90-second and 3-minute cuts; `docs/DEMO_STORYBOARD.md` is the Colosseum one and is not reused). Owner records it on his own Seeker. The swap shot only works after the promotion below. |
+| Demo video (≤ shows functionality) | **TODO — recordable now.** Shot list: `docs/SEEKER_DEMO_STORYBOARD.md` (reordered 2026-10-04: the school leads, the swap is the MWA moment, the SKR-paid pass is shot 6, Rent Reclaim is in the extended cut only). Owner records it on his own Seeker; both gates in its §0 are open. |
 | Pitch deck / brief presentation | Owner's to build; this document is the factual source material |
 | Judge GitHub access | Both repos are public, so no per-judge grant is needed for the code. Re-check that neither is switched to private before 2026-10-09. |
 | Team funding declaration | Open question — see §9 |
 | Submit | **Do not submit.** This package stays in draft; the final submission is the owner's explicit go, and the entry agreement is not signed until he says so. |
 
-### ⚠️ The develop/main caveat — what an APK built today actually does
+### ✅ The develop/main caveat — RESOLVED 2026-10-04
 
-The app's API base is `https://clucknorris.app` (`store-edition/seeker-edition.json` `apiBase`),
-and that host serves **`main`**. The dev APK's frontend is built from **`develop`**. `develop` is
-86 commits ahead of `main`; `main` has 7 commits `develop` does not (the Firepit hotfix
-cherry-picks #472/#474/#475 and CUNA #467). So:
-
-| Feature | In an APK built from `develop` | Works against production today |
-|---|---|---|
-| In-app swap (#420) | yes (pane, verifier, simulation gate) | **No** — `/api/seeker/swap/*` is a `not_found` on production (checked 2026-10-03). The pane has no server to talk to. |
-| Revoke approvals + Disconnect card (#458/#473) | yes | **Yes** — client-side only; it signs and reads through endpoints production already has |
-| Five safety lessons, LP Lab lesson 15 (#459/#464) | yes (bundled, offline) | n/a — the school is bundled; only the completion beacon uses the server |
-| Ten-language picker (#462) | yes | n/a — dictionaries are bundled; Ask Cluck replies are server-side (see §5 for Italian) |
-| Firepit surplus + wording + Rescan fix (#443/#471/#474/#475) | yes | **Yes** — on production |
-| SKR door on the tools pass (#395) | yes | **Yes** — live on production |
-
-**Promoting `develop` to `main` is the owner's explicit go, in the moment — never automatic and
-never inferred (AGENTS.md).** The promotion carries everything else on `develop` only, not just
-the swap, so it is a decision about the whole 86-commit difference. Do not record the swap shot or
-describe the swap as live in the video or the deck until that promotion has happened and
-`GET /api/seeker/swap/config` answers `ok:true` on production.
+`develop` was promoted to `main` on the owner's explicit go (PR #482, merge `1e4b7ac5` at 14:49
+UTC; the one-line version bump #484, `3bba62b1`, followed). Production serves the swap, the
+SKR-paid pass, Revoke and the Disconnect card, the ten languages and the 64 lessons; the seeker
+bundle is cut from that same `main`. Everything the 2026-10-03 version of this doc listed as
+"develop only" is live. The rule stands for next time: promotion is the owner's go in the moment,
+never inferred.
 
 ## 9. Open questions for the owner
 
@@ -335,20 +335,17 @@ describe the swap as live in the video or the deck until that promotion has happ
    15% / UI 15% / Innovation 15% / Ecosystem Impact 15%) or the published FAQ's four-equal-25%
    scheme. `docs/CLOCK_IN_HACKATHON_2026.md` flags this is unresolved; **ask in office hours,
    Discord Wed 18:30 UTC**, before finalizing what the deck emphasizes.
-3. ✅ **appId decision — DECIDED (owner, 2026-10-04): its own appId, `app.clucknorris.seeker`, a
-   fresh signing key, same publisher wallet.** The 2026-10-03 plan to replace the live
-   `app.clucknorris.school` listing needed that listing's signing key, which could not be located
-   on any machine (the live key's certificate fingerprint and the publisher wallet
-   `4Ws6jXEGQ7MG61Ke8qiuGrXhdcYX2NNVCtg3xRMsuLs8` were read from the chain and are recorded in the
-   wrapper's `docs/CLOCK_IN_MAC_RUNBOOK.md`). The live 1.0 listing is left untouched; the wrapper's
-   `build:seeker` and `dapp-store/config.seeker.yaml` target the new package (wrapper commit 7dc16ca).
-4. **Promote `develop` → `main` before the deadline?** #420 (the swap) is merged but production
-   cannot serve it; the swap is the app's largest on-chain SKR integration, which the hackathon
-   scores (20% of the main score under one scheme, a separate prize under the other). The
-   alternative is to submit with the swap described as "on develop, not yet live" — which §4 and
-   §7 already say honestly.
-5. **#421 (pay the pass in SKR)** — still design-only and open. Build it before the deadline, or
-   close it and keep §4 as written?
-6. **Release APK and the wrapper's default branch** — cut a `store-seeker-v*` release (owner's
-   tag) and merge or link `claude/seeker-integration` in `CLKN-SEEKER` (§8).
+3. ✅ **appId decision — settled twice on 2026-10-04; final answer: UPDATE the live
+   `app.clucknorris.school` listing.** The morning's call was a new listing because the original
+   signing key could not be found; the owner then recovered it from the May 2026 session that made
+   it (it is on the MacBook; the certificate fingerprint `7A:95:5F:A4…`, read from the live release
+   NFT, is the check). The wrapper has both paths — `build:seeker-update` is the live one;
+   `build:seeker` and the `app.clucknorris.seeker` portal draft stay unused. Publisher wallet
+   `4Ws6jXEGQ7MG61Ke8qiuGrXhdcYX2NNVCtg3xRMsuLs8` is in the owner's Phantom. The listing text was
+   rewritten so the school leads (wrapper e5fbefb).
+4. ✅ **Promoted 2026-10-04** (#482, #484). The swap is live.
+5. ✅ **#421 (pay the pass in SKR) — built, reviewed (four Codex rounds), merged, live.**
+6. **The wrapper's default branch** — `store-seeker-v1.0.1` is cut (1.0.2 pending); what remains is
+   the owner's call to merge or link `claude/seeker-integration` in `CLKN-SEEKER` (§8), and the
+   GitHub release that carries the APK.
 7. **Italian Ask Cluck** — `AI_LANGS` has no `it` entry (§5). Add one, or leave §5's wording.
