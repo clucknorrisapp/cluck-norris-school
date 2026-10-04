@@ -4,20 +4,23 @@ window.AHOY = window.AHOY || {};
 // ── Save (localStorage, every access guarded: private windows and blocked storage just mean no save) ──
 AHOY.Save = (function () {
   const KEY = "ahoy_pfp_save_v1";
-  const fresh = () => ({ crew: "hook", booty: 0, done: {}, pieces: {}, secrets: {}, treasure: {}, at: {}, best: {}, muted: false, nft: null });
+  const fresh = () => ({ crew: "hook", booty: 0, done: {}, pieces: {}, secrets: {}, treasure: {}, at: {}, best: {}, grades: {}, hardtack: false, muted: false, nft: null });
+  const GRADE_RANK = { bronze: 1, silver: 2, gold: 3 };
   let s = fresh();
   try { const raw = localStorage.getItem(KEY); if (raw) s = Object.assign(fresh(), JSON.parse(raw)); } catch (_) {}
   const write = () => { try { localStorage.setItem(KEY, JSON.stringify(s)); } catch (_) {} };
   return {
     get: () => s,
     set(patch) { Object.assign(s, patch); write(); },
-    island(id) { return { done: !!s.done[id], piece: !!s.pieces[id], best: s.best[id] || null }; },
-    completeIsland(id, { piece, booty, secrets, time }) {
+    island(id) { return { done: !!s.done[id], piece: !!s.pieces[id], best: s.best[id] || null, grade: s.grades[id] || null }; },
+    completeIsland(id, { piece, booty, secrets, time, grade }) {
       s.done[id] = true;
       if (piece) s.pieces[id] = true;
       s.booty += Math.max(0, booty | 0);
       s.secrets[id] = Math.max(s.secrets[id] || 0, secrets | 0);
       if (time && (!s.best[id] || time < s.best[id])) s.best[id] = time;
+      // The best grade ever earned on the island stays (bronze < silver < gold).
+      if (grade && (GRADE_RANK[grade] || 0) > (GRADE_RANK[s.grades[id]] || 0)) s.grades[id] = grade;
       write();
     },
     addBooty(n) { s.booty = Math.max(0, s.booty + (n | 0)); write(); },

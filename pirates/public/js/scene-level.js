@@ -7,13 +7,13 @@
 
   AHOY.buildLayout = function (layout) {
     const s = { grounds: [], planks: [], movers: [], ghosts: [], blocks: [], rings: [], walls: [], enemies: [], coins: [], chests: [],
-      urchins: [], barrels: [], checkpoints: [], piece: null, exit: null, boss: null, secrets: 0, width: 0 };
+      urchins: [], barrels: [], checkpoints: [], drops: [], piece: null, exit: null, boss: null, secrets: 0, width: 0 };
     let x = 0;
     const ground = (x0, w) => s.grounds.push({ x: x0, w });
     const coinRow = (x0, n, y) => { for (let i = 0; i < n; i++) s.coins.push({ x: x0 + U / 2 + i * U, y }); };
     for (const tok of String(layout).trim().split(/\s+/)) {
       let m;
-      if ((m = /^(Fc|F|G|P|M|U)(\d+)$/.exec(tok))) {
+      if ((m = /^(Fc|F|G|P|M|U|D)(\d+)$/.exec(tok))) {
         const n = +m[2], w = n * U;
         if (m[1] === "F") { ground(x, w); x += w; }
         else if (m[1] === "Fc") { ground(x, w); coinRow(x, n, GY - 60); x += w; }
@@ -27,7 +27,8 @@
           s.movers.push({ x: minX, y: GY - 90, w: mw, minX, maxX, speed: 110 });
           coinRow(x + U, Math.max(1, n - 2), GY - 170);
           x += w;
-        } else if (m[1] === "U") {
+        } else if (m[1] === "D") { ground(x, w); s.drops.push({ x0: x + U / 2, x1: x + w - U / 2 }); coinRow(x, n, GY - 60); x += w; }
+        else if (m[1] === "U") {
           ground(x, (n + 4) * U);
           s.urchins.push({ x: x + 2 * U, w: n * U });
           for (let i = 0; i < n; i++) s.coins.push({ x: x + 2 * U + U / 2 + i * U, y: GY - 160 });
@@ -90,7 +91,10 @@
       this.seaIdx = d.sea; this.islIdx = d.island;
       this.sea = AHOY.SEAS[d.sea]; this.isl = this.sea.islands[d.island];
       this.pirate = AHOY.currentPirate();
-      this.state = { hp: 3, coins: 0, secretsFound: 0, piece: false, done: false, invulnUntil: 0, dashUntil: 0, attackCd: 0, powerCd: 0,
+      // Every difficulty number comes from the tier table (data.js AHOY.DIFF); tier 1 is the game as
+      // it shipped. Nothing in this file hardcodes a tier-dependent figure.
+      this.P = AHOY.DIFF.p(AHOY.DIFF.tier(this.sea));
+      this.state = { hp: this.P.hearts, hitsTaken: 0, coins: 0, secretsFound: 0, piece: false, done: false, invulnUntil: 0, dashUntil: 0, attackCd: 0, powerCd: 0,
         ghostUntil: 0, xrayUntil: 0, grappling: false, facing: 1, coyote: 0, jumpBuf: 0, startedAt: 0, respawn: { x: 2 * U, y: GY - 80 }, paused: false,
         airJumps: 1, swingUntil: 0, spinUntil: 0 };
     }
@@ -115,14 +119,19 @@
       spec.grounds.forEach((g) => { const t = this.add.tileSprite(g.x, GY, g.w, 128, "ground-" + this.isl.ground).setOrigin(0, 0).setDepth(5); this.physics.add.existing(t, true); this.solids.add(t); });
       spec.blocks.forEach((b) => { const t = this.add.tileSprite(b.x, b.y, b.w, b.h, "block").setOrigin(0, 0).setDepth(5); this.physics.add.existing(t, true); this.solids.add(t); });
       this.oneway = this.physics.add.staticGroup();
-      spec.planks.forEach((p) => { const t = this.add.tileSprite(p.x, p.y, p.w, 24, "plank").setOrigin(0, 0).setDepth(6); this.physics.add.existing(t, true); this.oneway.add(t); });
+      spec.planks.forEach((p) => {
+        const t = this.add.tileSprite(p.x, p.y, p.w, 24, "plank").setOrigin(0, 0).setDepth(6); this.physics.add.existing(t, true); this.oneway.add(t);
+        // Tier 3+: planks over a pit crumble half a second after you land on them, and grow back.
+        if (this.P.crumble) { t.crumble = true; t.homeY = p.y; t.setTint(0xd8b48a); }
+      });
       this.ghosts = this.physics.add.staticGroup();
       spec.ghosts.forEach((p) => { const t = this.add.tileSprite(p.x, p.y, p.w, 24, "ghost").setOrigin(0, 0).setDepth(6).setAlpha(0.1); this.physics.add.existing(t, true); t.body.enable = false; this.ghosts.add(t); });
       this.movers = [];
       spec.movers.forEach((m) => {
         const t = this.add.tileSprite(m.x, m.y, m.w, 24, "plank").setOrigin(0, 0).setDepth(6);
-        this.physics.add.existing(t); t.body.setAllowGravity(false).setImmovable(true); t.body.setVelocityX(m.speed);
-        t.minX = m.minX; t.maxX = m.maxX; t.speed = m.speed; this.movers.push(t);
+        const speed = this.P.moverSpeed;
+        this.physics.add.existing(t); t.body.setAllowGravity(false).setImmovable(true); t.body.setVelocityX(speed);
+        t.minX = m.minX; t.maxX = m.maxX; t.speed = speed; this.movers.push(t);
       });
       this.walls = this.physics.add.staticGroup();
       spec.walls.forEach((w) => { const t = this.add.tileSprite(w.x, w.y, w.w, w.h, "crackwall").setOrigin(0, 0).setDepth(6); this.physics.add.existing(t, true); this.walls.add(t); });
@@ -142,7 +151,16 @@
         this.tweens.add({ targets: this.piece, y: spec.piece.y - 12, duration: 800, yoyo: true, repeat: -1, ease: "Sine.inOut" });
         if (AHOY.Save.island(this.isl.id).piece) this.piece.setAlpha(0.45);
       }
-      this.flags = spec.checkpoints.map((k) => this.add.image(k.x, GY, "flag").setOrigin(0.5, 1).setDepth(7));
+      // Tier 4+: one flag per island, not one every few chunks.
+      this.flags = spec.checkpoints.slice(0, this.P.checkpoints).map((k) => this.add.image(k.x, GY, "flag").setOrigin(0.5, 1).setDepth(7));
+      // Tier 2+: cannon / palm drops over the D stretches — a shadow warns, then it falls.
+      this.droppers = this.P.drops ? spec.drops.map((d) => ({ x0: d.x0, x1: d.x1, next: this.time.now + 1200 + Math.random() * 800 })) : [];
+      if (this.droppers.length && !this.textures.exists("cannonball")) {
+        const g = this.make.graphics({ add: false });
+        g.fillStyle(0x151515, 1).fillCircle(16, 16, 16).fillStyle(0x3a3a3a, 1).fillCircle(11, 11, 5).lineStyle(3, 0x000000, 1).strokeCircle(16, 16, 15);
+        g.generateTexture("cannonball", 32, 32); g.destroy();
+      }
+      this.balls = this.physics.add.group({ allowGravity: true });
       if (spec.exit) {
         if (this.isl.treasure) { this.exitObj = this.add.image(spec.exit.x, GY + 4, "xmark").setOrigin(0.5, 1).setScale(0.8).setDepth(7); this.tweens.add({ targets: this.exitObj, scale: 0.9, duration: 600, yoyo: true, repeat: -1 }); }
         else { this.exitObj = this.add.image(spec.exit.x, GY + 70, "dock").setOrigin(0.5, 1).setDepth(7); this.add.image(spec.exit.x + 120, GY - 20, "ship").setScale(0.3).setDepth(4); }
@@ -168,7 +186,9 @@
       this.physics.add.collider(this.player, this.solids);
       this.wallCollider = this.physics.add.collider(this.player, this.walls, null, () => !this.wallsOpen(), this);
       const oneWay = (pl, plat) => pl.body.velocity.y >= 0 && pl.body.bottom - pl.body.deltaY() <= plat.body.top + 10;
-      this.physics.add.collider(this.player, this.oneway, null, oneWay, this);
+      this.physics.add.collider(this.player, this.oneway, (pl, plat) => { if (plat.crumble && !plat.falling && pl.body.touching.down) this.crumblePlank(plat); }, oneWay, this);
+      this.physics.add.collider(this.balls, this.solids, (ball) => this.ballLands(ball));
+      this.physics.add.overlap(this.player, this.balls, (_, ball) => { if (ball.active && !ball.landed) { this.ballLands(ball); this.hurt(false, ball.x); } });
       this.physics.add.collider(this.player, this.ghosts, null, oneWay, this);
       this.movers.forEach((m) => this.physics.add.collider(this.player, m, null, oneWay, this));
       this.physics.add.overlap(this.player, this.coins, (_, c) => { c.destroy(); this.state.coins++; AHOY.Audio.play("coin"); this.hudCoins(); });
@@ -209,11 +229,12 @@
     // ── Enemies ──
     spawnEnemy(e) {
       const body = this.physics.add.sprite(e.x, e.y, "px").setDepth(15);
-      const cfg = { crab: { w: 62, h: 44, sp: 70, hp: 1, h0: 64, tex: "crab" }, skel: { w: 44, h: 90, sp: 95, hp: 2, h0: 112, tex: "skeleton" }, gull: { w: 64, h: 40, sp: 120, hp: 1, h0: 70, tex: "gull" } }[e.type] || { w: 60, h: 44, sp: 70, hp: 1, h0: 64, tex: "crab" };
+      const P = this.P;
+      const cfg = { crab: { w: 62, h: 44, sp: 70 * P.enemySpeed, hp: P.crabHp, h0: 64, tex: "crab" }, skel: { w: 44, h: 90, sp: 95 * P.enemySpeed, hp: P.skelHp, h0: 112, tex: "skeleton" }, gull: { w: 64, h: 40, sp: 120 * P.enemySpeed, hp: 1, h0: 70, tex: "gull" } }[e.type] || { w: 60, h: 44, sp: 70, hp: 1, h0: 64, tex: "crab" };
       body.body.setSize(cfg.w, cfg.h, true);
       const vis = this.add.image(e.x, e.y, cfg.tex).setOrigin(0.5, 1).setDepth(16);
       vis.setScale(cfg.h0 / vis.height);
-      const en = { body, vis, type: e.type, hp: cfg.hp, minX: e.minX, maxX: e.maxX, sp: cfg.sp, dir: -1, baseY: e.y, t: Math.random() * 6, dead: false, scale: vis.scaleX };
+      const en = { body, vis, type: e.type, hp: cfg.hp, minX: e.minX, maxX: e.maxX, sp: cfg.sp, dir: -1, baseY: e.y, t: Math.random() * 6, dead: false, scale: vis.scaleX, dive: null, diveCd: 0, lungeUntil: 0, lungeCd: 0 };
       en.colliders = [];
       if (e.type === "gull") body.body.setAllowGravity(false);
       else en.colliders.push(this.physics.add.collider(body, this.solids));
@@ -259,7 +280,7 @@
     hurt(spike, fromX) {
       const s = this.state;
       if (s.done || this.time.now < s.invulnUntil || this.time.now < s.dashUntil) return;
-      s.hp--; s.invulnUntil = this.time.now + 1300;
+      s.hp--; s.hitsTaken++; s.invulnUntil = this.time.now + this.P.invuln;
       AHOY.Audio.play("hit"); this.cameras.main.shake(180, 0.008);
       const dir = fromX != null ? Math.sign(this.player.x - fromX) || -s.facing : -s.facing;
       this.player.body.setVelocity(dir * 320, spike ? -620 : -420);
@@ -268,11 +289,58 @@
     }
     wipeout(msg) {
       const s = this.state;
+      if (this.P.restartOnWipeout) {
+        // Tier 3+: the island is lost — its booty with it — and starts over. No flag to fall back on.
+        if (s.restarting) return; s.restarting = true; s.done = true;
+        this.player.body.setVelocity(0, 0); this.player.body.moves = false;
+        this.banner(msg, s.coins ? `The sea takes your ${s.coins} coins · the island starts over` : "The island starts over");
+        this.cameras.main.fadeOut(1100, 0, 0, 0);
+        this.time.delayedCall(1150, () => this.scene.restart({ sea: this.seaIdx, island: this.islIdx }));
+        return;
+      }
       const lost = Math.min(s.coins, 5); s.coins -= lost;
       this.banner(msg, lost ? `Lost ${lost} coins · back to the last flag` : "Back to the last flag");
-      s.hp = 3; s.invulnUntil = this.time.now + 1500; s.grappling = false; this.player.body.moves = true; this.player.body.setAllowGravity(true);
+      s.hp = this.P.hearts; s.invulnUntil = this.time.now + 1500; s.grappling = false; this.player.body.moves = true; this.player.body.setAllowGravity(true);
       this.player.body.reset(s.respawn.x, s.respawn.y);
+      // The Kraken heals when you go down: a fight is won in one go, not by attrition across deaths.
+      if (this.boss && !this.boss.dead) { this.boss.hp = this.boss.max; this.boss.tentacles.forEach((t) => t.destroy()); this.boss.tentacles = []; this.boss.sweep && this.boss.sweep.destroy(); this.boss.sweep = null; this.drawBossBar(); this.popText(this.boss.img.x, this.boss.img.y - 200, "The Kraken heals!"); }
       this.hudHearts(); this.hudCoins();
+    }
+    // Tier 3+: a plank over a pit gives way shortly after you land on it, then grows back.
+    crumblePlank(plat) {
+      plat.falling = true;
+      this.tweens.add({ targets: plat, x: plat.x + 3, duration: 50, yoyo: true, repeat: 7 });
+      this.time.delayedCall(450, () => {
+        if (!plat.active) return;
+        plat.body.enable = false; AHOY.Audio.play("stomp");
+        this.tweens.add({ targets: plat, y: plat.homeY + 320, alpha: 0, angle: 12, duration: 500, ease: "Quad.in" });
+        this.time.delayedCall(2600, () => {
+          if (!plat.active) return;
+          plat.setY(plat.homeY).setAlpha(1).setAngle(0); plat.body.reset(plat.x, plat.homeY); plat.body.enable = true; plat.falling = false;
+        });
+      });
+    }
+    dropTick(t) {
+      this.droppers.forEach((d) => {
+        if (t < d.next) return;
+        d.next = t + this.P.dropGap + Math.random() * 500;
+        // Only drop where the pirate is or is about to be: within a screen of the stretch.
+        if (this.player.x < d.x0 - 900 || this.player.x > d.x1 + 300) return;
+        const x = Phaser.Math.Clamp(this.player.x + Phaser.Math.Between(-60, 160), d.x0, d.x1);
+        const warn = this.add.ellipse(x, GY + 4, 56, 16, 0x000000, 0.35).setDepth(8);
+        this.tweens.add({ targets: warn, scaleX: 1.4, alpha: 0.6, duration: 160, yoyo: true, repeat: 2 });
+        this.time.delayedCall(520, () => {
+          warn.destroy(); if (this.state.done) return;
+          const ball = this.balls.create(x, -40, "cannonball").setDepth(14);
+          ball.body.setCircle(14, 2, 2); ball.body.setVelocityY(260); ball.setAngularVelocity(240);
+          this.time.delayedCall(4000, () => ball.active && ball.destroy());
+        });
+      });
+    }
+    ballLands(ball) {
+      if (!ball.active || ball.landed) return; ball.landed = true;
+      AHOY.Audio.play("stomp"); ball.body.setVelocity(0, 0); ball.body.setAllowGravity(false);
+      this.tweens.add({ targets: ball, alpha: 0, scale: 1.3, duration: 260, onComplete: () => ball.destroy() });
     }
     openChest(c) {
       if (c.opened) return; c.opened = true;
@@ -370,7 +438,7 @@
       const k = this.add.image(b.x0 + 1080, 330, "kraken-boss").setDepth(3).setAlpha(0); k.setScale(420 / k.height);
       this.tweens.add({ targets: k, alpha: 1, y: 300, duration: 900 });
       this.tweens.add({ targets: k, y: 285, duration: 1600, yoyo: true, repeat: -1, ease: "Sine.inOut", delay: 900 });
-      this.boss = { img: k, hp: 10, max: 10, tentacles: [], next: this.time.now + 1800, rugNext: this.time.now + 4200 };
+      this.boss = { img: k, hp: 10, max: 10, tentacles: [], next: this.time.now + 1800, rugNext: this.time.now + 4200, sweepNext: this.time.now + 6000, sweep: null };
       this.bossBar = this.add.graphics().setScrollFactor(0).setDepth(900);
       this.bossLabel = UI.text(this, 640, 104, "THE RUG KRAKEN", 34, "#ffffff", { stroke: "#2b1b12", strokeThickness: 6 }).setScrollFactor(0).setDepth(901);
       this.banner("THE RUG KRAKEN!", "Hit the tentacles when they slam down. Jump the rugs!");
@@ -383,25 +451,38 @@
     bossTick() {
       const b = this.boss; if (!b || b.dead) return;
       const now = this.time.now;
+      const P = this.P, enraged = b.hp <= b.max / 2; // phase two: two tentacles a cycle, faster rugs
       if (now > b.next) {
-        b.next = now + Math.max(1300, 2400 - (b.max - b.hp) * 110);
+        b.next = now + Math.max(1300, 2400 - (b.max - b.hp) * 110) * (enraged ? 0.85 : 1);
+        const slam = (tx) => {
+          const warn = this.add.ellipse(tx, GY + 6, 130, 26, 0xff2222, 0.45).setDepth(8);
+          this.tweens.add({ targets: warn, alpha: 0.85, duration: 180, yoyo: true, repeat: 2 });
+          this.time.delayedCall(P.tentacleWarn, () => {
+            warn.destroy(); if (b.dead) return;
+            const t = this.add.image(tx, -40, "tentacle").setOrigin(0.5, 1).setDepth(12).setFlipY(true); t.setScale(300 / t.height);
+            t.hittable = false;
+            this.tweens.add({ targets: t, y: GY + 10, duration: 200, ease: "Quad.in", onComplete: () => {
+              AHOY.Audio.play("boom"); this.cameras.main.shake(200, 0.01); t.hittable = true; t.downAt = this.time.now;
+              const pb = this.player.body; if (Math.abs(pb.center.x - tx) < 70) this.hurt(false, tx);
+              this.time.delayedCall(P.tentacleWindow, () => { if (!t.active) return; t.hittable = false; this.tweens.add({ targets: t, y: -60, duration: 300, onComplete: () => t.destroy() }); });
+            } });
+            b.tentacles.push(t);
+          });
+        };
         const tx = Phaser.Math.Clamp(this.player.x + Phaser.Math.Between(-80, 80), this.bossSpec.x0 + 80, this.bossSpec.x1 - 260);
-        const warn = this.add.ellipse(tx, GY + 6, 130, 26, 0xff2222, 0.45).setDepth(8);
-        this.tweens.add({ targets: warn, alpha: 0.85, duration: 180, yoyo: true, repeat: 2 });
-        this.time.delayedCall(850, () => {
-          warn.destroy(); if (b.dead) return;
-          const t = this.add.image(tx, -40, "tentacle").setOrigin(0.5, 1).setDepth(12).setFlipY(true); t.setScale(300 / t.height);
-          t.hittable = false;
-          this.tweens.add({ targets: t, y: GY + 10, duration: 200, ease: "Quad.in", onComplete: () => {
-            AHOY.Audio.play("boom"); this.cameras.main.shake(200, 0.01); t.hittable = true; t.downAt = this.time.now;
-            const pb = this.player.body; if (Math.abs(pb.center.x - tx) < 70) this.hurt(false, tx);
-            this.time.delayedCall(1700, () => { if (!t.active) return; t.hittable = false; this.tweens.add({ targets: t, y: -60, duration: 300, onComplete: () => t.destroy() }); });
-          } });
-          b.tentacles.push(t);
-        });
+        slam(tx);
+        if (enraged) slam(Phaser.Math.Clamp(tx + (Math.random() < 0.5 ? -1 : 1) * Phaser.Math.Between(200, 300), this.bossSpec.x0 + 80, this.bossSpec.x1 - 260));
       }
+      // Phase three (three hits left): a tentacle sweeps the floor from the Kraken's side — jump it.
+      if (b.hp <= 3 && now > b.sweepNext && !b.sweep) {
+        b.sweepNext = now + 5200;
+        const sw = this.add.image(this.bossSpec.x1 - 60, GY + 8, "tentacle").setOrigin(0.5, 1).setDepth(12).setAngle(-80).setAlpha(0.95); sw.setScale(220 / sw.height);
+        b.sweep = sw; AHOY.Audio.play("boom");
+        this.tweens.add({ targets: sw, x: this.bossSpec.x0 + 40, duration: 2300, ease: "Sine.inOut", onComplete: () => { sw.destroy(); if (b.sweep === sw) b.sweep = null; } });
+      }
+      if (b.sweep && b.sweep.active) { const pb = this.player.body; if (Math.abs(pb.center.x - b.sweep.x) < 60 && pb.bottom > GY - 90) this.hurt(false, b.sweep.x); }
       if (now > b.rugNext && b.hp < b.max - 2) {
-        b.rugNext = now + Phaser.Math.Between(3200, 4600);
+        b.rugNext = now + Phaser.Math.Between(P.rugGap[0], P.rugGap[1]) * (enraged ? 0.75 : 1);
         const rug = this.physics.add.image(this.bossSpec.x1 - 120, GY - 28, "rug").setDepth(12);
         rug.body.setAllowGravity(false).setVelocityX(-380).setAngularVelocity(-360);
         const ov = this.physics.add.overlap(this.player, rug, () => { if (!rug.hitDone) { rug.hitDone = true; this.hurt(false, rug.x); } });
@@ -425,6 +506,7 @@
     bossDown() {
       const b = this.boss; b.dead = true; AHOY.Audio.play("chest");
       this.tweens.add({ targets: b.img, y: 900, angle: 25, duration: 1600, ease: "Quad.in" });
+      b.tentacles.forEach((t) => t.destroy()); b.tentacles = []; if (b.sweep) { b.sweep.destroy(); b.sweep = null; }
       this.bossBar.destroy(); this.bossLabel.destroy();
       this.banner("KRAKEN DEFEATED!", "The rug is pulled… from under the Kraken. Dig at the X!");
       this.state.coins += 30; this.hudCoins();
@@ -477,7 +559,8 @@
     makeHud() {
       const d = 900;
       const bar = this.add.graphics().setScrollFactor(0).setDepth(d); bar.fillStyle(0x2b1b12, 0.75).fillRoundedRect(12, 10, 560, 64, 14);
-      this.hearts = [0, 1, 2].map((i) => this.add.image(46 + i * 46, 42, "item-heart").setScale(0.24).setScrollFactor(0).setDepth(d + 1));
+      this.hearts = Array.from({ length: this.P.hearts }, (_, i) => this.add.image(46 + i * 46, 42, "item-heart").setScale(0.24).setScrollFactor(0).setDepth(d + 1));
+      UI.text(this, 1020, 42, "⚓ " + this.P.name + (this.P.hardtack ? " · HARDTACK" : ""), 22, this.P.tier >= 4 ? "#ffb3a7" : "#fff7e0", { stroke: "#2b1b12", strokeThickness: 4 }).setScrollFactor(0).setDepth(d + 1);
       this.add.image(200, 42, "item-coin").setScale(0.24).setScrollFactor(0).setDepth(d + 1);
       this.coinText = UI.text(this, 226, 42, "0", 36, "#ffcd77", { ox: 0 }).setScrollFactor(0).setDepth(d + 1);
       // The map-piece slot: an outlined empty slot until this island's piece is found.
@@ -534,17 +617,23 @@
       const s = this.state; if (s.done) return; s.done = true;
       this.player.body.setVelocity(0, 0); this.player.body.moves = false;
       const time = (this.time.now - s.startedAt) / 1000;
-      AHOY.Save.completeIsland(this.isl.id, { piece: s.piece, booty: s.coins, secrets: s.secretsFound, time });
+      // The grade: gold is a clean run under par (no hit, no splash), silver is every secret or under
+      // par, bronze is getting there. Par is a steady run across the island plus a little slack.
+      const par = Math.round(this.spec.width / 150 + 12);
+      const grade = s.hitsTaken === 0 && time <= par ? "gold" : (this.spec.secrets > 0 && s.secretsFound >= this.spec.secrets) || time <= par ? "silver" : "bronze";
+      const booty = s.coins * this.P.bootyMul;
+      AHOY.Save.completeIsland(this.isl.id, { piece: s.piece, booty, secrets: s.secretsFound, time, grade });
       AHOY.Audio.play("chest");
       if (this.isl.treasure) { this.cameras.main.fadeOut(400); this.cameras.main.once("camerafadeoutcomplete", () => this.scene.start("Dig", { sea: this.seaIdx, island: this.islIdx, coins: s.coins })); return; }
       const L = this.add.container(0, 0).setScrollFactor(0).setDepth(3000);
       L.add(this.add.rectangle(640, 360, 1280, 720, 0x000000, 0.5).setScrollFactor(0));
       L.add(UI.panel(this, 640, 360, 640, 420).setScrollFactor(0));
       L.add(UI.title(this, 640, 200, "ISLAND PLUNDERED!", 56).setScrollFactor(0));
-      const rows = [`Booty: +${s.coins}`, `Secrets: ${s.secretsFound}/${this.spec.secrets}`, s.piece ? "Map piece: FOUND ✔" : (AHOY.Save.island(this.isl.id).piece ? "Map piece: already charted" : "Map piece: missed — come back for it!"), `Time: ${time.toFixed(1)}s`];
-      rows.forEach((r, i) => L.add(UI.text(this, 640, 270 + i * 46, r, 36, "#2b1b12").setScrollFactor(0)));
-      if (s.secretsFound < this.spec.secrets) L.add(UI.text(this, 640, 452, "Some secrets need another pirate's power…", 26, "#7a1f12").setScrollFactor(0));
-      const b = UI.button(this, 640, 520, "BACK TO THE MAP", () => this.scene.start("Map", { sea: this.seaIdx }), { w: 340, h: 64, size: 34 }); b.setScrollFactor(0); L.add(b);
+      const rows = [`Booty: +${booty}` + (this.P.bootyMul > 1 ? " (Hardtack ×2)" : ""), `Secrets: ${s.secretsFound}/${this.spec.secrets}`, s.piece ? "Map piece: FOUND ✔" : (AHOY.Save.island(this.isl.id).piece ? "Map piece: already charted" : "Map piece: missed — come back for it!"), `Time: ${time.toFixed(1)}s · par ${par}s · ${s.hitsTaken} hit${s.hitsTaken === 1 ? "" : "s"}`];
+      rows.forEach((r, i) => L.add(UI.text(this, 640, 262 + i * 42, r, 34, "#2b1b12").setScrollFactor(0)));
+      L.add(UI.text(this, 640, 436, "★ " + grade.toUpperCase() + " MEDAL" + (grade === "gold" ? "" : grade === "silver" ? " · gold is a clean run under par" : " · silver is every secret, or under par"), 28, { gold: "#b8860b", silver: "#5c6670", bronze: "#8a4b1f" }[grade]).setScrollFactor(0));
+      if (s.secretsFound < this.spec.secrets) L.add(UI.text(this, 640, 468, "Some secrets need another pirate's power…", 24, "#7a1f12").setScrollFactor(0));
+      const b = UI.button(this, 640, 522, "BACK TO THE MAP", () => this.scene.start("Map", { sea: this.seaIdx }), { w: 340, h: 64, size: 34 }); b.setScrollFactor(0); L.add(b);
       this.input.keyboard.once("keydown-ENTER", () => this.scene.start("Map", { sea: this.seaIdx }));
     }
 
@@ -559,6 +648,7 @@
       if (s.xrayUntil && t > s.xrayUntil) { s.xrayUntil = 0; this.walls.getChildren().forEach((w) => w.setAlpha(1)); }
       if (s.dashUntil > t) this.walls.getChildren().slice().forEach((w) => { if (Math.abs(w.x + 32 - this.player.x) < 70 && Math.abs(w.y + 68 - this.player.y) < 110) this.breakWall(w); });
       this.hudPower();
+      if (this.droppers.length && !s.done) this.dropTick(t);
 
       const k = this.keys, b = this.player.body;
       if (!s.done && !s.grappling) {
@@ -597,12 +687,31 @@
       if (this.crest) this.crest.setPosition(b.center.x - s.facing * 26, b.bottom - 98);
 
       // Enemies.
+      const px = this.player.x, py = this.player.y;
       this.enemies.forEach((en) => {
         if (en.dead) return;
         const eb = en.body.body;
         if (en.body.x < en.minX) en.dir = 1; else if (en.body.x > en.maxX) en.dir = -1;
-        eb.setVelocityX(en.dir * en.sp);
-        if (en.type === "gull") { en.t += dt * 2.4; en.body.y = en.baseY + Math.sin(en.t) * 50; }
+        let sp = en.sp;
+        // Tier 3+: a skeleton within reach lunges — a short burst at the pirate, then a breather.
+        if (en.type === "skel" && this.P.skelLunge && !s.done) {
+          if (t < en.lungeUntil) sp = en.sp * 2.4;
+          else if (t > en.lungeCd && Math.abs(px - en.body.x) < 190 && Math.abs(py - en.body.y) < 80 && px > en.minX - 40 && px < en.maxX + 40) {
+            en.lungeUntil = t + 420; en.lungeCd = t + 2000; en.dir = Math.sign(px - en.body.x) || en.dir; en.vis.setTint(0xffd0d0); this.time.delayedCall(420, () => en.vis.active && en.vis.clearTint());
+          }
+        }
+        eb.setVelocityX(en.dir * sp);
+        if (en.type === "gull") {
+          // Tier 2+: a gull above the pirate dives at them, then climbs back to its line.
+          if (this.P.gullDive && !en.dive && t > en.diveCd && !s.done && Math.abs(px - en.body.x) < 240 && py > en.baseY + 40) {
+            en.dive = { phase: "down", until: t + 480, dir: Math.sign(px - en.body.x) || en.dir }; en.diveCd = t + 2600; en.vis.setTint(0xffe0a0);
+          }
+          if (en.dive) {
+            const d = en.dive;
+            if (d.phase === "down") { en.body.y = Math.min(GY - 60, en.body.y + 420 * dt); eb.setVelocityX(d.dir * 230); if (t > d.until) { d.phase = "up"; d.until = t + 700; } }
+            else { en.body.y = Math.max(en.baseY, en.body.y - 300 * dt); eb.setVelocityX(en.dir * sp); if (t > d.until) { en.dive = null; en.vis.clearTint(); en.body.y = en.baseY; } }
+          } else { en.t += dt * 2.4; en.body.y = en.baseY + Math.sin(en.t) * 50; }
+        }
         en.vis.setPosition(en.body.x, eb.bottom + 2).setFlipX(en.type === "skel" ? en.dir < 0 : en.dir > 0);
         if (en.type === "crab") en.vis.setAngle(Math.sin(t / 80) * 5);
       });
@@ -612,7 +721,7 @@
       if (this.spec.exit && !s.done && this.exitObj && Math.abs(this.player.x - this.spec.exit.x) < 50 && b.bottom > GY - 30) this.finish();
       if (this.bossSpec && !this.bossStarted && this.player.x > this.bossSpec.x0 + 160) this.startBoss();
       if (this.boss) this.bossTick();
-      if (this.player.y > 800 && !s.done) { s.hp = Math.max(0, s.hp - 1); this.hudHearts(); AHOY.Audio.play("hit"); if (s.hp <= 0) this.wipeout("Shipwrecked!"); else { this.banner("SPLASH!", "Back to the last flag"); b.reset(s.respawn.x, s.respawn.y); s.invulnUntil = t + 1200; } }
+      if (this.player.y > 800 && !s.done) { s.hp = Math.max(0, s.hp - 1); s.hitsTaken++; this.hudHearts(); AHOY.Audio.play("hit"); if (s.hp <= 0) this.wipeout("Shipwrecked!"); else { this.banner("SPLASH!", "Back to the last flag"); b.reset(s.respawn.x, s.respawn.y); s.invulnUntil = t + 1200; } }
     }
   }
 

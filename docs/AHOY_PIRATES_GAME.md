@@ -38,7 +38,25 @@ until the Pump Fun Pirates team has seen it and said yes. The art is theirs and 
   patch→Grapple, 3d→X-Ray, shades→Dash, hook arm→Grapple), and **laser** eyewear adds a laser
   attack. Their NFT shows as a crest and on the HUD.
 - **Boss**: Kraken's Lair, the Rug Kraken. Tentacles slam where you stand, rolled rugs come
-  along the floor, 10 hits.
+  along the floor, 10 hits. Below half health two tentacles slam a cycle and rugs come faster;
+  with three hits left a tentacle sweeps the floor from its side (jump it). Going down heals it —
+  a fight is won in one go.
+- **Difficulty** (owner, 2026-10-04: "needs to be more challenging overall"): one number per sea
+  (`difficulty` in `data.js`: Bay 1, Straits 2, Reef and Glacier 3, Deep / Uptober / Cove 4) and
+  one table, `AHOY.DIFF.p(tier)`, that every scene reads its numbers from. **Tier 1 is exactly the
+  game as it shipped**, pinned by the smoke test, so the free Bay stays forgiving. Up the tiers:
+  faster enemies (+25 % a tier), skeletons take 3 hits from tier 3 and crabs 2 from tier 4, shorter
+  invulnerability, faster moving planks, **gulls dive** (tier 2+), **skeletons lunge** (3+),
+  **planks over pits crumble** after half a second and grow back (3+), **cannon / coconut drops**
+  on the `D` stretches (2+; plain ground on tier 1), **one flag per island** (4+), and on tier 3+
+  **a wipeout loses the island and its booty** instead of returning you to the flag. Crossings
+  scale too: tighter storm, whack and gull timing, narrower rival zone, faster whirlpool decay,
+  bigger losses. **Hardtack** (title screen toggle, saved): every sea one tier harder, booty ×2.
+  The chart and every HUD say the tier ("Calm waters" … "Hurricane").
+- **Medals**: every island finish is graded — gold is a clean run under par (no hit, no splash),
+  silver is every secret or under par, bronze is getting there. Par is the island's width at a
+  steady run plus twelve seconds. The best medal shows on the chart beside the tick and on the
+  island's landing card.
 
 ## Holder tiers
 

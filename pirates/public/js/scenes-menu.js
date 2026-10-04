@@ -124,6 +124,14 @@ class TitleScene extends Phaser.Scene {
     UI.button(this, 400, 570, "CREW", () => UI.fadeTo(this, "Select"), { w: 220, h: 64, size: 36 });
     UI.button(this, 640, 570, "CONTROLS", () => AHOY.ControlsPanel.open(this), { w: 220, h: 64, size: 36 });
     UI.button(this, 880, 570, "HOLDERS", () => AHOY.HolderPanel.open(this), { w: 220, h: 64, size: 36 });
+    // Hardtack mode: every sea one tier harder, booty doubled (AHOY.DIFF in data.js). A toggle,
+    // saved, shown on the chart and in every island's HUD so nobody wonders why the gulls dive.
+    const hardLabel = () => "HARDTACK: " + (AHOY.Save.get().hardtack ? "ON" : "OFF");
+    const hard = UI.button(this, 1060, 470, hardLabel(), () => {
+      AHOY.Save.set({ hardtack: !AHOY.Save.get().hardtack }); hard.label.setText(hardLabel()); AHOY.Audio.play(AHOY.Save.get().hardtack ? "boom" : "good");
+      hardTip.setText(AHOY.Save.get().hardtack ? "Every sea one tier rougher · booty ×2" : "Hardtack: every sea one tier rougher, booty ×2");
+    }, { w: 300, h: 64, size: 32, fill: 0x7a1f12 });
+    const hardTip = UI.text(this, 1060, 518, AHOY.Save.get().hardtack ? "Every sea one tier rougher · booty ×2" : "Hardtack: every sea one tier rougher, booty ×2", 22, "#ffefc9", { stroke: "#2b1b12", strokeThickness: 4 });
 
     // The real contract address — the only one the game ever shows (a copycat exists).
     const ca = AHOY.CA;
