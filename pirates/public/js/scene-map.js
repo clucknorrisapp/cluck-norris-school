@@ -26,6 +26,8 @@
       const head = this.add.graphics(); head.fillStyle(0x2b1b12, 0.8).fillRoundedRect(330, 74, 620, 70, 14);
       UI.text(this, 640, 98, sea.name, 46, "#ffcd77");
       UI.text(this, 640, 130, sea.sub, 24, "#ffefc9");
+      const P = AHOY.DIFF.p(AHOY.DIFF.tier(sea));
+      UI.text(this, 640, 160, "⚓ " + P.name + (P.hardtack ? " · HARDTACK" : ""), 24, P.tier >= 4 ? "#ffb3a7" : "#fff7e0", { stroke: "#2b1b12", strokeThickness: 5 });
 
       // Routes.
       const routes = this.add.graphics();
@@ -48,6 +50,8 @@
           this.tweens.add({ targets: x, scale: 0.5, duration: 700, yoyo: true, repeat: -1 });
         }
         if (st.done) UI.text(this, isl.x + 62, isl.y - 50, "✔", 40, "#1b6e2a", { stroke: "#ffffff", strokeThickness: 6 });
+        // The island's best grade (scene-level.js finish): a medal beside the tick.
+        if (st.grade) UI.text(this, isl.x + 62, isl.y - 12, "★", 36, { gold: "#ffc93c", silver: "#dfe3ea", bronze: "#c47a3a" }[st.grade] || "#ffffff", { stroke: "#2b1b12", strokeThickness: 6 });
         if (st.piece) this.add.image(isl.x - 62, isl.y - 46, "item-map-piece").setScale(0.3);
         if (!open) { // fog over the unknown
           for (let k = 0; k < 5; k++) {
@@ -148,7 +152,7 @@
       const st = AHOY.Save.island(isl.id);
       const info = isl.boss ? "BOSS: the Rug Kraken waits below." : isl.treasure ? (this.allPieces() ? "The map is complete — the treasure is here!" : "The X is here… but your map is missing pieces. You can still dig!") : (st.piece ? "Map piece found ✔ — replay for booty and secrets." : "A map piece is hidden on this island.");
       layer.add(UI.text(this, 640, 384, info, 28, "#c0392b", { wrap: 560 }));
-      if (st.best) layer.add(UI.text(this, 640, 424, "Best time " + st.best.toFixed(1) + "s", 24, "#3d2a1f"));
+      if (st.best) layer.add(UI.text(this, 640, 424, "Best time " + st.best.toFixed(1) + "s" + (st.grade ? " · " + st.grade.toUpperCase() + " medal" : ""), 24, "#3d2a1f"));
       layer.add(UI.button(this, 520, 480, "LAND!", () => UI.fadeTo(this, "Level", { sea: this.seaIdx, island: i }), { w: 200, h: 66, size: 40, fill: 0xc0392b }));
       layer.add(UI.button(this, 760, 480, "STAY ABOARD", () => layer.destroy(), { w: 240, h: 66, size: 32 }));
     }
