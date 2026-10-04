@@ -3072,5 +3072,6 @@
   "A payment of {amount} SKR was sent but could not buy a pass: {reason}. Keep this signature and contact support: {sig}": "Um pagamento de {amount} SKR foi enviado, mas não conseguiu comprar um passe: {reason}. Guarde esta assinatura e fale com o suporte: {sig}",
   "Dismiss": "Dispensar",
   "Needs attention": "Precisa de atenção",
-  "We can't tell yet whether this payment went through. If SKR left your wallet, look in your wallet's history and contact support.": "Ainda não sabemos se este pagamento foi concluído. Se o SKR saiu da sua carteira, veja o histórico da carteira e fale com o suporte."
+  "We can't tell yet whether this payment went through. If SKR left your wallet, look in your wallet's history and contact support.": "Ainda não sabemos se este pagamento foi concluído. Se o SKR saiu da sua carteira, veja o histórico da carteira e fale com o suporte.",
+  "This app has an in-app swap, in the Toolkit and on the Swap tab. This page isn't telling you to use it — only that it exists.": "Este app tem uma troca dentro do app, no Kit de ferramentas e na aba Swap. Esta página não está dizendo para você usá-la — apenas que ela existe."
 }
