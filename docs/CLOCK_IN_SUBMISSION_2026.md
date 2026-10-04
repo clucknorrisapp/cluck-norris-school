@@ -335,10 +335,13 @@ describe the swap as live in the video or the deck until that promotion has happ
    15% / UI 15% / Innovation 15% / Ecosystem Impact 15%) or the published FAQ's four-equal-25%
    scheme. `docs/CLOCK_IN_HACKATHON_2026.md` flags this is unresolved; **ask in office hours,
    Discord Wed 18:30 UTC**, before finalizing what the deck emphasizes.
-3. **appId decision** — ship the hackathon build under its own appId (`app.clucknorris.seeker`,
-   zero risk to the live `app.clucknorris.school` listing) or fold it into the existing listing.
-   `docs/SEEKER_APP_PLAN.md` §"Ship it under its own appId" recommends the former; needs an
-   explicit owner call before the dApp Store draft is finalized.
+3. ✅ **appId decision — DECIDED (owner, 2026-10-04): its own appId, `app.clucknorris.seeker`, a
+   fresh signing key, same publisher wallet.** The 2026-10-03 plan to replace the live
+   `app.clucknorris.school` listing needed that listing's signing key, which could not be located
+   on any machine (the live key's certificate fingerprint and the publisher wallet
+   `4Ws6jXEGQ7MG61Ke8qiuGrXhdcYX2NNVCtg3xRMsuLs8` were read from the chain and are recorded in the
+   wrapper's `docs/CLOCK_IN_MAC_RUNBOOK.md`). The live 1.0 listing is left untouched; the wrapper's
+   `build:seeker` and `dapp-store/config.seeker.yaml` target the new package (wrapper commit 7dc16ca).
 4. **Promote `develop` → `main` before the deadline?** #420 (the swap) is merged but production
    cannot serve it; the swap is the app's largest on-chain SKR integration, which the hackathon
    scores (20% of the main score under one scheme, a separate prize under the other). The
