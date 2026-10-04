@@ -4,7 +4,6 @@
 [![Built on Solana](https://img.shields.io/badge/Built%20on-Solana-9945FF)](https://solana.com)
 [![Powered by Bags.fm](https://img.shields.io/badge/Powered%20by-Bags.fm-orange)](https://bags.fm)
 [![Live App](https://img.shields.io/badge/Live-clucknorris.app-green)](https://clucknorris.app)
-[![Colosseum Crypto World's Fair](https://img.shields.io/badge/Colosseum-Crypto%20World's%20Fair%202026-C9A227)](https://www.colosseum.com/worldsfair)
 [![Auto-deployed on Railway](https://img.shields.io/badge/Deploy-Railway-blueviolet)](https://railway.app)
 [![Receipts reproducible](https://clucknorris.app/hub/badge.svg)](https://clucknorris.app/hub/status)
 
@@ -21,98 +20,6 @@ Open source, live on mainnet. The heavy tools stay free while you hold ~$10 of C
 Everything that teaches is free. No signup, no wallet connect to learn, no subscription. The heavy tools (X-Ray, Holders, Trace) cost real money to run — hold about $10 worth of CLKN (in the Seeker app, about $20 of SKR opens the same door) and they are all free; otherwise 0.05 SOL unlocks the lot for 7 days. The safety basics — Wallet Checkup, Firepit, the Locker Room — and the airdropper stay free for everyone.
 
 Live at **[clucknorris.app](https://clucknorris.app)**.
-
----
-
-## 🏛️ Colosseum Crypto World's Fair — competing now
-
-**Window: 2026-09-14 13:00 UTC (06:00 PT) → 2026-10-13 06:59 UTC (2026-10-12 23:59 PT).** We're building in it with this product and this
-repo.
-
-Colosseum judges only the work completed inside that window, and requires all prior development
-to be disclosed. So the baseline is declared up front rather than blurred:
-
-| | |
-|---|---|
-| **Pre-event disclosure** | [`docs/PRE_EVENT_STATE.md`](docs/PRE_EVENT_STATE.md) — what existed before the window, itemised |
-| **Snapshot commits** | `main` at `75b69cc`, `develop` at `41d0a6a`, taken 2026-09-14 09:00 UTC |
-| **Durable markers** | branches `snapshot/pre-colosseum-2026-09-14-main` and `…-develop` |
-| **The scored delta** | `git log 75b69cc..main` — everything after the snapshot |
-| **The plan** | [`docs/COLOSSEUM_ROADMAP.md`](docs/COLOSSEUM_ROADMAP.md) |
-
-**What we're entering: the Project Hub** — a project-owned rewards program whose terms,
-eligibility and payments any holder can check *without trusting us*. Live today, and every piece
-below works with no wallet connected:
-
-- **[`/hub`](https://clucknorris.app/hub)** — every project's published program version (pool
-  size, term tiers, exclusions, payout cadence) and a wallet's own eligibility, backed by a
-  stable **reason code** rather than a bare yes/no (`below_min_lock`, `term_too_short`,
-  `excluded_creator`, …) — `GET /api/hub/:project/holder?address=`.
-- **Receipts that explain their number** — a settled receipt page (`/hub/:project/r/:sig`) shows
-  the payout row *and*, where the inputs were retained, a "how this number was computed"
-  walkthrough using the holder's own term, multiplier and pro-rata share — derived by the same
-  code that computed the payout, never authored copy.
-- **Reproduce a receipt yourself** — `node scripts/reproduce-receipt.cjs <receipt-url>` re-derives
-  the amount from the published inputs on your own machine, no server call, no wallet. The exact
-  same verifier also ships as a standalone package — no clone, no build —
-  [`packages/hub-verify`](packages/hub-verify) (`npx @clkn/hub-verify <receipt-url>`; publishing to
-  npm is pending the owner's go, so for now run it from a git ref or from this repo). Every
-  program page states the measured ratio, never an asserted one: **"N of M receipts in `<batch>`
-  reproduce; K have missing inputs"** (`GET /api/hub/:project/reproducibility`).
-- **[`/hub/demo`](https://clucknorris.app/hub/demo)** — the whole loop with no wallet at all: a
-  clearly labelled `dryRun:true` fixture project walks a program version → a holder qualifying
-  under a stated rule → funding coverage → a batch → a receipt → reproducing it, then a second
-  fixture (`/hub/demo-b`) proving one project's data can never leak into another's.
-- **The settlement library as a public, composable module** — [`lib/hub/README.md`](lib/hub/README.md)
-  documents the entities and invariants in plain words, and every wire shape is published JSON
-  Schema at `/hub/schema/<name>.json` (`project-public`, `program-version`, `batch`, `receipt`),
-  so a second product can validate a Hub JSON body without reading this repo.
-- **[`/for-projects`](https://clucknorris.app/for-projects)** — the guided front door for a
-  project team: lock → apply for lock-to-earn → airdrop → listing checkup →
-  owners snapshot → burn receipt, in the order teams actually use them, plus a per-mint checklist
-  of what a token has already done.
-- The **"Receipts reproducible" badge** above is computed live from the public record every time
-  it renders — `GET /api/hub/badge.json` sums `lib/hub/reproduce.js`'s `projectReproducibility`
-  over every registered, non-demo project, the exact same function [`/hub/status`](https://clucknorris.app/hub/status)
-  calls, so the number on this README is never typed by hand.
-- **Ten languages, kept honest** — the two lessons that shipped with zero translated strings
-  (Seed Phrase Survival, Inheritance) were translated into every non-English school dictionary
-  during this window, and the i18n audit now checks lesson coverage by id so the gap can't recur
-  silently.
-
-- **[`/hub/status`](https://clucknorris.app/hub/status)** — every project's programs, receipts,
-  reproducibility ratio and latest holder count in one place, plus which git commit and branch
-  the running server was actually built from (`GET /api/build`) — fed only by the public routes
-  above, with a plain-words box on what the page proves and what it doesn't.
-- **The school points at the Hub, and the Hub points back** — the six lock lessons end on a
-  "Ready to lock?" card that carries the project a learner arrived from, and a project page shows
-  how many anonymous visitors read the lock lessons before reaching it (only when above zero).
-- **The Hub pages in all ten languages**, with the same CI coverage gate as the school.
-- **[`docs/HUB_VERIFY.md`](docs/HUB_VERIFY.md)** — the two-minute version of all of the above:
-  every command copy-pasteable, which routes are live on production today vs staging, and what
-  isn't independently verifiable yet, stated plainly. `scripts/hub-verify-doc-test.cjs` pins the
-  doc against the code in CI so it can't quietly go stale.
-- **[`/hub/judge`](https://clucknorris.app/hub/judge)** — the judge's fifteen minutes: one section
-  per Colosseum judging criterion, each a short list of exact URLs to open, what to look for, and
-  the test file that pins it — rendered straight from [`docs/JUDGE_GUIDE.md`](docs/JUDGE_GUIDE.md)
-  so the page and the doc can never drift apart.
-
-**What isn't true yet, stated plainly.** A program version's `hash` is served by the same server
-that computes the payout — that lets a reader *re-derive* the arithmetic from the published
-inputs; it does not prove the server omitted no qualifying escrow. The independent on-chain
-commitment (the funding wallet signs a memo transaction over that hash; the server writes the
-commitment only after it observes the memo on-chain) is **built and ships dry-run**: no program
-has been committed yet, so every Hub surface still says "reproducible from the published inputs,"
-never "independently verified," and the wording upgrades per program only on observation.
-Separately, the Addendum-B settlement journal (the full append-only-per-transfer shape
-`receipt.schema.json` documents) is built, unit-tested and wired into the payout route on a
-pull request under money-path review; until it merges, today's live payout and receipt routes
-still run on the earlier CUNA payout model. `lib/hub/README.md` §5 states the exact gap rather
-than glossing over it.
-
-The school is the front door; the rest of the tools below are the same stack, already live. No
-prizes are claimed and no result is predicted here. Everything on this page that predates
-2026-09-14 is disclosed as such.
 
 ---
 
