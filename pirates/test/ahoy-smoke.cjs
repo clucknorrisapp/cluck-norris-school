@@ -325,6 +325,97 @@ function chromiumPath() {
     await ctx.close();
   }
 
+  // ── Codex round 3: AHOY no-session-secret mode. /verify answers token:null, expiresAt:null. The
+  // verified tier must survive the NEXT decision (it used to be coerced to expiry 0 and dropped) for
+  // this page session only: never stored, gone on reload, gone on disconnect, and a late or
+  // superseded answer must not restore it.
+  const NOSECRET = { ok: true, tier: "nft", ahoy: 0, usd: 0, nfts: [{ id: "n1", name: "P", image: null, traits: {} }], token: null, expiresAt: null };
+  const walletInit = (w) => {
+    window.solana = { publicKey: null, connect: async () => { window.solana.publicKey = { toString: () => w }; return { publicKey: window.solana.publicKey }; },
+      signMessage: async () => ({ signature: new Uint8Array(64).fill(7) }), disconnect: async () => {} };
+  };
+  const noSecretPage = async (verifyHandler) => {
+    const { ctx, gp } = await newGatePage(async (p) => {
+      await p.route(/\/api\/ahoy\/challenge/, (r) => r.fulfill({ json: { ok: true, message: "sign me", nonce: "n1" } }));
+      await p.route(/\/api\/ahoy\/verify/, verifyHandler);
+    });
+    await gp.addInitScript(walletInit, WALLET);
+    await gp.goto(base, { waitUntil: "load" });
+    await gp.waitForFunction(() => window.__AHOY_GAME && AHOY.Gate.mode() === "live", null, { timeout: 30000 });
+    return { ctx, gp };
+  };
+  const gateView = (gp) => gp.evaluate(() => {
+    const nftSea = AHOY.SEAS.find((x) => x.access === "nft"), capSea = AHOY.SEAS.find((x) => x.access === "captain");
+    const s = AHOY.Gate.state();
+    return { canNft: AHOY.Gate.canSail(nftSea), canCap: AHOY.Gate.canSail(capSea), tier: AHOY.Gate.tier(), wallet: s.wallet, confirmed: s.confirmed, pending: AHOY.Gate.pending(), stored: sessionStorage.getItem("ahoy_pfp_gate_v1"), storedLocal: localStorage.getItem("ahoy_pfp_gate_v1") };
+  });
+
+  // (d) token:null keeps the verified tier for the next decisions, and writes nothing to storage.
+  {
+    const { ctx, gp } = await noSecretPage((r) => r.fulfill({ json: NOSECRET }));
+    await gp.evaluate(() => AHOY.Gate.connectAndVerify());
+    const v1 = await gateView(gp);
+    await wait(50);
+    const v2 = await gateView(gp);
+    check(v1.canNft && v1.canCap && v1.tier === "nft" && v1.confirmed && v1.wallet === WALLET, `no-secret sign-in: the verified tier is honoured (nft ${v1.canNft}, tier ${v1.tier})`);
+    check(v2.canNft && v2.tier === "nft" && v2.confirmed, `...and survives the NEXT access decision (tier ${v2.tier}) — it used to be coerced to expiry 0 and dropped`);
+    check(v1.stored === null && v1.storedLocal === null, "...and is never persisted to session/local storage");
+    // reload: a fresh page load has nothing to restore
+    await gp.reload({ waitUntil: "load" });
+    await gp.waitForFunction(() => window.__AHOY_GAME && AHOY.Gate.mode() === "live", null, { timeout: 30000 });
+    const v3 = await gateView(gp);
+    check(!v3.canNft && !v3.canCap && v3.tier === "free" && v3.wallet === null && !v3.confirmed, `reload clears the page-only grant (tier ${v3.tier}, wallet ${v3.wallet})`);
+    await ctx.close();
+  }
+
+  // (e) disconnect clears it.
+  {
+    const { ctx, gp } = await noSecretPage((r) => r.fulfill({ json: NOSECRET }));
+    await gp.evaluate(() => AHOY.Gate.connectAndVerify());
+    const before = await gateView(gp);
+    await gp.evaluate(() => AHOY.Gate.disconnect());
+    const after = await gateView(gp);
+    check(before.canNft && !after.canNft && !after.canCap && after.tier === "free" && after.wallet === null && !after.confirmed, `disconnect clears the page-only grant (before nft ${before.canNft}; after tier ${after.tier}, wallet ${after.wallet})`);
+    await ctx.close();
+  }
+
+  // (f) a late no-secret /verify answer that arrives after a disconnect is ignored.
+  {
+    const gate = deferred(); let seen;
+    const asked = new Promise((r) => { seen = r; });
+    const { ctx, gp } = await noSecretPage(async (r) => { seen(); await gate.p; try { await r.fulfill({ json: NOSECRET }); } catch (_) {} });
+    await gp.evaluate(() => { window.__verifyP = AHOY.Gate.connectAndVerify().then(() => "applied", (e) => "rejected: " + e.message); });
+    await asked; await wait(100);
+    await gp.evaluate(() => AHOY.Gate.disconnect());
+    gate.release();
+    const settled = await gp.evaluate(() => window.__verifyP);
+    await wait(300);
+    const out = await gateView(gp);
+    check(!out.canNft && !out.canCap && out.wallet === null && !out.confirmed && out.tier === "free" && /^rejected/.test(settled), `a no-secret /verify answer after disconnect does not restore the grant (${settled}; wallet ${out.wallet}, tier ${out.tier})`);
+    await ctx.close();
+  }
+
+  // (g) a late answer for an OLDER request, after a newer connect has taken over, does not overwrite it.
+  {
+    const gate = deferred(); let calls = 0; let seen;
+    const asked = new Promise((r) => { seen = r; });
+    const OLD = { ...NOSECRET, tier: "deckhand", nfts: [] };
+    const { ctx, gp } = await noSecretPage(async (r) => {
+      const n = ++calls;
+      if (n === 1) { seen(); await gate.p; try { await r.fulfill({ json: OLD }); } catch (_) {} }
+      else r.fulfill({ json: NOSECRET });
+    });
+    await gp.evaluate(() => { window.__firstP = AHOY.Gate.connectAndVerify().then(() => "applied", (e) => "rejected: " + e.message); });
+    await asked; await wait(100);
+    await gp.evaluate(() => AHOY.Gate.connectAndVerify());          // the newer request wins immediately
+    gate.release();
+    const first = await gp.evaluate(() => window.__firstP);
+    await wait(300);
+    const out = await gateView(gp);
+    check(/^rejected/.test(first) && out.tier === "nft" && out.canNft, `a superseded no-secret answer is dropped; the newer one stands (${first}; tier ${out.tier})`);
+    await ctx.close();
+  }
+
   check(errors.length === 0, "no console errors" + (errors.length ? ":\n    " + errors.slice(0, 12).join("\n    ") : ""));
   await browser.close(); if (server) server.close();
   console.log(fails.length ? `\n${fails.length} FAILED` : "\nall passed");

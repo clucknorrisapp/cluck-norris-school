@@ -3,7 +3,8 @@
 // Signs and sends. Every transaction goes through src/seeker/sign.js's signSendConfirm() — the
 // app's one signing seam (confirmation-err-first, three outcomes, live-pubkey re-read, message-
 // byte diff, connected-wallet-signs-first). This file does not re-implement any of that; the
-// unconfirmed-recheck below reuses sign.js's own confirmSignature() rather than a second copy.
+// unconfirmed-recheck below reuses sign.js's own checkPendingSwap / checkUnsignedPending rather
+// than a second copy, and the unresolved attempt itself is persisted by burn-pending.js.
 //
 // Server (server.js, read-only until the receipt call):
 //   GET  /api/burn-token-info?mint=<mint>&wallet=<address>
@@ -41,7 +42,9 @@ import { t, useI18nReady } from "../i18n.js";
 import { Pane, Loading, Empty, Unavailable, Refused, Confirm, toolFetch, useOnline } from "../pane.jsx";
 import { NeedsWallet } from "../needswallet.jsx";
 import { shortAddr } from "../addr.js";
-import { signSendConfirm, confirmSignature, rpcFn, splTokenShim } from "../sign.js";
+import { signSendConfirm, rpcFn, splTokenShim, checkPendingSwap, checkUnsignedPending } from "../sign.js";
+import { loadBurnPending, saveBurnPending, clearBurnPending, BURN_PENDING_ESCAPE_MS } from "./burn-pending.js";
+import { noSignatureSentence, releasedSentence } from "../attempt-copy.js";
 import "./tools.css";
 
 const MINT_RE = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
@@ -84,13 +87,39 @@ const OUTCOME_LABEL = {
   declined: "Declined",
 };
 
-function OutcomeCard({ o, onDismiss, onRetry, onCheckStatus }) {
+// A persisted attempt (burn-pending.js), shaped as the on-screen "unconfirmed" outcome.
+function outcomeFromRecord(rec) {
+  return {
+    status: "unconfirmed", sig: rec.sig, amount: rec.amount, symbol: rec.symbol, mint: rec.mint,
+    usdValue: null, pctSupply: null, isFullBalance: rec.isFullBalance,
+    at: rec.at, recentBlockhash: rec.recentBlockhash, lastValidBlockHeight: rec.lastValidBlockHeight, wallet: rec.wallet,
+  };
+}
+
+// ⚠️ Codex on #479 (b0d381a4), P1 — an UNCONFIRMED burn has no "OK". It used to offer one when
+// there was no signature (a send-capable wallet errored after it may have broadcast), which
+// cleared the card, brought the form back and let the same amount be burned a second time. Now
+// the only ways out of this card are the chain (Check status: landed / failed on chain / blockhash
+// proven dead) and, after BURN_PENDING_ESCAPE_MS, "Stop watching" — which is not a claim that
+// nothing happened. The record behind the card is persisted (burn-pending.js) so a remount or
+// reload restores it, and it was written BEFORE the wallet was asked.
+function OutcomeCard({ o, onDismiss, onRetry, onCheckStatus, onStopWatching }) {
+  const [, forceTick] = React.useState(0);
+  const unresolved = o.status === "unconfirmed";
+  React.useEffect(() => {
+    if (!unresolved) return undefined;
+    const iv = setInterval(() => forceTick((n) => n + 1), 30000); // notice crossing the 10-minute mark
+    return () => clearInterval(iv);
+  }, [unresolved]);
+  const showEscape = unresolved && typeof o.at === "number" && Date.now() - o.at >= BURN_PENDING_ESCAPE_MS;
   return (
     <div className={"seeker-burn-outcome seeker-burn-outcome-" + o.status} role={o.status === "failed" || o.status === "unconfirmed" ? "alert" : "status"}>
-      <p className="seeker-burn-outcome-title">
-        {o.status === "sent" ? "🔥 " : o.status === "failed" ? "⚠️ " : o.status === "unconfirmed" ? "⏳ " : ""}
-        {t(OUTCOME_LABEL[o.status])}
-      </p>
+      {o.status !== "released" ? (
+        <p className="seeker-burn-outcome-title">
+          {o.status === "sent" ? "🔥 " : o.status === "failed" ? "⚠️ " : o.status === "unconfirmed" ? "⏳ " : ""}
+          {t(OUTCOME_LABEL[o.status])}
+        </p>
+      ) : null}
       {o.status === "sent" ? (
         <>
           <p>{t("Burned")} <strong>{fmtNum((o.receipt && o.receipt.burned) != null ? o.receipt.burned : o.amount)} {o.symbol}</strong>{o.isFullBalance ? <> · {t("your entire balance")}</> : null}. {t("This is permanent and cannot be undone.")}</p>
@@ -113,11 +142,31 @@ function OutcomeCard({ o, onDismiss, onRetry, onCheckStatus }) {
         </>
       ) : o.status === "unconfirmed" ? (
         <>
-          <p>{t("This was submitted but had no on-chain status after 30 seconds. It may still have landed — check before doing anything else. Resending it if it already landed would burn the tokens a second time.")}</p>
+          {o.sig
+            ? <p>{t("This was submitted but had no on-chain status after 30 seconds. It may still have landed — check before doing anything else. Resending it if it already landed would burn the tokens a second time.")}</p>
+            : <p>{noSignatureSentence()}</p>}
+          {solscanTx(o.sig) ? <p><a className="seeker-forensic-link" href={solscanTx(o.sig)} target="_blank" rel="noopener noreferrer">{t("View transaction on Solscan")}</a></p> : null}
           <div className="seeker-burn-outcome-actions">
+            {/* With a signature this asks the chain about it; without one only the attempt's own
+                lifetime (blockhash proven dead) can release it — and then the balance re-read is
+                the only claim. Either way there is a button: a missing signature is tracked, never
+                treated as nothing to look up. */}
             <button type="button" className="seeker-btn seeker-btn-quiet" disabled={o.checking} onClick={onCheckStatus}>{o.checking ? t("Checking…") : t("Check status")}</button>
           </div>
+          {showEscape ? (
+            <div className="seeker-swap-pending-escape">
+              {o.sig ? <p>{t("This is taking longer than usual to confirm. Your signature above is the real record — check it on Solscan, or stop watching here.")}</p> : null}
+              <button type="button" className="seeker-btn seeker-btn-quiet seeker-burn-stopwatch" onClick={onStopWatching}>{t("Stop watching")}</button>
+            </div>
+          ) : null}
         </>
+      ) : o.status === "released" ? (
+        // A signature-less attempt whose blockhash is proven dead. No title, no "nothing was
+        // burned": the balance on the card above was re-read when this was released, and that
+        // is the only record there is.
+        // `true`: this card renders only inside a LOADED token card (phase === "loaded"), so the
+        // balance shown above it is a real read, never the pre-release figure.
+        <p>{releasedSentence(true)}</p>
       ) : o.status === "failed" ? (
         <>
           <p>{t("Nothing was burned — the transaction did not land.")}{o.error ? ` ${o.error}` : ""}</p>
@@ -158,7 +207,7 @@ export default function ProjectBurnPane({ wallet }) {
   const [confirmPhase, setConfirmPhase] = React.useState("idle");
   const [confirmTok, setConfirmTok] = React.useState(null); // the FROZEN fresh read + resolved raw amount — see header note
   const [burning, setBurning] = React.useState(false);
-  const [burnOutcome, setBurnOutcome] = React.useState(null); // { status, sig?, error?, amount, symbol, mint, usdValue, pctSupply, isFullBalance, receipt?, receiptError?, checking? }
+  const [burnOutcome, setBurnOutcome] = React.useState(null); // { status, sig?, error?, amount, symbol, mint, usdValue, pctSupply, isFullBalance, receipt?, receiptError?, checking?, at?, recentBlockhash?, lastValidBlockHeight?, wallet? }
   const abortRef = React.useRef(null);
   const confirmAbortRef = React.useRef(null);
 
@@ -166,6 +215,35 @@ export default function ProjectBurnPane({ wallet }) {
     try { abortRef.current && abortRef.current.abort(); } catch (_) {}
     try { confirmAbortRef.current && confirmAbortRef.current.abort(); } catch (_) {}
   }, []);
+
+  // ── restore an unresolved attempt for THIS wallet (Codex on #479, P1) ─────────────────────────
+  // The record is written before the wallet is asked (see onConfirmed), so a prompt that was
+  // closed with the app, a wallet reply that never came back, or a confirmation still in flight
+  // all come back here as the watching card — with the burn form OFF — and the token the attempt
+  // was for is loaded so the card has somewhere to render. Another wallet's record is never shown.
+  const walletAddr = wallet.connected && wallet.address ? wallet.address : null;
+  React.useEffect(() => {
+    const rec = walletAddr ? loadBurnPending(walletAddr) : null;
+    // ⚠️ Codex round 2 on #479 (e3d3effa), P1 — THE RECORD ALWAYS WINS. The first cut kept any
+    // declined / sent / failed card that happened to be on screen, so switching from wallet A
+    // (its declined card still open) to wallet B (an unresolved burn on record) showed A's card,
+    // whose OK brought the burn form back for B while B's blockhash was still live — a second
+    // prompt, and B's original record overwritten. Now: a record for the connected wallet is
+    // restored unconditionally (keeping an unconfirmed card already showing for that wallet, so
+    // a Check status in flight is not reset); without one, an outcome that belongs to a
+    // different wallet is dropped rather than carried onto this one's screen.
+    setBurnOutcome((o) => {
+      if (rec) return o && o.status === "unconfirmed" && o.wallet === walletAddr ? o : outcomeFromRecord(rec);
+      if (o && o.wallet && o.wallet !== walletAddr) return null;
+      return o;
+    });
+    if (rec) {
+      setMintInput(rec.mint);
+      setFormError(null);
+      fetchToken(rec.mint);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [walletAddr]);
 
   // Shared fetch — used both for the first load from the form and for a silent refresh after a
   // burn lands (which must NOT reset the amount field or clear an outcome card still on screen).
@@ -202,7 +280,10 @@ export default function ProjectBurnPane({ wallet }) {
     if (!MINT_RE.test(mint)) { setFormError(t("Enter a valid Solana mint address.")); return; }
     setFormError(null);
     setAmount("");
-    setBurnOutcome(null);
+    // An UNRESOLVED attempt is never dropped by loading a token — it is cleared only by the chain
+    // or the escape hatch (Codex on #479, P1). Loading a different mint keeps the card, which
+    // renders on whatever token card is shown and keeps the burn form off.
+    setBurnOutcome((o) => (o && o.status === "unconfirmed" ? o : null));
     fetchToken(mint);
   }
 
@@ -226,7 +307,8 @@ export default function ProjectBurnPane({ wallet }) {
   // balance != null), and this used to arm a live Burn button under a card reading
   // "Your balance: Unknown". A burn is irreversible; arming it on a balance nobody could read
   // is the opposite of this app's rule that the guardrail comes before the power.
-  const canBurn = tok && balance != null && amtNum > 0 && !overBalance && !tooSmall && confirmPhase !== "checking" && !burning;
+  const unresolved = !!burnOutcome && burnOutcome.status === "unconfirmed";
+  const canBurn = tok && balance != null && amtNum > 0 && !overBalance && !tooSmall && confirmPhase !== "checking" && !burning && !unresolved;
 
   function setPct(p) {
     if (!tok || balance == null) return;
@@ -277,12 +359,35 @@ export default function ProjectBurnPane({ wallet }) {
     setConfirmPhase("idle");
     setConfirmTok(null);
     if (!frozen) return;
+    if (unresolved) return; // never a second attempt while the first is unresolved
     setBurning(true);
     setBurnOutcome(null);
+    // ⚠️ Codex on #479 (b0d381a4), P1 — the attempt is on record BEFORE the wallet is asked. A
+    // send-capable wallet (signAndSendTransaction / MWA) can broadcast and then throw without a
+    // signature; `onSigned` never runs then, and this pane used to hold the outcome in React state
+    // only and offer "OK" — a second tap burned the same amount again. `beforeSign` writes the
+    // record with `sig: null` (sign.js runs it after build(), so the blockhash and its lifetime
+    // are known); `onSigned` fills the signature in; a save that fails means the wallet is never
+    // asked (sign.js returns `failed` and says so). Only the chain releases the record.
+    const startedAt = Date.now();
+    const ownerAddr = wallet.address;
+    let builtBlockhash = null;
+    const record = (sig, lifetime) => ({
+      sig, mint: frozen.mint, symbol: frozen.symbol, decimals: frozen.decimals, rawAmt: frozen.rawAmt,
+      amount: frozen.amtNum, isFullBalance: frozen.isFullBalance,
+      recentBlockhash: builtBlockhash, lastValidBlockHeight: lifetime, wallet: ownerAddr, at: startedAt,
+    });
+    let lifetime = null;
     const res = await signSendConfirm({
       provider: wallet.provider,
-      owner: wallet.address,
+      owner: ownerAddr,
+      beforeSign: (info) => {
+        lifetime = info && typeof info.lastValidBlockHeight === "number" ? info.lastValidBlockHeight : null;
+        return saveBurnPending(record(null, lifetime)); // false → sign.js: the wallet is never asked
+      },
+      onSigned: (sig) => { saveBurnPending(record(sig, lifetime)); },
       build: (web3, blockhash, owner) => {
+        builtBlockhash = blockhash;
         const { Transaction, PublicKey } = web3;
         const spl = splTokenShim();
         const ownerKey = new PublicKey(owner);
@@ -320,17 +425,28 @@ export default function ProjectBurnPane({ wallet }) {
 
   async function settleOutcome(res, frozen) {
     const base = {
+      wallet: wallet.address, // every outcome names its wallet — a switch drops another wallet's card (round 2, P1)
       amount: frozen.amtNum, symbol: frozen.symbol, mint: frozen.mint,
       usdValue: frozen.priceUsd != null ? frozen.amtNum * frozen.priceUsd : null,
       pctSupply: frozen.supply ? (frozen.amtNum / frozen.supply) * 100 : null,
       isFullBalance: frozen.isFullBalance,
     };
+    // A definitive answer (landed; refused so nothing landed; declined in the wallet) retires the
+    // record written before the prompt. Unconfirmed keeps it — with or without a signature.
+    if (res.status === "sent" || res.status === "failed" || res.status === "declined") clearBurnPending(wallet.address);
     if (res.status === "sent") {
       setBurnOutcome({ ...base, status: "sent", sig: res.sig });
       fetchReceipt(res.sig, frozen.mint);
       loadToken(); // refresh balance/supply so a second burn sees the new figure
     } else if (res.status === "unconfirmed") {
-      setBurnOutcome({ ...base, status: "unconfirmed", sig: res.sig });
+      // Codex on #479, P1: `res.noSignature` (a send-capable wallet errored after it may have
+      // broadcast) is tracked exactly like a known signature — the sig:null record STAYS, the
+      // form stays off, and only Check status / the chain can release it.
+      const prev = loadBurnPending(wallet.address);
+      const sig = res.sig || null;
+      const rec = { ...(prev || {}), sig, mint: frozen.mint, symbol: frozen.symbol, decimals: frozen.decimals, rawAmt: frozen.rawAmt, amount: frozen.amtNum, isFullBalance: frozen.isFullBalance, wallet: wallet.address, at: prev && typeof prev.at === "number" ? prev.at : Date.now() };
+      saveBurnPending(rec);
+      setBurnOutcome({ ...base, status: "unconfirmed", sig, at: rec.at, recentBlockhash: rec.recentBlockhash || null, lastValidBlockHeight: rec.lastValidBlockHeight == null ? null : rec.lastValidBlockHeight, wallet: wallet.address });
     } else if (res.status === "declined") {
       setBurnOutcome({ ...base, status: "declined" });
     } else {
@@ -339,32 +455,55 @@ export default function ProjectBurnPane({ wallet }) {
     setBurning(false);
   }
 
-  // The PRIMARY recovery action for an ambiguous send: re-poll the exact signature already held
-  // via sign.js's own confirmSignature — never a second, hand-rolled status check (header note).
-  // A "still pending" result changes nothing so a stray tap can't be read as permission to retry.
+  // The PRIMARY recovery action for an ambiguous send — through sign.js's own checks, never a
+  // hand-rolled status read (header note). With a signature: checkPendingSwap (err before status,
+  // history searched, expiry only on a well-formed null AND a dead blockhash) — landed → receipt +
+  // balance re-read; failed on chain / expired → nothing was burned. Without one (Codex on #479,
+  // P1): checkUnsignedPending — the attempt's blockhash proven dead releases the record, the
+  // balance is re-read, and that re-read is the ONLY claim; never "did not land". A "still
+  // pending" answer changes nothing so a stray tap can't be read as permission to retry.
   async function recheckPending() {
     if (!burnOutcome || burnOutcome.status !== "unconfirmed" || burnOutcome.checking) return;
     setBurnOutcome((o) => ({ ...o, checking: true }));
+    const walletOf = burnOutcome.wallet || wallet.address;
     try {
-      // searchHistory: a recheck can happen minutes or hours later, by which point a genuinely
-      // landed burn has fallen out of the validator's recent-status cache and would come back
-      // ambiguous forever. attempts:1 because this is a person asking now, not a poll.
-      const landed = await confirmSignature(rpcFn(), burnOutcome.sig, { searchHistory: true, attempts: 1 });
-      if (landed) {
+      const lv = typeof burnOutcome.lastValidBlockHeight === "number" ? burnOutcome.lastValidBlockHeight : null;
+      const r = burnOutcome.sig
+        ? await checkPendingSwap(rpcFn(), { signature: burnOutcome.sig, lastValidBlockHeight: lv, recentBlockhash: burnOutcome.recentBlockhash || null })
+        : await checkUnsignedPending(rpcFn(), { lastValidBlockHeight: lv, recentBlockhash: burnOutcome.recentBlockhash || null });
+      if (r.status === "sent") {
+        clearBurnPending(walletOf);
         setBurnOutcome((o) => ({ ...o, status: "sent", checking: false }));
         fetchReceipt(burnOutcome.sig, burnOutcome.mint);
+        loadToken();
+      } else if (r.status === "expired" && !burnOutcome.sig) {
+        clearBurnPending(walletOf);
+        setBurnOutcome((o) => ({ ...o, status: "released", checking: false }));
+        loadToken(); // the balance re-read is the record
+      } else if (r.status === "failed" || r.status === "expired") {
+        // Landed and failed on chain, or provably never landed: nothing was burned.
+        clearBurnPending(walletOf);
+        setBurnOutcome((o) => ({ ...o, status: "failed", error: r.status === "failed" ? r.error : "", checking: false }));
         loadToken();
       } else {
         setBurnOutcome((o) => ({ ...o, checking: false })); // still ambiguous — unchanged, safe
       }
     } catch (e) {
-      // Landed AND failed on-chain: nothing was burned. Safe to retry.
-      setBurnOutcome((o) => ({ ...o, status: "failed", error: (e && e.message) || String(e), checking: false }));
+      setBurnOutcome((o) => (o ? { ...o, checking: false } : o)); // a read failure is not an answer
     }
   }
 
-  function dismissOutcome() { setBurnOutcome(null); }
-  function retryFromOutcome() { setBurnOutcome(null); }
+  // The escape hatch: after BURN_PENDING_ESCAPE_MS an unresolved attempt can be dropped from
+  // view. Not a claim that nothing happened — the signature link (when there is one) stays on the
+  // card right up to this tap.
+  function stopWatching() {
+    clearBurnPending((burnOutcome && burnOutcome.wallet) || wallet.address);
+    setBurnOutcome(null);
+    loadToken();
+  }
+
+  function dismissOutcome() { setBurnOutcome((o) => (o && o.status === "unconfirmed" ? o : null)); }
+  function retryFromOutcome() { setBurnOutcome((o) => (o && o.status === "unconfirmed" ? o : null)); }
 
   const confirmLines = confirmTok ? [
     <span key="a">{t("Burning")}: <strong>{fmtNum(confirmTok.amtNum)} {confirmTok.symbol}</strong>{confirmTok.isFullBalance ? <> · {t("your entire balance")}</> : null}</span>,
@@ -416,7 +555,7 @@ export default function ProjectBurnPane({ wallet }) {
           </dl>
 
           {burnOutcome ? (
-            <OutcomeCard o={burnOutcome} onDismiss={dismissOutcome} onRetry={retryFromOutcome} onCheckStatus={recheckPending} />
+            <OutcomeCard o={burnOutcome} onDismiss={dismissOutcome} onRetry={retryFromOutcome} onCheckStatus={recheckPending} onStopWatching={stopWatching} />
           ) : burning ? (
             <Loading label={t("Approve the burn in your wallet…")} />
           ) : tok.walletBalance != null && balance <= 0 ? (

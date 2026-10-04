@@ -15082,10 +15082,17 @@ app.get("/api/burn-scan", async (req, res) => {
   const TOKEN_2022_PROG = "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb";
   try {
     const accounts = [];
+    // The slot the account list was read at: the MAX of both reads' own context.slot (conservative —
+    // a proof read must be no older than the NEWER of them). Any read without a usable slot makes it
+    // null, and a null scanSlot means the client can prove nothing and hides nothing (Codex round 3:
+    // a lagging proof node older than the scan could hide a genuinely recreated account).
+    let scanSlot = 0, scanSlotKnown = true;
     for (const prog of [TOKEN_2022_PROG, TOKEN_PROG]) {
       // "confirmed", not the RPC default "finalized": finalized trails by ~15-30s, so a Rescan right
       // after a burn/reclaim showed the closed accounts again until a reconnect (owner report 2026-10-02).
       const d = await rpc("getTokenAccountsByOwner", [wallet, { programId: prog }, { encoding: "jsonParsed", commitment: "confirmed" }]);
+      const ctxSlot = d?.result?.context?.slot;
+      if (Number.isSafeInteger(ctxSlot) && ctxSlot >= 0) scanSlot = Math.max(scanSlot, ctxSlot); else scanSlotKnown = false;
       for (const acc of (d?.result?.value || [])) {
         const info = acc.account?.data?.parsed?.info;
         if (!info?.mint || !acc.pubkey) continue;
@@ -15180,6 +15187,7 @@ app.get("/api/burn-scan", async (req, res) => {
     });
     return res.status(200).json({
       success: true, wallet,
+      slot: scanSlotKnown ? scanSlot : null,   // see scanSlot above; null = unknown, never a guess
       count: out.length, capped,
       rentSolTotal: Number((rentLamportsTotal / 1e9).toFixed(6)),
       valueUsdTotal: Number(valueUsdTotal.toFixed(2)),

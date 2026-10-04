@@ -43,7 +43,7 @@ function appCopy(mod) {
     reset() { recent = { closed: {}, withdrawn: {} }; },
     closed(e) { recent.closed[ACC] = e; },
     withdrawn(e) { recent.withdrawn[ACC] = { at: e.at, prior: e.prior, txSlot: e.txSlot }; },
-    run(list, rpc, now) { return mod.reconcileRecent(list, recent, rpc, { now, sleep: noSleep }); },
+    run(list, rpc, now, scanSlot) { return mod.reconcileRecent(list, recent, rpc, { now, sleep: noSleep, scanSlot: scanSlot === undefined ? 100 : scanSlot }); },
   };
 }
 function webCopy() {
@@ -58,7 +58,7 @@ function webCopy() {
     reset() { for (const k of Object.keys(ctx.recentlyClosed)) delete ctx.recentlyClosed[k]; for (const k of Object.keys(ctx.recentlyWithdrawn)) delete ctx.recentlyWithdrawn[k]; },
     closed(e) { ctx.recentlyClosed[ACC] = { at: e.at, amountRaw: e.amountRaw, lamports: e.lamports, txSlot: e.txSlot }; },
     withdrawn(e) { ctx.recentlyWithdrawn[ACC] = { at: e.at, priorLamports: e.prior, txSlot: e.txSlot }; },
-    run(list, rpc, now) { ctx.rpc = rpc; return ctx.reconcileRecent(list, { now, sleep: noSleep }); },
+    run(list, rpc, now, scanSlot) { ctx.rpc = rpc; return ctx.reconcileRecent(list, { now, sleep: noSleep, scanSlot: scanSlot === undefined ? 100 : scanSlot }); },
   };
 }
 
@@ -125,6 +125,50 @@ async function suite(label, c) {
   c.reset(); c.withdrawn({ ...wSnap, txSlot: null }); ch = chain({ nodes: [120], accounts: {} });
   out = await c.run([row({ rentLamports: prior, surplusLamports: 367129, surplusEligible: true })], ch.rpc, now);
   ok("a withdrawal with no recorded slot hides nothing", out[0].surplusEligible === true && ch.calls.length === 0);
+
+  // Codex round 3: the proof must be no older than the SCAN it overrides.
+  // close at 100, recreate (identical balances) at 250, scan read at 300; the proof lands on a
+  // lagging node at 200 that has not seen the recreation.
+  c.reset(); c.closed(snap); ch = chain({ nodes: [200, 200, 200], accounts: {} });
+  out = await c.run([row()], ch.rpc, now, 300);
+  ok("Codex r3: a proof node OLDER than the scan (200 < 300) is refused → the recreated account is SHOWN", out.length === 1, out);
+  ok("…the proof read asked for minContextSlot = max(txSlot 100, scanSlot 300) = 300 and was retried",
+    ch.calls.length === 3 && ch.calls.every((x) => x.params[1].minContextSlot === 300), ch.calls.map((x) => x.params[1]));
+
+  c.reset(); c.closed(snap); ch = chain({ nodes: [200, 310], accounts: { [ACC]: { lamports: 2039280 } } });
+  out = await c.run([row()], ch.rpc, now, 300);
+  ok("Codex r3: a caught-up node (310 >= 300) that sees the recreated account → SHOWN", out.length === 1 && ch.calls.length === 2);
+
+  c.reset(); c.closed(snap); ch = chain({ nodes: [200, 310], accounts: {} });
+  out = await c.run([row()], ch.rpc, now, 300);
+  ok("Codex r3: a caught-up node (310 >= 300) that says the account is gone → still HIDDEN (lag hiding keeps working)", out.length === 0 && ch.calls.length === 2);
+
+  // A node that ignores minContextSlot and answers below the bound is caught by the re-check.
+  c.reset(); c.closed(snap);
+  out = await c.run([row()], async () => ({ context: { slot: 200 }, value: [null] }), now, 300);
+  ok("Codex r3: an answer whose context.slot is below the bound is never accepted, even if the node ignored minContextSlot", out.length === 1);
+
+  // withdraw at 100, re-deposit back to EXACTLY the old figure at 250, scan at 300; a lagging
+  // proof node at 200 still shows the post-withdrawal balance.
+  c.reset(); c.withdrawn(wSnap); ch = chain({ nodes: [200, 200, 200], accounts: { [ACC]: { lamports: after } } });
+  out = await c.run([row({ rentLamports: prior, surplusLamports: 367129, surplusEligible: true })], ch.rpc, now, 300);
+  ok("Codex r3: withdraw-then-redeposit — a lagging proof (200 < 300) does NOT suppress the genuine surplus",
+    out.length === 1 && out[0].rentLamports === prior && out[0].surplusLamports === 367129 && out[0].surplusEligible === true, out[0]);
+
+  c.reset(); c.withdrawn(wSnap); ch = chain({ nodes: [200, 310], accounts: { [ACC]: { lamports: after } } });
+  out = await c.run([row({ rentLamports: prior, surplusLamports: 367129, surplusEligible: true })], ch.rpc, now, 300);
+  ok("Codex r3: a withdrawal proof from a node at/after the scan slot still corrects a lagging row",
+    out.length === 1 && out[0].rentLamports === after && out[0].surplusLamports === 0 && out[0].surplusEligible === false, out[0]);
+
+  // Unknown scan slot → no proof → hide nothing, and don't even ask.
+  for (const bad of [null, "300", 3.5, NaN, -1]) {
+    c.reset(); c.closed(snap); ch = chain({ nodes: [400], accounts: {} });
+    out = await c.run([row()], ch.rpc, now, bad);
+    ok(`unknown/invalid scanSlot (${String(bad)}) → the row is shown and the chain isn't asked`, out.length === 1 && ch.calls.length === 0);
+  }
+  c.reset(); c.closed(snap); ch = chain({ nodes: [400], accounts: {} });
+  out = await c.run([row()], ch.rpc, now, null);
+  ok("a scan with no slot at all (older server / server could not read one) hides nothing", out.length === 1 && ch.calls.length === 0);
 }
 
 (async () => {
