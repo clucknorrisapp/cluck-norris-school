@@ -141,21 +141,32 @@ function chromiumPath() {
   check(await page.evaluate(() => !window.__AHOY_LEVEL.state.paused), "controller A resumes from the pause menu");
 
   // The high chest on Launch Beach (the ghost-plank secret): ground jump, then a second jump at the top.
+  // The key holds are wall-clock timed against the game's physics, so on a loaded CI runner one
+  // attempt can let go a few frames early and fall short — develop's 2026-10-04 smoke-test run did
+  // exactly that (the PR run before it passed). Up to three attempts, the player reset to the
+  // same spot each time; the pose and the double-jump spin are read from the first attempt.
   const chestInfo = await page.evaluate(() => {
     const L = window.__AHOY_LEVEL; const c = L.chests.getChildren().find((ch) => ch.secret === "ghost");
-    L.state.invulnUntil = 1e12; L.player.body.reset(c.x - 30, 540); L.player.body.setVelocity(0, 0);
     return { x: c.x, y: c.y };
   });
-  await wait(500);
-  // Hold for a full jump (a tap is a deliberate short hop), let go near the top, press again.
-  await page.keyboard.down("Space"); await wait(200);
-  const jumpPose = await pose();
-  await wait(200); await page.keyboard.up("Space"); await wait(40);
-  await page.keyboard.down("Space"); await wait(60);
-  const spun = await page.evaluate(() => window.__AHOY_LEVEL.state.spinUntil > window.__AHOY_LEVEL.time.now);
-  await shot("05e-double-jump");
-  await wait(700); await page.keyboard.up("Space"); await wait(600);
-  const opened = await page.evaluate(() => window.__AHOY_LEVEL.chests.getChildren().find((ch) => ch.secret === "ghost").opened === true);
+  let jumpPose = null, spun = false, opened = false;
+  for (let attempt = 1; attempt <= 3 && !opened; attempt++) {
+    await page.evaluate((cx) => {
+      const L = window.__AHOY_LEVEL;
+      L.state.invulnUntil = 1e12; L.player.body.reset(cx - 30, 540); L.player.body.setVelocity(0, 0);
+    }, chestInfo.x);
+    await wait(500);
+    // Hold for a full jump (a tap is a deliberate short hop), let go near the top, press again.
+    await page.keyboard.down("Space"); await wait(200);
+    const p = await pose(); if (attempt === 1) jumpPose = p;
+    await wait(200); await page.keyboard.up("Space"); await wait(40);
+    await page.keyboard.down("Space"); await wait(60);
+    const s = await page.evaluate(() => window.__AHOY_LEVEL.state.spinUntil > window.__AHOY_LEVEL.time.now);
+    if (attempt === 1) { spun = s; await shot("05e-double-jump"); }
+    await wait(700); await page.keyboard.up("Space"); await wait(600);
+    opened = await page.evaluate(() => window.__AHOY_LEVEL.chests.getChildren().find((ch) => ch.secret === "ghost").opened === true);
+    if (!opened && attempt < 3) console.log("  · double-jump attempt " + attempt + " fell short of the chest — retrying");
+  }
   check(jumpPose === "jump", "in the air shows the jump frame (" + jumpPose + ")");
   check(spun, "second jump in the air is a double jump");
   check(opened, `double jump reaches the high chest at y=${chestInfo.y} without Ghost Sight`);

@@ -169,6 +169,11 @@ export async function paySkr({ provider, owner, quote, source, payIntent, storag
     const sendOnly = typeof provider.signTransaction !== "function";
     if (sendOnly && !res.sig && attempt) return { status: "unconfirmed", sig: null, error: res.error };
     clearRecord(storage, owner);
+  } else if (res.status === "unconfirmed" && !res.sig) {
+    // sign.js now says this itself (`noSignature: true`, since #479): a send-capable wallet errored
+    // after it may have broadcast. Same answer as the guard above — the attempt stays on record,
+    // and the signature is an explicit null for every caller that reads it.
+    return { ...res, sig: null };
   }
   return res;
 }
