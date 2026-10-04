@@ -21,24 +21,20 @@ the school: it is the "Liquidity & LP Mastery" course.)
 
 ---
 
-## 0. Before you hit record — two gates
+## 0. Before you hit record — two gates (both OPEN as of 2026-10-04)
 
-1. **The app calls production, and the swap is not on production.** The app's API base is
-   `https://clucknorris.app`, which serves `main`. The swap (PR #420, merged to `develop`
-   2026-09-29) is on `develop` only: on 2026-10-03 `GET https://clucknorris.app/api/seeker/swap/config`
-   answered `{"success":false,"error":"not_found"}`. **Shot 8 is conditional on the owner promoting
-   `develop` to `main`** (his explicit go, in the moment — AGENTS.md) **and** on this returning
-   `ok:true`:
-   `curl -s https://clucknorris.app/api/seeker/swap/config`. If it does not, cut shot 8 entirely;
-   do not describe a swap that production cannot serve. The same promotion carries everything else
-   that is `develop`-only (Revoke, the ten-language picker, the five new safety lessons) — see
-   `docs/CLOCK_IN_SUBMISSION_2026.md` §8. Revoke (shot 6) works against production today, because
-   it signs and reads through endpoints production already has.
-2. **Which APK.** A dev APK is built by the wrapper repo's `android-build.yml`, job
-   `seeker-dev-apk` (debug, appId `app.clucknorris.seeker.dev`, frontend built from `develop`).
-   A release APK needs a pinned `store-seeker-v*` release, and none exists yet. Record on whichever
-   build the owner actually installs; the lesson count and the language list below describe the
-   `develop` build (production's school still has 58 lessons and seven languages).
+1. **Production carries everything.** `develop` was promoted to `main` on the owner's go on
+   2026-10-04 (PR #482, merge `1e4b7ac5`, then #484 `3bba62b1`); `GET https://clucknorris.app/api/seeker/swap/config`
+   and `GET …/api/tool-gate/skr-quote?wallet=<addr>` both answer on production (checked 15:11 UTC).
+   So the swap, the SKR-paid pass, Revoke, the ten languages and the 64 lessons are all live. If a
+   later check ever finds `not_found` again, cut the affected shot — never describe a thing
+   production cannot serve.
+2. **Which APK.** Record on the **release APK** the Mac builds from the pinned
+   `store-seeker-v1.0.2` bundle with `npm run build:seeker-update` (package
+   `app.clucknorris.school`, versionCode 10 / 2.0.0, signed with the original listing's key —
+   wrapper `docs/CLOCK_IN_MAC_RUNBOOK.md` §2.0). Not the `.seeker.dev` debug build: its bundle may
+   be a different commit from what ships. The bottom bar on that build is **School · Toolkit ·
+   Daily · Swap · Ask** (owner, 2026-10-04: the bar is for places you go every day).
 
 ---
 
@@ -46,25 +42,26 @@ the school: it is the "Liquidity & LP Mastery" course.)
 
 Record in portrait, on the Seeker, screen-recorded on-device (see §3). Every caption is a factual
 statement, never a promise — no yield, no return, no guarantee, no price or dollar claim (AGENTS.md's
-"Earn" rule).
+"Earn" rule). **The school leads and the swap is the Solana Mobile moment** (owner, 2026-10-04:
+"Rent reclaim sure as heck shouldn't be a focus … the school is the focus … connect your wallet
+and buy Seeker or buy Cluck, those are focus"). Rent Reclaim is in the extended cut only.
 
 | # | Sec | Screen | Owner does | On-screen caption |
 |---|---|---|---|---|
-| 1 | 0:00–0:07 | `/school` (school home) | Open the app. It lands on the school, not the tools grid. Let the "x / 64" progress card read. | "The School of Crypto Hard Knocks — free, no wallet, no signup." |
-| 2 | 0:07–0:19 | `/school/:courseId/:lessonId` (a lesson) | Open one lesson from The Incubator, step through a screen or two, then tap the language pill and switch to Español — the same lesson re-renders. | "64 lessons, bundled on the phone — in ten languages." |
-| 3 | 0:19–0:28 | `/ask` (Ask Cluck) | Type a real beginner question ("what is a seed phrase"), get an answer. | "Ask Cluck — the AI tutor, same one on the website." |
-| 4 | 0:28–0:35 | `/tools` (Toolkit grid) | Open the tab; the "Start here" group (Firepit, Locker Room, Project Burn, Airdropper) is on screen, scroll once. | "The tools, built for this phone." |
-| 5 | 0:35–1:00 | `/rent` (Rent Reclaim) | Tap Rent Reclaim → **Connect Wallet** → the MWA sheet opens (wallet app switches to foreground) → approve the connection → the scan lists closable accounts → tap one → the wallet's confirm sheet names the exact SOL amount → approve → back in the app, the result (landed / failed / unconfirmed) and an explorer link. | "Get your own SOL back — signed on your phone with Mobile Wallet Adapter." |
-| 6 | 1:00–1:15 | `/checkup` (Wallet Checkup, wallet already connected from shot 5) | The checkup scans the connected wallet. On the approvals list, tap **Revoke this approval** → the confirm sheet lists exactly the accounts → approve in the wallet → the app re-reads the chain and shows the per-account answer. | "Wallet Checkup — see who can move your tokens, then revoke it. Signed on your phone." |
-| 7 | 1:15–1:25 | Tools pass sheet (opened from X-Ray or Holders with a wallet under both doors) | Run a pass-gated tool with a wallet that doesn't qualify; the pass sheet opens instead of a result, showing the CLKN amount, the SKR amount, and the SOL price/day terms — all live numbers. | "One tools pass — hold CLKN or SKR, or pay once in SOL. Terms shown live, never fixed in the app." |
-| 8 | 1:25–1:40 | **CONDITIONAL on the owner promoting `develop` → `main`** (§0 gate 1) — `/tools/swap`, reached from the pass sheet's "Swap for SKR in this app" link or the grid | Pick SOL → SKR and an amount, get a quote; the card shows the rate, the minimum received and the price impact; tap Review swap → the confirm sheet → the wallet signs → landed, with a Solscan link. | "Swap SOL, SKR, CLKN or USDC without leaving the app — rate, minimum received and price impact shown before you sign." — **cut this shot entirely if production still returns `not_found` for the swap; do not describe a swap that isn't live.** |
+| 1 | 0:00–0:07 | `/school` (school home) | Open the app. It lands on the school, not the tools grid. Let the "x / 64" progress card read; the bar shows School · Toolkit · Daily · Swap · Ask. | "The School of Crypto Hard Knocks — free, no wallet, no signup." |
+| 2 | 0:07–0:18 | `/school/:courseId/:lessonId` (a lesson) | Open one lesson from The Incubator, step through a screen or two, then tap the language pill and switch to Español — the same lesson re-renders. | "64 lessons, bundled on the phone — in ten languages." |
+| 3 | 0:18–0:26 | `/ask` (Ask Cluck tab) | Type a real beginner question ("what is a seed phrase"), get an answer. | "Ask Cluck — the AI tutor, same one on the website." |
+| 4 | 0:26–0:32 | `/tools` (Toolkit tab) | Open the tab; the "Start here" group (Firepit, Locker Room, Project Burn, Airdropper) is on screen, scroll once. | "The tools, built for this phone." |
+| 5 | 0:32–0:57 | `/tools/swap` (Swap tab) | **Connect Wallet** → the MWA sheet opens (wallet app comes to the foreground) → approve the connection → back in the app, pick SOL → SKR and a small amount → the quote card shows the rate, the minimum received and the price impact → tap Review swap → the app's confirm sheet → the wallet's own confirm sheet → approve → landed, with the Solscan link. | "Swap SOL, SKR, CLKN or USDC without leaving the app — signed on your phone with Mobile Wallet Adapter. Rate, minimum received and price impact shown before you sign." |
+| 6 | 0:57–1:12 | Tools pass sheet → pay in SKR (open Wallet X-Ray or Holders with a wallet that holds a little SKR but is under both doors) | The pass sheet opens instead of a result, showing the CLKN door, the SKR door and the SKR price for seven days — all live numbers. Tap **Pay in SKR** → the wallet's confirm sheet names the SKR amount → approve → the sheet reports the pass granted and its expiry, and the tool runs. | "One tools pass — hold CLKN or SKR, or pay once, in SOL or in SKR. Terms shown live, never fixed in the app." |
+| 7 | 1:12–1:25 | `/checkup` (from the Toolkit, wallet already connected) | The checkup scans the connected wallet. On the approvals list, tap **Revoke this approval** → the confirm sheet lists exactly the accounts → approve in the wallet → the app re-reads the chain and shows the per-account answer. | "Wallet Checkup — see who can move your tokens, then revoke it. Signed on your phone." |
+| 8 | 1:25–1:30 | `/tools/alpha` (Daily tab) | Open the Daily: today's lesson, the one question, where the majors closed. | "The Daily — something to open every day." |
 
-Total with shot 8: ~100 s; without it, ~85 s. To land at 90 with the swap, drop shot 7 (the pass
-sheet is the only shot with nothing to sign) or take 3 s off each of shots 2 and 3. The swap shot is
-the only one where the wallet signs a transaction the app did not build locally — it receives it
-from the server and checks it before showing the wallet (`src/seeker/swap-verify.js`, then the
-pre-sign simulation, `src/seeker/swap-simulate.js`); that is a one-line voice-over if there is
-room, not a caption.
+Total ~90 s. If it runs long, trim shots 2 and 3 by 2–3 s each; never trim shot 5 — it is the one
+Solana Mobile Stack moment, and the only shot where the wallet signs a transaction the app did not
+build locally (it receives it from the server and checks it first: `src/seeker/swap-verify.js`,
+then the pre-sign simulation, `src/seeker/swap-simulate.js` — a one-line voice-over if there is
+room, not a caption).
 
 ### Shot 5 detail — what must actually be visible
 
@@ -73,17 +70,27 @@ order and legibly:
 1. The app's own "Connect Wallet" tap.
 2. The **MWA sheet** — the OS-level wallet-picker / handoff to the wallet app (not an in-app modal).
 3. The wallet app's own **connection approval** screen, then control returning to Cluck Norris.
-4. The Rent Reclaim scan result (closable accounts + SOL amounts).
-5. Tapping "close" on one account → the wallet's own **confirm sheet naming the exact SOL amount**
-   (this is the number the app told you first — it must match).
+4. The quote card: rate, minimum received, price impact, with the amount typed.
+5. The app's confirm sheet, then the wallet's own **confirm sheet** — the SOL out and the SKR in
+   must be the figures the app showed first.
 6. The wallet's approval, control returning to the app.
-7. The app's own outcome text (landed / failed / unconfirmed — `docs/SEEKER_DEVICE_TEST.md` step 12)
-   and an **explorer link** the owner taps to show the transaction on-chain in a browser.
+7. The app's own outcome text (landed / failed / unconfirmed) and the **Solscan link** the owner
+   taps to show the transaction on-chain in a browser.
 
 If step 2 or 5 cannot be captured cleanly in one take, retake the whole shot rather than cutting
 around it — the MWA sheet and the wallet's own confirm sheet are the proof this isn't a mocked flow.
 
-### Shot 6 detail — the Revoke setup
+### Shot 6 detail — the SKR-paid pass (#421, on production since 2026-10-04)
+
+The sheet quotes a server-signed SKR amount (`GET /api/tool-gate/skr-quote`, ten-minute validity)
+for the dollar figure the config serves — **never say the figure**, let the screen show it. The
+wallet's confirm sheet must show an SKR transfer of exactly that amount to the receiver. After
+approval the sheet says the pass is granted and until when; that line is the point of the shot.
+If the demo wallet already qualifies through CLKN or SKR holdings, use a second wallet below both
+doors (see §3). A quote that fails to load is a 503 the sheet reports honestly — if that happens on
+the day, wait a minute and retry; the server needs three price ticks after a cold deploy.
+
+### Shot 7 detail — the Revoke setup
 
 The Revoke control appears only when the scanned address **is** the connected wallet (it does not
 show on a pasted address) and only when the scan finds a token account with an open delegate
@@ -98,18 +105,18 @@ read) — film that line, it is the point of the shot.
 
 ## 2. The 3-minute extended cut
 
-Same opening (shots 1–8 above, ~1:40 with the swap; if shot 8 is cut, everything below moves up
-15 s), then add:
+Same opening (shots 1–8 above, ~1:30), then add:
 
 | # | Sec | Screen | Owner does | On-screen caption |
 |---|---|---|---|---|
-| 9 | 1:40–1:55 | `/tools/firepit` (Firepit) | Show the three sections: reclaim rent from empty accounts, reclaim surplus rent (accounts stay open), burn tokens. Select one item; the confirm sheet's button names its job. Complete one. | "Firepit — reclaim the rent in empty accounts, or burn worthless tokens. Every token is priced first." |
-| 10 | 1:55–2:10 | `/tools/lock` (Locker Room) | Preview a lock; if completing it, show the wallet as the first signer, then the ephemeral escrow key. | "Locker Room — lock tokens on Jupiter Lock, non-custodially, with public proof." |
-| 11 | 2:10–2:20 | `/tools/burn` (Project Burn) | Preview only (burning supply is real) — show the fee/consequence text before any signature. | "Project Burn — a verifiable on-chain burn receipt." |
-| 12 | 2:20–2:30 | School home, language pill open | Open the language pill and let the full list show, then pick one. | "Ten languages: English, Spanish, Hindi, Italian, Portuguese, Vietnamese, Chinese, Korean, Turkish, Indonesian." |
-| 13 | 2:30–2:42 | A lesson, airplane mode | Turn on airplane mode, open a second, not-yet-opened lesson — it renders with no network. | "The school works with no signal — it's already on the phone." |
-| 14 | 2:42–2:50 | `/tools/alpha` (Daily) with airplane mode still on | Open the Daily — it says it's offline rather than showing stale numbers. | "Every tool says so, honestly, when it can't reach the network." |
-| 15 | 2:50–3:00 | `/checkup` → "Disconnect & clean up" card, airplane mode off | Scroll to the card, tap the disconnect button; the card confirms and shows the "still to do in your wallet app" steps. | "Disconnect & clean up — clears this phone's pass and sign-in, and says where your wallet keeps the rest." |
+| 9 | 1:30–1:50 | `/rent` (Rent Reclaim, from the Toolkit) | The scan lists closable accounts and the SOL each returns → tap one → the wallet's confirm sheet names the exact SOL amount → approve → the result (landed / failed / unconfirmed) and an explorer link. | "Get your own SOL back — dead token accounts are holding it. We charge nothing." |
+| 10 | 1:50–2:05 | `/tools/firepit` (Firepit) | Show the three sections: reclaim rent from empty accounts, reclaim surplus rent (accounts stay open), burn tokens. Select one item; the confirm sheet's button names its job. Complete one. | "Firepit — reclaim the rent in empty accounts, or burn worthless tokens. Every token is priced first." |
+| 11 | 2:05–2:18 | `/tools/lock` (Locker Room) | Preview a lock; if completing it, show the wallet as the first signer, then the ephemeral escrow key. | "Locker Room — lock tokens on Jupiter Lock, non-custodially, with public proof." |
+| 12 | 2:18–2:26 | `/tools/burn` (Project Burn) | Preview only (burning supply is real) — show the fee/consequence text before any signature. | "Project Burn — a verifiable on-chain burn receipt." |
+| 13 | 2:26–2:34 | School home, language pill open | Open the language pill and let the full list show, then pick one. | "Ten languages: English, Spanish, Hindi, Italian, Portuguese, Vietnamese, Chinese, Korean, Turkish, Indonesian." |
+| 14 | 2:34–2:44 | A lesson, airplane mode | Turn on airplane mode, open a second, not-yet-opened lesson — it renders with no network. | "The school works with no signal — it's already on the phone." |
+| 15 | 2:44–2:52 | `/tools/alpha` (Daily) with airplane mode still on | Open the Daily — it says it's offline rather than showing stale numbers. | "Every tool says so, honestly, when it can't reach the network." |
+| 16 | 2:52–3:00 | `/checkup` → "Disconnect & clean up" card, airplane mode off | Scroll to the card, tap the disconnect button; the card confirms and shows the "still to do in your wallet app" steps. | "Disconnect & clean up — clears this phone's pass and sign-in, and says where your wallet keeps the rest." |
 
 End on: school home, wallet disconnected, Cluck Norris wordmark. No slogan overlay beyond what
 the app itself already renders.
@@ -122,9 +129,8 @@ the app itself already renders.
   (no third-party capture app needed; portrait orientation throughout — do not rotate for any
   shot).
 - **Wallet:** use a **demo wallet** holding only what each shot needs (a little SOL for fees, one
-  junk token for Firepit, a token account with an open delegate approval for shot 6, an amount of
-  CLKN or SKR near a pass-door threshold if shot 7 needs to show the sheet, and a small SOL balance
-  to swap if shot 8 is in). **Never show a wallet's real overall balance beyond what a shot
+  junk token for Firepit, a token account with an open delegate approval for shot 7, a little SKR but less than either
+  door for shot 6, and a small SOL balance to swap for shot 5). **Never show a wallet's real overall balance beyond what a shot
   requires** — no portfolio screen, no full holdings list from the wallet app itself.
 - **Blur or crop out:** the wallet app's own balance/portfolio screens beyond the single approval
   sheet needed, any real personal address if it isn't the demo wallet, notification shade content
@@ -135,31 +141,33 @@ the app itself already renders.
 - **Live data only.** No mocked API responses, no `--offline` demo fixtures (that convention is
   the Hub/Colosseum material in `docs/DEMO_STORYBOARD.md`; this app has no dry-run mode — every
   screen here calls the real, running `clucknorris.app` backend).
-- **Pass-sheet shot (7):** if the demo wallet already qualifies through CLKN or SKR by recording
-  day, either top down a second demo wallet below both doors, or capture the sheet earlier and
-  splice in cleanly (this one exception to "don't patch" is fine — it's an empty-state screen, not
-  a signature).
+- **Pass-sheet shot (6):** if the demo wallet already qualifies through CLKN or SKR by recording
+  day, use a second demo wallet below both doors that holds a little SKR — this shot now ends in a
+  signature (the SKR payment), so it is recorded in one take like the others.
 - **Wallet-flow honesty:** no step-by-step device run of the wallet flows is recorded anywhere in
   the repo (the owner's own 2026-09-21 statement that connect and signing work is in
-  `docs/SEEKER_TOOLS_BUILD.md`; nothing is recorded for the swap, revoke or surplus reclaim). If a
-  signing shot does not work on the day, that is a finding to report, not a shot to fake.
+  `docs/SEEKER_TOOLS_BUILD.md`; nothing is recorded for the swap, the SKR-paid pass, revoke or surplus reclaim — the
+  2026-10-04 device session is the first). If a signing shot does not work on the day, that is a
+  finding to report, not a shot to fake.
 
 ---
 
-## 4. Claims checklist — every caption must be true in the code on `develop`
+## 4. Claims checklist — every caption must be true in the code on `main` (= production since 2026-10-04)
 
 | Caption / claim | Backed by |
 |---|---|
 | "Free, no wallet, no signup" (school) | `src/seeker/edition/full.jsx` + `edu.jsx` route tables, `docs/SEEKER_DEMO_INVENTORY.md` §1–2 (`/school` needs no wallet in either edition) |
-| "64 lessons, bundled on the phone" | `data/curriculum.json` — 64 lessons / 4 courses / 235 questions, `node scripts/extract-curriculum.js --check` passes against `src/App.jsx` `LESSONS` (21) + `INCUBATOR_LESSONS` (7) + `src/sections/LPLab.jsx` `LP_LESSONS` (15) + 21 Library pieces; the app's progress card shows `TOTAL_LESSONS` from `src/seeker/school/curriculum.js`; "works offline" in `docs/SEEKER_DEMO_INVENTORY.md` §1. **Production still bundles 58** — the caption is true for a `develop` build only (58 → 63 in #459, → 64 in #464) |
+| "64 lessons, bundled on the phone" | `data/curriculum.json` — 64 lessons / 4 courses / 235 questions, `node scripts/extract-curriculum.js --check` passes against `src/App.jsx` `LESSONS` (21) + `INCUBATOR_LESSONS` (7) + `src/sections/LPLab.jsx` `LP_LESSONS` (15) + 21 Library pieces; the app's progress card shows `TOTAL_LESSONS` from `src/seeker/school/curriculum.js`; "works offline" in `docs/SEEKER_DEMO_INVENTORY.md` §1. **On production since the 2026-10-04 promotion** (58 → 63 in #459, → 64 in #464) |
 | "in ten languages" / "Ten languages: …" | `public/i18n.js` `LANGS` (10 entries: en zh es it pt vi hi ko tr id); the Seeker bundle has no `excludeLangs` (`store-edition/seeker-edition.json`), confirmed by building it: 10 picker entries, 18 dictionary files; all 1,291 app strings present in all nine dictionaries (`scripts/seeker-i18n-keys.cjs`; `scripts/seeker-build-test.cjs` §f). PR #462. The Play/iOS bundles stay at seven — do not use this caption on a store-edition recording |
 | "Ask Cluck — the AI tutor" | `docs/CLOCK_IN_SUBMISSION_2026.md` §5; `/ask` is a bottom tab in both editions. Do not say it sits inside lessons — it does not. For Italian the server adds no reply-language instruction (`AI_LANGS`, `server.js:155` has no `it`), so do not demo Ask Cluck in Italian |
 | "The tools, built for this phone" / "Start here" group | `src/seeker/tools/registry.js` (`flagship: true` on firepit, lock, burn, airdrop), `src/seeker/ToolsHome.jsx` ("Start here") |
 | "Get your own SOL back — signed on your phone with MWA" | `src/seeker/reclaim-sign.js` `runFullReclaim()`; `docs/SEEKER_DEVICE_TEST.md` step 12; `docs/SEEKER_APP_PLAN.md` §4's money-path rule ("the client builds and signs, the server never signs for a user") |
 | "Wallet Checkup — see who can move your tokens, then revoke it" | PR #458 (`src/seeker/CheckupRevoke.jsx`, `src/seeker/revoke.js`, `scripts/seeker-revoke-test.cjs` 87 checks passing); the sheet text "Each delegate below loses the ability to move that token out of your wallet. This costs a network fee and nothing else — your tokens stay where they are."; result re-read from chain; round-2 fixes in #473. **develop only; client-side, works against production** |
 | "paste any address, free" (if shown) | PR #397 ("Wallet Checkup takes any pasted address in the full edition too"); `docs/SEEKER_DEVICE_TEST.md` step 11. Revoke is not offered on a pasted address |
-| "One tools pass — hold CLKN or SKR, or pay once in SOL. Terms shown live" | `/api/tool-gate/config` (served `skr` block confirmed live 2026-10-03), `lib/tool-pass-qualify.js`, `scripts/tool-pass-qualify-test.cjs`, `src/seeker/passgate.jsx`; AGENTS.md's tools-pass section — never state a dollar figure in the caption, only that it renders live |
-| "Swap SOL, SKR, CLKN or USDC without leaving the app — rate, minimum received and price impact shown before you sign" (shot 8, conditional) | Registry blurb in `src/seeker/tools/registry.js`; `src/seeker/tools/Swap.jsx`; `server.js` `/api/seeker/swap/{config,quote,tx}`; `docs/SEEKER_SWAP_DESIGN.md`; PR #420 merge `ec977c0f` on `develop` (2026-09-29). **Usable only once production serves it** — verify with `curl -s https://clucknorris.app/api/seeker/swap/config` returning `ok:true` before cutting the video; on 2026-10-03 it returned `not_found` |
+| "Terms shown live, never fixed in the app" | `/api/tool-gate/config` (served `skr` block confirmed live 2026-10-03), `lib/tool-pass-qualify.js`, `scripts/tool-pass-qualify-test.cjs`, `src/seeker/passgate.jsx`; AGENTS.md's tools-pass section — never state a dollar figure in the caption, only that it renders live |
+| "Swap SOL, SKR, CLKN or USDC without leaving the app — signed on your phone with MWA. Rate, minimum received and price impact shown before you sign" (shot 5) | Registry blurb in `src/seeker/tools/registry.js`; `src/seeker/tools/Swap.jsx` (the Swap tab since 1.0.2); `server.js` `/api/seeker/swap/{config,quote,tx}`; `docs/SEEKER_SWAP_DESIGN.md`; PR #420, on production since 2026-10-04 (`/api/seeker/swap/config` answers). The attempt record written before the wallet is asked (#479) is why a lost reply never unlocks the form |
+| "One tools pass — hold CLKN or SKR, or pay once, in SOL or in SKR" (shot 6) | #421 (`lib/tool-pass-skr.js`, `src/seeker/skr-pay.js`, `src/seeker/passgate.jsx`; `GET /api/tool-gate/skr-quote` answered a signed quote on production 2026-10-04 15:11 UTC; `scripts/tool-pass-skr-test.cjs`, `scripts/seeker-skr-pay-test.cjs` 129 checks). Never state the dollar or SKR figure — the sheet renders it live |
+| "The Daily — something to open every day" (shot 8) | `src/seeker/tools/DailyBrief.jsx`, a bottom tab in both editions since 1.0.2 (`src/seeker/edition/full.jsx` TABS) |
 | "Firepit — reclaim the rent in empty accounts, or burn worthless tokens. Every token is priced first" | `src/seeker/tools/Firepit.jsx` (three sections: "Reclaim rent — empty accounts", "Reclaim surplus rent — keep accounts open", "Burn tokens — and reclaim rent too"; buttons "Reclaim rent" / "Reclaim surplus" / red "Burn"); PRs #443, #471 (on production as #457, #472, #474, #475); `src/seeker/sign.js` `signSendConfirm()`; `docs/SEEKER_DEVICE_TEST.md` step 13 |
 | "Locker Room — lock tokens on Jupiter Lock, non-custodially, with public proof" | `src/seeker/tools/LockerRoom.jsx`; AGENTS.md's two-signer rule (connected wallet signs first, then the ephemeral escrow key) |
 | "Project Burn — a verifiable on-chain burn receipt" | `src/seeker/tools/ProjectBurn.jsx`, `src/seeker/sign.js` `signSendConfirm()` |
