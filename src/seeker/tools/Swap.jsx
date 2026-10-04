@@ -61,9 +61,11 @@ import { useSearchParams } from "react-router-dom";
 import { t, tf, useI18nReady } from "../i18n.js";
 import { Pane, Loading, Unavailable, Refused, Confirm, toolFetch, useOnline } from "../pane.jsx";
 import { NeedsWallet } from "../needswallet.jsx";
-import { signSendConfirm, assertSameAccount, rpcFn, checkPendingSwap } from "../sign.js";
+import { signSendConfirm, assertSameAccount, rpcFn, checkPendingSwap, checkUnsignedPending } from "../sign.js";
 import { verifySwapTransaction, MAX_PRIORITY_FEE_LAMPORTS } from "../swap-verify.js";
 import { preSignSimulation } from "../swap-simulate.js";
+// Codex on #479, P1 — the two sentences for an attempt with no signature (shared with Project Burn).
+import { noSignatureSentence, releasedSentence } from "../attempt-copy.js";
 import "./tools.css";
 
 const NATIVE_SOL_MINT = "So11111111111111111111111111111111111111112";
@@ -206,10 +208,13 @@ function outcomeTitle(status) {
   if (status === "failed") return t("Swap failed");
   if (status === "expired") return t("Expired");
   if (status === "declined") return t("Declined");
+  if (status === "released") return t("Unconfirmed");
   return t("Unconfirmed");
 }
 
-function OutcomeCard({ o, onDismiss, onRetry }) {
+// `balPhase` — the pay-mint balance read's phase (idle|loading|loaded|unavailable): the "released"
+// card may only claim a balance re-read when one actually succeeded (Codex round 2 on #479, P2).
+function OutcomeCard({ o, onDismiss, onRetry, balPhase }) {
   return (
     <div className={"seeker-burn-outcome seeker-burn-outcome-" + o.status} role={o.status === "failed" || o.status === "expired" ? "alert" : "status"}>
       <p className="seeker-burn-outcome-title">
@@ -235,6 +240,15 @@ function OutcomeCard({ o, onDismiss, onRetry }) {
           </p>
           {solscanTx(o.sig) ? <p><a className="seeker-listing-link" href={solscanTx(o.sig)} target="_blank" rel="noopener noreferrer">{t("View transaction on Solscan")}</a></p> : null}
         </>
+      ) : o.status === "unconfirmed" ? (
+        <p>{t("This was submitted but had no on-chain status after 30 seconds. It may still land — check before signing again.")}</p>
+      ) : o.status === "released" ? (
+        // A signature-less attempt whose blockhash is proven dead. No "did not land": only the
+        // balance line above this card speaks — and only once its re-read has actually answered.
+        // While it is in flight, say so; if it failed, say THAT, never "was just re-read".
+        balPhase === "loaded" ? <p>{releasedSentence(true)}</p>
+          : balPhase === "unavailable" ? <p>{releasedSentence(false)}</p>
+          : <Loading label={t("Reading balance…")} />
       ) : o.status === "expired" ? (
         <p>{t("This did not land before its expiry block height passed — it's safe to try again.")} {solscanTx(o.sig) ? <a className="seeker-listing-link" href={solscanTx(o.sig)} target="_blank" rel="noopener noreferrer">{t("View transaction on Solscan")}</a> : null}</p>
       ) : (
@@ -275,10 +289,15 @@ function PendingCard({ p, onDismiss }) {
     <div className="seeker-burn-outcome seeker-burn-outcome-unconfirmed" role="status">
       <p className="seeker-burn-outcome-title">⏳ {outcomeTitle("unconfirmed")}</p>
       <p>{t("Checking…")} {tf("Submitted {inAmt} {inSym} → {outSym}.", { inAmt: p.inAmt || "—", inSym: p.inSym || "", outSym: p.outSym || "" })}</p>
+      {/* Codex on #479, P1: a record with NO signature (the wallet prompt is still open, or a
+          send-capable wallet errored after it may have broadcast) locks the form exactly like a
+          known signature; it is released only by the chain (its blockhash proven dead → balance
+          re-read) or the escape hatch below. */}
+      {!p.sig ? <p>{noSignatureSentence()}</p> : null}
       {solscanTx(p.sig) ? <p><a className="seeker-listing-link" href={solscanTx(p.sig)} target="_blank" rel="noopener noreferrer">{t("View transaction on Solscan")}</a></p> : null}
       {showEscape ? (
         <div className="seeker-swap-pending-escape">
-          <p>{t("This is taking longer than usual to confirm. Your signature above is the real record — check it on Solscan, or stop watching here.")}</p>
+          {p.sig ? <p>{t("This is taking longer than usual to confirm. Your signature above is the real record — check it on Solscan, or stop watching here.")}</p> : null}
           <button type="button" className="seeker-btn seeker-btn-quiet" onClick={onDismiss}>{t("Stop watching")}</button>
         </div>
       ) : null}
@@ -292,7 +311,9 @@ function loadPending() {
     const raw = window.localStorage.getItem(PENDING_STORAGE_KEY);
     if (!raw) return null;
     const p = JSON.parse(raw);
-    if (!p || !p.sig || !p.wallet) return null;
+    // Codex on #479, P1: `sig` may be null — the record is written before the wallet is asked.
+    if (!p || !p.wallet) return null;
+    if (!p.sig) p.sig = null;
     return p;
   } catch (_) { return null; }
 }
@@ -383,6 +404,22 @@ export default function SwapPane({ wallet }) {
       // checkPendingSwap lives in sign.js — the ONE signing seam — not here (P2-2's poll still
       // has to go through the seam's err-before-confirmationStatus rule; scripts/seeker-build-test.cjs
       // pins that no pane calls getSignatureStatuses directly).
+      if (!pending.sig) {
+        // Codex on #479, P1: no signature (written before the prompt; the wallet never returned
+        // one). Nothing to look up — only the transaction's own lifetime can release it, and
+        // "expired" proves nothing NEW can land, not that nothing did. So: re-read the balance
+        // (the only record there is) and say exactly that; never "did not land".
+        const r = await checkUnsignedPending(rpcFn(), { lastValidBlockHeight: pending.lastValidBlockHeight, recentBlockhash: pending.recentBlockhash });
+        if (r.status !== "expired") return; // keep polling
+        // The balance read is the only record of what happened. Mark it IN FLIGHT synchronously
+        // (the effect that performs it runs after this render) so the released card can never
+        // show the pre-release figure as "just re-read", and let the card follow the read's own
+        // outcome (Codex round 2 on #479, P2).
+        setBalIn({ phase: "loading", raw: null });
+        setBalTick((n) => n + 1);
+        await resolvePending({ status: "released" });
+        return;
+      }
       const result = await checkPendingSwap(rpcFn(), { signature: pending.sig, lastValidBlockHeight: pending.lastValidBlockHeight, recentBlockhash: pending.recentBlockhash });
       if (result.status === "pending") return; // keep polling
       await resolvePending(result);
@@ -391,7 +428,7 @@ export default function SwapPane({ wallet }) {
     const iv = setInterval(checkOnce, PENDING_POLL_MS);
     return () => { stopped = true; clearInterval(iv); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pending && pending.sig]);
+  }, [pending && (pending.sig || "unsigned:" + pending.at)]);
 
   // ── config: load once, mints/defaults/slippage options ─────────────────────────────────────
   const loadConfig = React.useCallback(() => {
@@ -707,6 +744,15 @@ export default function SwapPane({ wallet }) {
     // blockhash, never a freshly-fetched one) so the pending record can carry it for
     // checkPendingSwap's isBlockhashValid check.
     let builtRecentBlockhash = null;
+    // Codex on #479 (b0d381a4), P1 — the attempt is on record BEFORE the wallet is asked. A
+    // send-capable wallet (signAndSendTransaction / MWA) may broadcast and then throw without ever
+    // handing back a signature; `onSigned` below never runs in that case, and this pane used to
+    // report `unconfirmed` with nothing persisted and the form unlocked — a second tap swapped the
+    // same amount again. `beforeSign` writes the record with `sig: null` (sign.js runs it after
+    // build(), so the transaction's own blockhash and expiry are known); `onSigned` fills the
+    // signature in; a save that fails means the wallet is never asked. The record — not the
+    // outcome card — is what locks the form, and only the chain releases it.
+    const startedAt = Date.now();
     const res = await signSendConfirm({
       provider: wallet.provider,
       owner: wallet.address,
@@ -739,8 +785,13 @@ export default function SwapPane({ wallet }) {
       // ⚠️ Round 31, P2 — `requireOnSigned: true` below means savePending() THROWING here (a full
       // or unavailable localStorage) stops signSendConfirm from ever calling submitSigned: nothing
       // is sent. `setPending(p)` only runs once savePending() is known to have actually written.
+      beforeSign: () => {
+        const p = { sig: null, lastValidBlockHeight: body.lastValidBlockHeight, recentBlockhash: builtRecentBlockhash, wallet: live, at: startedAt, inSym, outSym, inAmt, outAmt };
+        savePending(p); // throws → sign.js returns `failed` and the wallet is never asked
+        setPending(p);
+      },
       onSigned: (sig) => {
-        const p = { sig, lastValidBlockHeight: body.lastValidBlockHeight, recentBlockhash: builtRecentBlockhash, wallet: live, at: Date.now(), inSym, outSym, inAmt, outAmt };
+        const p = { sig, lastValidBlockHeight: body.lastValidBlockHeight, recentBlockhash: builtRecentBlockhash, wallet: live, at: startedAt, inSym, outSym, inAmt, outAmt };
         savePending(p);
         setPending(p);
       },
@@ -749,8 +800,19 @@ export default function SwapPane({ wallet }) {
 
     const base = { inSym, outSym, inAmt, outAmt };
     if (res.status === "sent") {
+      // Landed: the record written before the prompt is retired here, explicitly — on the
+      // signAndSendTransaction path `onSigned`'s save is best-effort, so the poll might otherwise
+      // be left watching a sig:null record for a swap that already confirmed.
+      clearPendingStorage();
+      setPending(null);
       setOutcome({ ...base, status: "sent", sig: res.sig });
       setBalTick((n) => n + 1); // re-read balances now that the swap landed
+      setSwapping(false);
+    } else if (res.status === "unconfirmed" && res.noSignature) {
+      // A send-capable wallet errored after it may have broadcast and gave us NO signature. The
+      // sig:null record `beforeSign` wrote STAYS and keeps the form locked (Codex on #479, P1);
+      // the poll above releases it only once its blockhash is proven dead, with a balance
+      // re-read as the only claim. No outcome card, no "failed", no retry button.
       setSwapping(false);
     } else if (res.status === "unconfirmed") {
       // onSigned already persisted the pending record above — nothing more to do here.
@@ -847,7 +909,7 @@ export default function SwapPane({ wallet }) {
         <div className="seeker-swap-form">
           {swapping ? <Loading label={t("Approve the swap in your wallet…")} /> : null}
           {pending ? <PendingCard p={pending} onDismiss={dismissPending} /> : null}
-          {outcome ? <OutcomeCard o={outcome} onDismiss={dismissOutcome} onRetry={retryFromOutcome} /> : null}
+          {outcome ? <OutcomeCard o={outcome} onDismiss={dismissOutcome} onRetry={retryFromOutcome} balPhase={balIn.phase} /> : null}
 
           {!swapping ? (
             <>

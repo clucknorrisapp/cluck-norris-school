@@ -353,6 +353,12 @@ The owner manages all liquidity positions **manually**. Read freely; touch nothi
   baseline-less = the historic never-sell behavior, and that is the default everywhere. Also:
   **never buy CLKN with operator funds** without asking in that moment (owner rule, after
   unwanted inventory buys).
+- 🗑️ **BULLEN engine removed 2026-10-03 (owner: "they are done, i am not helping them").** Code
+  only: the engine loop, `/api/bullen-engine`, `/api/bullen-bootstrap`, the vault's BULLEN-gated
+  branches and the one-armed-engine-per-wallet guard's fourth member are gone (the guard itself
+  stays for cuna/dnc/rose). The persisted `bullen` project record, its paused vault state and the
+  tokens/SOL the shared operator wallet still holds were deliberately NOT touched — that cleanup
+  is the owner's act.
 - ⛔ **The autonomous rebalancer is hard-killed in code** (`JUP_AUTO_REBALANCE_KILLED = true`).
   Re-enabling is a deliberate two-step opt-in. Don't, without an explicit ask.
 - **Read balances ON-CHAIN, never with the product tools.** `/api/wallet-xray` and autopsy are

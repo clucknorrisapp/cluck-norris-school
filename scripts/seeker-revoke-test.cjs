@@ -122,6 +122,90 @@ const pk = () => web3.Keypair.generate().publicKey.toBase58();
     delete global.window;
   }
 
+  console.log("\n(d1) Codex round 3: the pending record exists BEFORE the wallet is asked, so no wallet path can broadcast first\n");
+  {
+    const bs58m = require("bs58"); const b58 = (bs58m.encode || (bs58m.default && bs58m.default.encode)).bind(bs58m.default || bs58m);
+    const kp = web3.Keypair.generate(); const owner = kp.publicKey.toBase58();
+    const batch = [{ tokenAccount: pk(), program: R.TOKEN_PROGRAM, mint: pk(), delegate: pk() }, { tokenAccount: pk(), program: R.TOKEN_2022_PROGRAM, mint: pk(), delegate: pk() }];
+    const bhash = pk();
+    let events = [];
+    global.window = {
+      solanaWeb3: web3,
+      CluckWallet: { asTransaction: (sg) => sg, b58encode: (u8) => b58(u8) },
+      CluckUtil: { rpc: async (m) => {
+        if (m === "getLatestBlockhash") return { value: { blockhash: bhash, lastValidBlockHeight: 4242 } };
+        if (m === "sendTransaction") { events.push("send"); return "SENTSIG"; }
+        if (m === "getSignatureStatuses") return { value: [{ err: null, confirmationStatus: "confirmed" }] };
+        throw new Error("unexpected " + m);
+      } },
+    };
+    const signOnly = { publicKey: kp.publicKey, signTransaction: async (tx) => { events.push("wallet-asked"); tx.partialSign(kp); return tx; } };
+    // A wallet that signs AND broadcasts in one operation (MWA signAndSendTransactions, Phantom's
+    // signAndSendTransaction): by the time it returns, the transaction is on chain.
+    const signAndSend = { publicKey: kp.publicKey, signAndSendTransaction: async () => { events.push("wallet-asked+broadcast"); return { signature: "SAS" + "1".repeat(60) }; } };
+    let before = null, signed = null;
+    const cbs = { beforeSign: (r) => { events.push("saved-before"); before = r; return true; }, onSigned: (r) => { events.push("sig-filled"); signed = r; } };
+
+    const res = await R.runRevoke({ provider: signOnly, owner, batch, ...cbs });
+    ok("sign-then-send wallet: the record is saved BEFORE the wallet is asked, the signature filled after, then the send",
+       events.join(",") === "saved-before,wallet-asked,sig-filled,send", events);
+    ok("…the early record carries the accounts, the blockhash and its real lastValidBlockHeight, and NO signature yet",
+       before && before.accounts.length === 2 && before.recentBlockhash === bhash && before.lastValidBlockHeight === 4242 && !before.sig, before);
+    ok("…the fill-in carries the wallet's own signature", signed && typeof signed.sig === "string" && signed.sig.length >= 80, signed);
+    ok("…and the result is a normal sent", res.status === "sent", res);
+
+    events = [];
+    const res2 = await R.runRevoke({ provider: signAndSend, owner, batch, ...cbs });
+    ok("signAndSend-style wallet (broadcasts inside the wallet call): the record existed BEFORE that call",
+       events[0] === "saved-before" && events.indexOf("saved-before") < events.indexOf("wallet-asked+broadcast"), events);
+    ok("…and the signature it returns is filled in afterwards", events.includes("sig-filled") && res2.status === "sent", { events, res2 });
+
+    for (const [label, cb] of [["returns false", () => false], ["throws", () => { throw new Error("QuotaExceededError"); }]]) {
+      for (const [pname, prov] of [["sign-then-send", signOnly], ["signAndSend", signAndSend]]) {
+        events = [];
+        const r2 = await R.runRevoke({ provider: prov, owner, batch, beforeSign: cb, onSigned: () => events.push("sig-filled") });
+        ok(`${pname} wallet, save ${label} → the WALLET IS NEVER ASKED and nothing is sent (fail closed)`, events.length === 0, events);
+        ok(`…the person is told, as a failure`, r2.status === "failed" && /Could not save the recovery record/.test(r2.error || ""), r2);
+      }
+    }
+    events = [];
+    const r3 = await R.runRevoke({ provider: signOnly, owner, batch });
+    ok("with no callbacks the behaviour is unchanged (asks the wallet, sends)", events.join(",") === "wallet-asked,send" && r3.status === "sent", { events, r3 });
+
+    // ── Codex round 3 (re-review), P2-1: an error from a SEND-CAPABLE wallet is never `failed` ──
+    const sendThrows = (err) => ({ publicKey: kp.publicKey, signAndSendTransaction: async () => { events.push("wallet-asked+broadcast"); throw err; } });
+    const sendNull = { publicKey: kp.publicKey, signAndSendTransaction: async () => { events.push("wallet-asked+broadcast"); return null; } };
+    events = [];
+    const e1 = await R.runRevoke({ provider: sendThrows(new Error("bridge closed after broadcast")), owner, batch, ...cbs });
+    ok("send-capable wallet throws AFTER it may have broadcast → `unconfirmed` (noSignature), never `failed`", e1.status === "unconfirmed" && e1.noSignature === true && !e1.sig, e1);
+    ok("…and the record written before the prompt is the only thing holding the accounts (beforeSign ran first)", events[0] === "saved-before", events);
+    events = [];
+    const e2 = await R.runRevoke({ provider: sendNull, owner, batch, ...cbs });
+    ok("send-capable wallet answers with NO signature → `unconfirmed` (noSignature), never `failed`", e2.status === "unconfirmed" && e2.noSignature === true, e2);
+    for (const [label, err] of [["code 4001", Object.assign(new Error("denied"), { code: 4001 })], ["User rejected the request", new Error("User rejected the request.")], ["user cancelled", new Error("The user cancelled the request")]]) {
+      events = [];
+      const d = await R.runRevoke({ provider: sendThrows(err), owner, batch, ...cbs });
+      ok(`an explicit decline (${label}) from a send-capable wallet is still \`declined\``, d.status === "declined", d);
+    }
+    // sign-only wallet: an error before OUR submit is a safe failure
+    events = [];
+    const so = await R.runRevoke({ provider: { publicKey: kp.publicKey, signTransaction: async () => { events.push("wallet-asked"); throw new Error("wallet crashed"); } }, owner, batch, ...cbs });
+    ok("sign-only wallet that errors before we submit → `failed` (nothing was broadcast)", so.status === "failed" && !events.includes("send"), { so, events });
+
+    // sign.js: the sig-less recheck. Only the transaction's own lifetime may release a record with no signature.
+    const S = await import(path.join(ROOT, "src", "seeker", "sign.js") + "?t=" + Date.now());
+    const chain = (h, valid) => async (m) => { if (m === "getBlockHeight") return h; if (m === "isBlockhashValid") return valid; throw new Error("unexpected " + m); };
+    ok("sig-less record: height not past lastValidBlockHeight → pending", (await S.checkUnsignedPending(chain(100, { value: false }), { lastValidBlockHeight: 200, recentBlockhash: bhash })).status === "pending");
+    ok("sig-less record: height past it but the blockhash is not PROVEN dead ({}, null, true, error) → pending",
+       (await Promise.all([{}, null, { value: true }, { value: null }].map((v) => S.checkUnsignedPending(chain(300, v), { lastValidBlockHeight: 200, recentBlockhash: bhash })))).every((r) => r.status === "pending")
+       && (await S.checkUnsignedPending(async () => { throw new Error("down"); }, { lastValidBlockHeight: 200, recentBlockhash: bhash })).status === "pending");
+    ok("sig-less record: no recorded blockhash or lifetime → pending forever (never guessed)",
+       (await S.checkUnsignedPending(chain(300, { value: false }), { lastValidBlockHeight: 200, recentBlockhash: null })).status === "pending"
+       && (await S.checkUnsignedPending(chain(300, { value: false }), { lastValidBlockHeight: null, recentBlockhash: bhash })).status === "pending");
+    ok("sig-less record: height past it AND isBlockhashValid value === false → expired", (await S.checkUnsignedPending(chain(300, { value: false }), { lastValidBlockHeight: 200, recentBlockhash: bhash })).status === "expired");
+    delete global.window;
+  }
+
   console.log("\n(d2) the persisted unresolved-send record — by wallet, validated, never throws\n");
   {
     const mem = {};
@@ -130,6 +214,9 @@ const pk = () => web3.Keypair.generate().publicKey.toBase58();
     const w1 = pk(), w2 = pk(), acct = pk();
     const rec = { sig: "S".repeat(88), accounts: [{ tokenAccount: acct, program: R.TOKEN_PROGRAM, mint: pk(), delegate: pk() }], recentBlockhash: pk(), lastValidBlockHeight: 250, wallet: w1, at: 12345 };
     ok("save then load round-trips every field", R.saveRevokePending(rec) && JSON.stringify(R.loadRevokePending(w1)) === JSON.stringify({ ...rec, accounts: [{ tokenAccount: acct, program: R.TOKEN_PROGRAM, mint: rec.accounts[0].mint, delegate: rec.accounts[0].delegate }] }), R.loadRevokePending(w1));
+    ok("a record written before the wallet signed (sig null) saves and loads, still keyed by wallet",
+       R.saveRevokePending({ ...rec, sig: null, wallet: w2 }) && R.loadRevokePending(w2) && R.loadRevokePending(w2).sig === null && R.loadRevokePending(w2).accounts.length === 1);
+    R.clearRevokePending(w2);
     ok("it is keyed by wallet: another wallet sees nothing", R.loadRevokePending(w2) === null);
     ok("a second wallet's record does not clobber the first", R.saveRevokePending({ ...rec, wallet: w2, sig: "T".repeat(88) }) && R.loadRevokePending(w1).sig === rec.sig && R.loadRevokePending(w2).sig === "T".repeat(88));
     R.clearRevokePending(w1);
@@ -241,7 +328,25 @@ const pk = () => web3.Keypair.generate().publicKey.toBase58();
           // `lvbh` is the lastValidBlockHeight that came with the blockhash; 900 < height 1000 means
           // "the chain has moved past the transaction's lifetime" unless a scenario says otherwise.
           const s = window.__state = Object.assign({ fetchCount: 0, scanDelay: 0, height: 1000, lvbh: 900, blockhashValid: true, sigStatus: null, accounts: {} }, state);
-          s.runRevoke = async () => ({ status: s.sendStatus, sig: SIG, accounts: s.sentRows.map((r) => ({ tokenAccount: r.tokenAccount, program: r.program, mint: r.mint, delegate: r.delegate })), recentBlockhash: BH, lastValidBlockHeight: s.lvbh });
+          s.runRevoke = async (a) => {
+            const accounts = s.sentRows.map((r) => ({ tokenAccount: r.tokenAccount, program: r.program, mint: r.mint, delegate: r.delegate }));
+            const KEY = "clkn_seeker_revoke_pending";
+            // Mimics sign.js's seam: beforeSign runs after the build and BEFORE the wallet is asked (a
+            // throw / false → the wallet is never asked); onSigned fills the signature in once the wallet
+            // returns; only then does the broadcast + confirmation happen.
+            s.walletAsked = false; s.broadcast = false; s.beforeSignSeen = typeof a.beforeSign === "function"; s.storedAtAsk = null;
+            let saved = true;   // no callback passed → the seam has nothing to wait on
+            if (s.beforeSignSeen) { try { saved = a.beforeSign({ accounts, recentBlockhash: BH, lastValidBlockHeight: s.lvbh }) !== false; } catch (_) { saved = false; } }
+            if (!saved) return { status: "failed", error: "Could not save the recovery record — nothing was sent. Free some storage and try again.", accounts, recentBlockhash: BH, lastValidBlockHeight: s.lvbh };
+            s.walletAsked = true; s.storedAtAsk = window.localStorage.getItem(KEY);
+            if (s.noSignatureAfterBroadcast) return { status: "unconfirmed", noSignature: true, error: "bridge closed after broadcast", accounts, recentBlockhash: BH, lastValidBlockHeight: s.lvbh };
+            if (s.signGate) await new Promise((r) => { window.__releaseSign = r; });
+            if (s.declineAtPrompt) return { status: "declined", accounts, recentBlockhash: BH, lastValidBlockHeight: s.lvbh };
+            if (typeof a.onSigned === "function") { try { a.onSigned({ sig: SIG, accounts, recentBlockhash: BH, lastValidBlockHeight: s.lvbh }); } catch (_) {} }
+            s.broadcast = true;
+            if (s.sendGate) await new Promise((r) => { window.__releaseSend = r; });
+            return { status: s.sendStatus, sig: SIG, accounts, recentBlockhash: BH, lastValidBlockHeight: s.lvbh };
+          };
           const parsed = (d) => ({ data: { parsed: { info: d ? { delegate: d } : {} } } });
           window.CluckUtil = { rpc: async (m, p) => {
             if (m === "getSignatureStatuses") return { value: [s.sigStatus] };
@@ -435,6 +540,111 @@ const pk = () => web3.Keypair.generate().publicKey.toBase58();
         await page.click(".seeker-revoke-stopwatch");
         await page.waitForSelector(".seeker-revoke-btn", { timeout: 10000 });
         ok("dismissing through the escape hatch clears the record and frees the accounts", (await stored(page)) === null && (await revokeBtns(page)).length === 1 && !(await page.$(".seeker-revoke-outcome-unconfirmed")));
+        await page.close();
+      }
+
+      // ── Codex round 3, P2: the record exists BEFORE the wallet is asked ───────────────────────
+      const KEYSTR = "clkn_seeker_revoke_pending";
+      {
+        // (a) remount DURING SIGNING — the wallet prompt is still open (promise pending).
+        const { page, errors } = await open({ rows: rowsAB, sendStatus: "unconfirmed", signGate: true, sendGate: true, accounts: { [A]: "delegate", [B]: "delegate" } });
+        await submit(page);
+        await page.waitForFunction(() => window.__state.walletAsked === true, null, { timeout: 10000 }).catch(() => {});
+        const asked = JSON.parse((await stored(page)) || "null");
+        ok("while the wallet prompt is open: the pending record is ALREADY stored, by wallet, with no signature yet",
+           asked && asked[ADDR] && asked[ADDR].sig === null && asked[ADDR].accounts.length === 2 && asked[ADDR].recentBlockhash === BH && asked[ADDR].lastValidBlockHeight === 900, asked);
+        ok("…and it was in storage at the moment the wallet was asked", !!(await page.evaluate(() => window.__state.storedAtAsk)));
+        await remount(page);                                     // leave Checkup during signing, come back
+        await page.waitForSelector(".seeker-revoke-outcome-unconfirmed", { timeout: 4000 }).catch(() => {});
+        ok("(a) remount DURING SIGNING: NO Revoke button is offered", (await revokeBtns(page)).length === 0, await revokeBtns(page));
+        ok("…the watching card is shown, is titled Revoking…, and has no signature link", /Revoking…/.test(await page.$eval(".seeker-revoke-outcome-unconfirmed", (el) => el.innerText)) && !(await page.$('a[href^="https://solscan.io/tx/"]')) && /Check status/.test(await body(page)));
+        // Check status while the blockhash is still live → still pending, still blocked
+        await checkStatus(page).catch(() => {});
+        ok("a sig-less record with a LIVE blockhash stays pending after Check status (record kept, no Revoke)",
+           (await revokeBtns(page)).length === 0 && (await stored(page)) !== null);
+        // (b) now the wallet signs: the signature is filled into the record while the send is unresolved
+        await page.evaluate(() => window.__releaseSign());
+        await page.waitForFunction(() => window.__state.broadcast === true, null, { timeout: 4000 }).catch(() => {});
+        const mid = JSON.parse((await stored(page)) || "null");
+        ok("(b) during CONFIRMATION (sig known, unresolved): the record now carries the signature", mid && mid[ADDR] && mid[ADDR].sig === SIG, mid);
+        await remount(page);
+        await page.waitForSelector(".seeker-revoke-outcome-unconfirmed", { timeout: 4000 }).catch(() => {});
+        ok("(b) remount during confirmation: NO Revoke button, signature shown", (await revokeBtns(page)).length === 0 && (await body(page)).includes(SIG.slice(0, 4) + "…" + SIG.slice(-4)));
+        await set(page, { sendStatus: "sent" });
+        await page.evaluate(() => window.__releaseSend());
+        await page.waitForFunction((k) => window.localStorage.getItem(k) === null, KEYSTR, { timeout: 4000 }).catch(() => {});
+        ok("a definitive landed outcome clears the record", (await stored(page)) === null, await stored(page));
+        ok("signing/confirmation flow: no uncaught exception", errors.length === 0, errors.join(" | "));
+        await page.close();
+      }
+      {
+        // A sig-less record whose blockhash is PROVEN dead is released. Codex re-review P2-2: expiry cannot say
+        // whether it landed EARLIER, so it must never print "did not land" — the re-read is the only claim.
+        for (const [label, accounts, expectBtns] of [
+          ["one delegate still approved", { [A]: "delegate", [B]: "clear" }, 1],
+          ["both delegates already gone", { [A]: "clear", [B]: "clear" }, 0],
+        ]) {
+          const { page } = await open({ rows: rowsAB, sendStatus: "unconfirmed", signGate: true, accounts });
+          await submit(page);
+          await page.waitForFunction(() => window.__state.walletAsked === true, null, { timeout: 10000 }).catch(() => {});
+          await remount(page);
+          await page.waitForSelector(".seeker-revoke-outcome-unconfirmed", { timeout: 4000 }).catch(() => {});
+          await set(page, { blockhashValid: false });             // height 1000 is past lvbh 900
+          await checkStatus(page).catch(() => {});
+          await page.waitForFunction(() => /Re-read on chain/.test(document.body.innerText), null, { timeout: 4000 }).catch(() => {});
+          const txt = await body(page);
+          const btns = await revokeBtns(page);
+          ok(`sig-less expiry, ${label}: NEVER says the transaction did not land or that nothing was revoked`, !/did not land|Nothing was revoked|Revoke failed/i.test(txt), txt.slice(0, 300));
+          ok(`sig-less expiry, ${label}: the chain re-read is the only claim`, /Re-read on chain: \d of 2 approvals are gone/.test(txt), txt.slice(0, 300));
+          if (expectBtns) ok("…the account still showing a delegate is offered for revoking again, and says so", btns.length === 1 && btns[0] === "Revoke this approval" && /1 still show a delegate/.test(txt), { btns, txt: txt.slice(0, 300) });
+          else ok("…both gone: shown as cleared (2 of 2), no Revoke offered", /2 of 2 approvals are gone/.test(txt) && btns.length === 0, { btns, txt: txt.slice(0, 300) });
+          ok("…and the record is released", (await stored(page)) === null, await stored(page));
+          await page.close();
+        }
+      }
+      {
+        // Codex re-review P2-1: a send-capable wallet that errors AFTER it may have broadcast. The record stays
+        // (sig:null), the watching state shows, and Revoke is NOT offered — even after a remount.
+        const { page } = await open({ rows: rowsAB, sendStatus: "unconfirmed", noSignatureAfterBroadcast: true, accounts: { [A]: "delegate", [B]: "delegate" } });
+        await submit(page);
+        await page.waitForSelector(".seeker-revoke-outcome-unconfirmed", { timeout: 6000 }).catch(() => {});
+        const kept = JSON.parse((await stored(page)) || "null");
+        ok("wallet error after broadcast (no signature): the pending record is KEPT, still sig:null", kept && kept[ADDR] && kept[ADDR].sig === null && kept[ADDR].accounts.length === 2, kept);
+        ok("…the watching state shows and NO Revoke is offered", (await revokeBtns(page)).length === 0 && !!(await page.$(".seeker-revoke-outcome-unconfirmed")) && !/Revoke failed|did not land/.test(await body(page)), await body(page));
+        await remount(page);
+        await page.waitForSelector(".seeker-revoke-outcome-unconfirmed", { timeout: 4000 }).catch(() => {});
+        ok("…and after a remount still no Revoke", (await revokeBtns(page)).length === 0);
+        await page.close();
+      }
+      {
+        // The wallet prompt is declined → nothing was sent, the record written before the prompt is retired.
+        const { page } = await open({ rows: rowsAB, sendStatus: "unconfirmed", signGate: true, declineAtPrompt: true, accounts: { [A]: "delegate", [B]: "delegate" } });
+        await submit(page);
+        await page.waitForFunction(() => window.__state.walletAsked === true, null, { timeout: 10000 }).catch(() => {});
+        await page.evaluate(() => window.__releaseSign());
+        await page.waitForSelector(".seeker-revoke-outcome-declined", { timeout: 4000 }).catch(() => {});
+        ok("a declined prompt clears the early record and the accounts are revocable again", (await stored(page)) === null && (await revokeBtns(page)).length === 1, await stored(page));
+        await page.close();
+      }
+      {
+        // A definitive failed outcome (node refused it) also clears the early record.
+        const { page } = await open({ rows: rowsAB, sendStatus: "failed", accounts: { [A]: "delegate", [B]: "delegate" } });
+        await submit(page);
+        await page.waitForSelector(".seeker-revoke-outcome-failed", { timeout: 10000 });
+        ok("a definitive failed send clears the record written before the prompt", (await stored(page)) === null, await stored(page));
+        ok("…and the accounts are revocable again (nothing landed)", (await revokeBtns(page)).length === 1);
+        await page.close();
+      }
+      {
+        // (c) storage write failure → the wallet is NEVER asked.
+        const { page } = await open({ rows: rowsAB, sendStatus: "unconfirmed", accounts: { [A]: "delegate", [B]: "delegate" } });
+        await page.evaluate(() => { Storage.prototype.setItem = function () { throw new Error("QuotaExceededError"); }; });
+        await submit(page);
+        await page.waitForSelector(".seeker-revoke-outcome-failed", { timeout: 4000 }).catch(() => {});
+        const st = await page.evaluate(() => ({ walletAsked: window.__state.walletAsked, broadcast: window.__state.broadcast, beforeSignSeen: window.__state.beforeSignSeen }));
+        ok("the pane hands the seam a beforeSign save callback at all", st.beforeSignSeen === true, st);
+        ok("(c) storage write failure → the wallet is NEVER asked, nothing is broadcast", st.walletAsked === false && st.broadcast === false, st);
+        ok("…and the person is told why, in plain words", /Could not save the recovery record/.test(await body(page)));
         await page.close();
       }
 
