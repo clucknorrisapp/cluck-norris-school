@@ -263,7 +263,39 @@ The product reaches into Telegram and X, not just the website.
 - **Buy / sell alerts** — a 30-second poller posts every real CLKN trade with USD value, price, market cap and route, plus a ~12-minute reconciliation sweep that recovers anything a transient hiccup dropped, durably de-duped so it can never double-post
 - **Lock celebrations** — a new lock is detected on-chain, composed, illustrated and posted to X and Telegram, with a progress tracker toward the next supply-locked milestone
 - **Slash commands** — `/guide`, `/walletxray`, `/trace`, `/holders`, `/securitycoop`, `/buyspecial`, `/hatchery`, `/bags`, `/liquidity`, `/tools`, via a secret-validated webhook
-- **📱 Solana Seeker dApp Store** — the site is wrapped as a native Android app (Capacitor) and is live in the Seeker store. It loads the live site, so every ship reaches the app instantly. *Honest scope: deeper Mobile Wallet Adapter / Seed Vault integration is roadmap, not built.*
+- **📱 Solana Seeker dApp Store** — the Seeker app (next section): the school bundled on the device and a toolkit that signs through Mobile Wallet Adapter. The listing's first version (May 2026) was a shell that loaded the live site; the Seeker edition replaces it.
+
+---
+
+## 📱 The Seeker app — and how to test it
+
+Built for the Solana Mobile CLOCK IN hackathon (2026-09-14 → 2026-10-09). It is this repo's
+`seeker.html` + `src/seeker/*`, bundled as a pinned release (`store-seeker-v*`) and packaged by
+[`clucknorrisapp/CLKN-SEEKER`](https://github.com/clucknorrisapp/CLKN-SEEKER) (Capacitor, the
+`CluckMWA` plugin, signing) — the packaging work lives on that repo's `claude/seeker-integration`
+branch. Package `app.clucknorris.school`; the APK is attached to a GitHub release there and
+linked from the hackathon submission.
+
+**Bottom bar: School · Toolkit · Daily · Swap · Ask** — places you go every day. The school is
+first.
+
+- **No wallet needed:** the school (64 lessons, four courses, ten languages, works in airplane
+  mode), the Library, the Solana Room, Ask Cluck, the Daily, Listing Checkup, Wallet Checkup on a
+  pasted address.
+- **Connect a wallet (Mobile Wallet Adapter, signed on the phone, non-custodial):** Swap (SOL,
+  SKR, CLKN, USDC — rate, minimum received and price impact shown before you sign, and the
+  transaction is checked and simulated before the wallet is asked), Rent Reclaim, Firepit,
+  Project Burn, the Locker Room, the Airdropper, Revoke inside Wallet Checkup.
+- **The tools pass** (X-Ray, Holders, Trace): free on a CLKN or SKR holding, or pay once in SOL
+  or in SKR for seven days; every figure is served live, none is in the app.
+- **What to look for:** every action that costs money names its consequence before the wallet
+  opens; a transaction that did not land is reported as not landed, never as done; a lost
+  wallet reply never unlocks the form for a second attempt.
+
+Tests a judge can run from this repo without a device: `node scripts/seeker-app-boot-test.cjs`
+(renders every screen headless), and the unit suites `scripts/seeker-*-test.cjs` (swap verify
+and simulate, pending-attempt guards, revoke, the SKR pass, i18n coverage). CI runs them on every
+push.
 
 ---
 
