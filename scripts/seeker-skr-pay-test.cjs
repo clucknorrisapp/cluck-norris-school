@@ -389,6 +389,61 @@ const T22 = "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb";
       st = mkAttempt();
       r1 = await mod.checkPayment({ fetchFn: refuse, storage: st, wallet: PAYER, rpc: chain({ height: 5000, valid: false, slot: 5000, sigs: [payEntry(), ...old(2)], txs: { [PAY]: txOf(ixOf()) } }) });
       ok("the same refusal once the blockhash is proven dead (nothing else can land) → released to the support list as before", r1.kind === "refused" && !r1.watching && !kept(st) && mod.loadStuck(st, PAYER).some((x) => x.paySig === PAY), r1);
+
+      // ── Codex round 4 on #421, P2: the stored attempt is NEVER deleted (or overwritten with the
+      // candidate) before the decision is on disk. The first cut saved the candidate over the attempt,
+      // let the refusal clear it, then tried to restore the attempt — a restore whose failure was
+      // swallowed and reported as `watching: true` with no active record left at all.
+      const live = () => chain({ height: 100, valid: true, sigs: [payEntry(), ...old(2)], txs: { [PAY]: txOf(ixOf()) } });
+      {
+        const base = memStorage(); const writes = [];
+        const stTrace = { getItem: base.getItem, removeItem: (k) => { writes.push({ op: "remove", k }); return base.removeItem(k); }, setItem: (k, v) => { writes.push({ op: "set", k, v }); return base.setItem(k, v); } };
+        mkAttempt({}, stTrace); writes.length = 0;
+        const r = await mod.checkPayment({ fetchFn: refuse, storage: stTrace, wallet: PAYER, rpc: live() });
+        const recWrites = writes.filter((w) => w.k.startsWith("clkn_seeker_skrpay:") || (!w.k.startsWith("clkn_seeker_skrstuck:")));
+        ok("live blockhash, candidate refused: the active record key is NEVER removed", r.kind === "refused" && r.watching === true && !recWrites.some((w) => w.op === "remove"), writes);
+        ok("…and every write to it is still the ATTEMPT (paySig null) — the candidate is never written over it", recWrites.filter((w) => w.op === "set").every((w) => { const j = JSON.parse(w.v); return j.paySig === null && j.attempt === true; }), recWrites);
+        ok("…the support entry was stored BEFORE the attempt's ignore list", writes.findIndex((w) => w.k.startsWith("clkn_seeker_skrstuck:")) < writes.findIndex((w) => w.op === "set" && !w.k.startsWith("clkn_seeker_skrstuck:")), writes.map((w) => w.op + ":" + w.k.slice(0, 20)));
+      }
+      {
+        // The ignore-list write FAILS: the attempt is untouched (still the guard), the answer still watches.
+        const base = memStorage(); let breakRec = false;
+        const stBreak = { getItem: base.getItem, removeItem: base.removeItem, setItem: (k, v) => { if (breakRec && !k.startsWith("clkn_seeker_skrstuck:")) throw new Error("QuotaExceededError"); return base.setItem(k, v); } };
+        mkAttempt({}, stBreak); breakRec = true;
+        const r = await mod.checkPayment({ fetchFn: refuse, storage: stBreak, wallet: PAYER, rpc: live() });
+        const att = mod.loadRecord(stBreak, PAYER);
+        ok("the restore/ignore write fails → the ATTEMPT is still stored, unchanged, and the answer is refused + watching", r.kind === "refused" && r.watching === true && att && att.attempt === true && att.paySig === null, { r, att });
+        ok("…the evidence (support entry) was still stored", mod.loadStuck(stBreak, PAYER).some((x) => x.paySig === PAY));
+        const r2 = await mod.checkPayment({ fetchFn: refuse, storage: stBreak, wallet: PAYER, rpc: live() });
+        ok("…a later check meets the same refusal again but NEVER releases the attempt", r2.kind === "refused" && r2.watching === true && kept(stBreak), r2);
+      }
+      {
+        // The support-entry write FAILS (storage exhausted) in candidate mode: attempt intact, still watching.
+        const base = memStorage();
+        const stNoStuck = { getItem: base.getItem, removeItem: base.removeItem, setItem: (k, v) => { if (k.startsWith("clkn_seeker_skrstuck:")) throw new Error("QuotaExceededError"); return base.setItem(k, v); } };
+        mkAttempt({}, stNoStuck);
+        const r = await mod.checkPayment({ fetchFn: refuse, storage: stNoStuck, wallet: PAYER, rpc: live() });
+        ok("support entry cannot be stored → the attempt is kept (keptActive + watching), nothing released", r.kind === "refused" && r.keptActive === true && r.watching === true && kept(stNoStuck) && mod.loadRecord(stNoStuck, PAYER).attempt === true, r);
+        // Even with the blockhash DEAD, no release without the evidence on disk.
+        mkAttempt({}, stNoStuck);
+        const rd = await mod.checkPayment({ fetchFn: refuse, storage: stNoStuck, wallet: PAYER, rpc: chain({ height: 5000, valid: false, slot: 5000, sigs: [payEntry(), ...old(2)], txs: { [PAY]: txOf(ixOf()) } }) });
+        ok("dead blockhash but the support entry cannot be stored → the attempt is still KEPT (never released without its evidence)", rd.kind === "refused" && rd.keptActive === true && kept(stNoStuck), rd);
+      }
+      {
+        // A candidate that only comes back "retry" leaves the attempt exactly as it was (never written over).
+        st = mkAttempt();
+        const before = JSON.stringify(mod.loadRecord(st, PAYER));
+        const r = await mod.checkPayment({ fetchFn: async () => resp(503, { success: false, error: "unavailable" }), storage: st, wallet: PAYER, rpc: live() });
+        ok("candidate redemption 'retry' → the stored attempt is byte-for-byte unchanged", r.kind === "retry" && JSON.stringify(mod.loadRecord(st, PAYER)) === before, r);
+      }
+      // Codex round 4 on #421, P1: the sheet honours `watching` — a refused search candidate keeps the
+      // record (and so the "Check payment" state), never a fresh pay button.
+      {
+        const pg = fs.readFileSync(path.join(ROOT, "src", "seeker", "passgate.jsx"), "utf8");
+        const branch = pg.slice(pg.indexOf('out.kind === "refused" && out.watching'), pg.indexOf('} else if (out.kind === "refused") {'));
+        ok("passgate: a refused + watching outcome keeps the stored record on screen (setRec(loadRecord…)), never setRec(null)", branch.length > 0 && /setRec\(loadRecord\(store\(\), wallet\.address\)\)/.test(branch) && !/setRec\(null\)/.test(branch), branch.slice(0, 200));
+        ok("passgate: …and that branch comes BEFORE the plain refused branch that clears the record", pg.indexOf('out.kind === "refused" && out.watching') < pg.indexOf('} else if (out.kind === "refused") {'));
+      }
     }
 
     // ── P2: no device timestamp is a chain-time bound ──

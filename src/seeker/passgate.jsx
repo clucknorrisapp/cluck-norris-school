@@ -170,6 +170,14 @@ export function PassGate({ pass, wallet, tool, onUnlocked, onClose }) {
       // The search for a payment we could not see was not complete (or an RPC call failed): kept, never released.
       setRec(loadRecord(store(), wallet.address));
       setPayNote({ tone: "warn", text: t("We can't tell yet whether this payment went through. If SKR left your wallet, look in your wallet's history and contact support.") });
+    } else if (out.kind === "refused" && out.watching) {
+      // Codex round 4 on #421 (P1): a candidate the chain SEARCH turned up was refused, but the
+      // attempt's own blockhash is still live — the real payment may yet land. The attempt is still
+      // on record (skr-pay.js kept it as the guard) and this sheet must keep showing "Check payment",
+      // never a second pay button. The first cut dropped `rec` here and offered another payment.
+      setRec(loadRecord(store(), wallet.address));
+      setStuck(loadStuck(store(), wallet.address));   // the refused candidate is kept as evidence
+      setPayNote({ tone: "warn", text: tf("That payment can't buy a pass: {reason}", { reason: out.error || out.code || "?" }) + " " + t("Your payment may still be landing — check it before paying again.") });
     } else if (out.kind === "refused") {
       setRec(null);
       setStuck(loadStuck(store(), wallet.address));   // a payment that landed is kept, with its signature

@@ -228,8 +228,18 @@ export function dismissStuck(storage, wallet, paySig) {
 //   { kind:"signin" }                               the pay intent expired and `refreshIntent`
 //                                                   could not mint a new one; record kept
 // `refreshIntent()` → a fresh payIntent string, or null (the wallet declined / user qualifies).
-export async function redeemRecord({ fetchFn, storage, wallet, refreshIntent }) {
-  let rec = loadRecord(storage, wallet);
+// `candidate` — Codex round 4 on #421 (P2): a signature the chain SEARCH turned up for an ATTEMPT
+// (checkPayment), handed in as an in-memory record. The stored record stays the attempt the whole
+// time: it is never overwritten with the candidate and never deleted before the decision is safely
+// on disk. A grant clears it; a definitive refusal while the attempt's blockhash is still live
+// stores the support entry and adds the candidate to the attempt's `ignoreSigs` (two writes, each
+// of which may fail — a failed write leaves the attempt exactly as it was, still the guard, and the
+// answer says `watching: true`); only with `blockhashDead` is the attempt released to the support
+// list, and only once the support entry is stored. The first cut saved the candidate OVER the
+// attempt, let the refusal delete it, and then tried to restore the attempt — a restore that could
+// fail silently and leave no active record at all, with the answer still claiming to watch.
+export async function redeemRecord({ fetchFn, storage, wallet, refreshIntent, candidate, blockhashDead }) {
+  let rec = candidate || loadRecord(storage, wallet);
   if (!rec) return { kind: "none" };
   // An attempt has no signature to redeem yet — "Check payment" finds it on the chain first.
   if (!rec.paySig) return { kind: "retry", error: null };
@@ -249,7 +259,8 @@ export async function redeemRecord({ fetchFn, storage, wallet, refreshIntent }) 
     const fresh = typeof refreshIntent === "function" ? await refreshIntent().catch(() => null) : null;
     if (!fresh) return { kind: "signin" };
     rec = { ...rec, payIntent: fresh };
-    try { saveRecord(storage, rec); } catch (_) { /* the in-memory copy still works for this call */ }
+    // In candidate mode the fresh intent goes onto the STORED attempt (the candidate is never written).
+    try { const stored = candidate ? loadRecord(storage, wallet) : null; saveRecord(storage, candidate ? { ...(stored || candidate), payIntent: fresh } : rec); } catch (_) { /* the in-memory copy still works for this call */ }
     out = await post();
   }
   if (out.transport) return { kind: "retry", error: null };
@@ -265,16 +276,30 @@ export async function redeemRecord({ fetchFn, storage, wallet, refreshIntent }) 
     // dismisses it (review of #421, P3: an outside_window refusal used to clear a paid record).
     // Only a transaction that FAILED on chain moved nothing and has nothing to keep.
     const code = j.code || "";
+    const refusedAnswer = (extra) => ({ kind: "refused", error: j.error || "", code, sig: rec.paySig, amountUi: rec.amountUi || null, stuck: code !== "tx_failed", ...extra });
     if (code !== "tx_failed") {
       // The active record is cleared ONLY after the support entry is safely stored (review of #421
       // round 2: a storage-exhaustion failure here used to be swallowed and the only evidence — the
       // signature — deleted anyway). If the save fails the active record stays exactly as it is, it
-      // still carries the signature, and the caller shows the support state from it.
+      // still carries the signature, and the caller shows the support state from it. (Candidate
+      // mode: the stored attempt is still the guard, and it is still being watched.)
       try { saveStuck(storage, { wallet, paySig: rec.paySig, amountUi: rec.amountUi || null, code, error: j.error || "", at: Date.now() }); }
-      catch (_) { return { kind: "refused", error: j.error || "", code, sig: rec.paySig, amountUi: rec.amountUi || null, stuck: false, keptActive: true }; }
+      catch (_) { return refusedAnswer({ stuck: false, keptActive: true, ...(candidate ? { watching: true } : {}) }); }
+    }
+    if (candidate && !blockhashDead) {
+      // A refusal of a candidate found by SEARCH (not the signature the wallet handed back) must not
+      // end the attempt while its blockhash can still produce the real transaction: the refusal is
+      // on the support list as evidence, the attempt stays on record as the guard, and that
+      // candidate is ignored from now on. The ignore-list write failing changes nothing that
+      // matters — the attempt is untouched, the next check simply meets the same refusal again.
+      const attempt = loadRecord(storage, wallet);
+      if (attempt && !attempt.paySig) {
+        try { saveRecord(storage, { ...attempt, ignoreSigs: [...(Array.isArray(attempt.ignoreSigs) ? attempt.ignoreSigs : []), rec.paySig] }); } catch (_) { /* evidence is already in the support list; the attempt is intact */ }
+      }
+      return refusedAnswer({ watching: true });
     }
     clearRecord(storage, wallet);
-    return { kind: "refused", error: j.error || "", code, sig: rec.paySig, amountUi: rec.amountUi || null, stuck: code !== "tx_failed" };
+    return refusedAnswer({});
   }
   // Everything else — 5xx, an unavailable chain read, "not visible yet", a store that could not
   // record, a malformed body — is "not yet", and the record stays.
@@ -375,18 +400,12 @@ export async function checkPayment({ fetchFn, storage, wallet, rpc, refreshInten
     } catch (_) { return { kind: "cannot-confirm", error: null }; }
     const found = await findAttempt(rpc, rec, dead ? proofSlot : null);
     if (found.sig) {
-      const attempt = rec;
-      rec = { ...rec, paySig: found.sig, attempt: false };
-      try { saveRecord(storage, rec); } catch (_) { return { kind: "cannot-confirm", error: null }; }   // keep the attempt; try again
-      first = await redeemRecord({ fetchFn, storage, wallet, refreshIntent });
-      // A refusal of a candidate found by SEARCH (not the signature the wallet handed back) must not
-      // end the attempt while its blockhash can still produce the real transaction: the refusal is
-      // kept as evidence (redeemRecord stored the support entry), the attempt is restored to keep
-      // watching, and that candidate is ignored from now on.
-      if (first.kind === "refused" && !dead && !first.keptActive) {
-        try { saveRecord(storage, { ...attempt, ignoreSigs: [...(Array.isArray(attempt.ignoreSigs) ? attempt.ignoreSigs : []), found.sig] }); } catch (_) { /* evidence is already in the support list */ }
-        return { ...first, watching: true };
-      }
+      // Codex round 4 on #421 (P2): the candidate is redeemed IN MEMORY. The stored record stays
+      // the attempt throughout — it is never overwritten with the candidate and never deleted
+      // before the decision is on disk (redeemRecord's candidate mode owns the write order). A
+      // candidate that only comes back "retry" leaves the attempt as it was; the next check
+      // searches again and finds it again.
+      first = await redeemRecord({ fetchFn, storage, wallet, refreshIntent, candidate: { ...rec, paySig: found.sig, attempt: false }, blockhashDead: dead });
       if (first.kind !== "retry") return first;
     } else if (dead && found.complete) { clearRecord(storage, wallet); return { kind: "never-landed", error: null }; }
     else if (!found.complete) return { kind: "cannot-confirm", error: null };   // incomplete search: never a release, whatever the blockhash says
