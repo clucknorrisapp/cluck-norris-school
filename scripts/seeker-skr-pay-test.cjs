@@ -1,0 +1,609 @@
+#!/usr/bin/env node
+"use strict";
+// The Seeker app's SKR-paid pass — the CLIENT half (src/seeker/skr-pay.js, driven through the real
+// signing seam src/seeker/sign.js). The server half is scripts/tool-pass-skr-test.cjs.
+//
+// This moves a person's SKR, so what is pinned is the order and the classification, not the happy
+// path alone:
+//   1. the instruction bytes the page builds are byte-identical to @solana/spl-token's (AGENTS.md:
+//      "diff its bytes against the library in Node") — classic AND Token-2022;
+//   2. the quote is checked before a wallet is asked to sign (mint, program, amount ↔ amountUi);
+//   3. the recovery record is written AFTER the wallet signs and BEFORE the transaction is
+//      submitted and before any redemption request — and a record that cannot be stored stops the
+//      broadcast (nothing is sent that cannot be recovered);
+//   4. landed / failed / unconfirmed / declined stay four different things;
+//   5. a retryable refusal (5xx, transport, "not visible yet") KEEPS the record; a grant or a
+//      DEFINITIVE refusal clears it, and the refusal's reason is surfaced; reopening re-posts it;
+//   6. a payment that never landed is released only when the node proves its blockhash dead.
+// No network, no wallet: a fake window, a fake fetch, a real ed25519 keypair as the "wallet".
+const fs = require("fs");
+const path = require("path");
+const vm = require("vm");
+const web3 = require("@solana/web3.js");
+const spl = require("@solana/spl-token");
+
+const ROOT = path.join(__dirname, "..");
+let pass = 0, fail = 0;
+const ok = (name, cond, detail) => {
+  if (cond) { pass++; console.log("  ✓ " + name); }
+  else { fail++; console.log("  ✗ " + name + (detail !== undefined ? "\n      " + (typeof detail === "string" ? detail : JSON.stringify(detail)) : "")); }
+};
+
+const SKR_MINT = "SKRbvo6Gf7GondiT3BbTfuRDPqLWei4j2Qy2NPGZhW3";
+const RECEIVER = "7LHBcRYosycMBwBqxBHeRiDQohYzpppDALKYVT4TNY5H";
+const CLASSIC = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
+const T22 = "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb";
+
+(async () => {
+  // ── load the real browser modules into THIS process (one realm, real interop) ───────────────
+  global.solanaWeb3 = web3;
+  global.btoa = (s) => Buffer.from(s, "binary").toString("base64");
+  vm.runInThisContext(fs.readFileSync(path.join(ROOT, "public", "cluck-wallet.js"), "utf8"), { filename: "cluck-wallet.js" });
+  vm.runInThisContext(fs.readFileSync(path.join(ROOT, "public", "airdrop-engine.js"), "utf8"), { filename: "airdrop-engine.js" });
+  const shim = global.splToken;
+  if (!shim || typeof shim.createTransferCheckedInstruction !== "function") { console.log("  ✗ the splToken shim did not load"); process.exit(1); }
+  const realSetTimeout = global.setTimeout;
+  global.setTimeout = (fn, ms, ...a) => realSetTimeout(fn, 0, ...a);   // confirmSignature's 30 one-second polls, instantly
+
+  const payerKp = web3.Keypair.generate();
+  const PAYER = payerKp.publicKey.toBase58();
+  const state = { sendMode: "ok", statusMode: "landed", rpcLog: [], sent: [], height: 100, blockhashValid: true, txStatusNull: false };
+  const randHash = () => web3.Keypair.generate().publicKey.toBase58();
+  global.window = {
+    solanaWeb3: web3, CluckWallet: global.CluckWallet, splToken: shim,
+    CluckUtil: {
+      rpc: async (method, params) => {
+        state.rpcLog.push(method);
+        if (method === "getLatestBlockhash") return { value: { blockhash: randHash(), lastValidBlockHeight: 1000 } };
+        if (method === "sendTransaction") {
+          state.sent.push(params[0]);
+          if (state.sendMode === "transport") throw new Error("fetch failed");
+          if (state.sendMode === "reject") { const e = new Error("Transaction simulation failed"); e.rpcError = true; throw e; }
+          return web3.Transaction.from(Buffer.from(params[0], "base64")).signature ? require("bs58").encode(web3.Transaction.from(Buffer.from(params[0], "base64")).signature) : "x";
+        }
+        if (method === "getSignatureStatuses") {
+          if (state.statusMode === "landed") return { value: [{ confirmationStatus: "confirmed", err: null }] };
+          if (state.statusMode === "failed") return { value: [{ confirmationStatus: "confirmed", err: { InstructionError: [1, "Custom"] } }] };
+          return { value: [null] };
+        }
+        if (method === "getBlockHeight") return state.height;
+        if (method === "isBlockhashValid") return { value: state.blockhashValid };
+        throw new Error("unexpected rpc " + method);
+      },
+    },
+  };
+  const rpc = (m, p) => global.window.CluckUtil.rpc(m, p);
+  const mod = await import(path.join(ROOT, "src", "seeker", "skr-pay.js") + "?t=" + Date.now());
+
+  // ── helpers ──────────────────────────────────────────────────────────────────────────────────
+  const ataOf = (program) => spl.getAssociatedTokenAddressSync(new web3.PublicKey(SKR_MINT), new web3.PublicKey(RECEIVER), true, new web3.PublicKey(program)).toBase58();
+  const mkQuote = (over) => ({
+    success: true, mint: SKR_MINT, decimals: 6, program: CLASSIC, usd: 1, priceUsd: 0.02, amountRaw: "50000000", amountUi: "50", days: 7,
+    receiver: RECEIVER, receiverAta: ataOf(CLASSIC), receiverAtaExists: false, issuedAt: Date.now(), expiresAt: Date.now() + 600e3, quote: "body.mac", ...over,
+  });
+  function memStorage(opts = {}) {
+    const m = new Map(); const log = [];
+    return {
+      setItem: (k, v) => { log.push("save"); if (opts.throwOnSet) throw new Error("QuotaExceededError"); if (!opts.silentDrop) m.set(k, v); },
+      getItem: (k) => (m.has(k) ? m.get(k) : null),
+      removeItem: (k) => { log.push("clear"); m.delete(k); },
+      log, raw: m,
+    };
+  }
+  const resp = (status, body) => ({ ok: status >= 200 && status < 300, status, json: async () => { if (body === undefined) throw new Error("no body"); return body; } });
+  const provider = (over = {}) => ({ publicKey: { toString: () => PAYER }, signTransaction: async (tx) => { tx.partialSign(payerKp); return tx; }, ...over });
+  const reset = () => { state.sendMode = "ok"; state.statusMode = "landed"; state.rpcLog = []; state.sent = []; state.height = 100; state.blockhashValid = true; };
+  const norm = (ix) => JSON.stringify({ p: ix.programId.toBase58(), k: ix.keys.map((k) => [k.pubkey.toBase58(), !!k.isSigner, !!k.isWritable]), d: Array.from(ix.data) });
+
+  // ═══ 1. instruction bytes vs the library ═══════════════════════════════════════════════════
+  console.log("\n1. the page's instructions are byte-identical to @solana/spl-token (classic + Token-2022)\n");
+  for (const [label, program] of [["classic", CLASSIC], ["Token-2022", T22]]) {
+    const q = mkQuote({ program, receiverAta: ataOf(program) });
+    const source = web3.Keypair.generate().publicKey.toBase58();
+    const tx = mod.buildSkrPayTx(web3, shim, { payer: PAYER, quote: q, source, blockhash: randHash() });
+    const [createIx, transferIx] = tx.instructions;
+    const P = new web3.PublicKey(program), mint = new web3.PublicKey(SKR_MINT), payer = new web3.PublicKey(PAYER), recv = new web3.PublicKey(RECEIVER);
+    const ata = spl.getAssociatedTokenAddressSync(mint, recv, true, P);
+    ok(`${label}: the shim's ATA derivation = the library's`, shim.getAssociatedTokenAddressSync(mint, recv, program).toBase58() === ata.toBase58());
+    const libTransfer = spl.createTransferCheckedInstruction(new web3.PublicKey(source), mint, ata, payer, 50000000n, 6, [], P);
+    ok(`${label}: TransferChecked (programId, key order/flags, data) = the library's`, norm(transferIx) === norm(libTransfer), { ours: norm(transferIx), lib: norm(libTransfer) });
+    const libCreate = spl.createAssociatedTokenAccountIdempotentInstruction(payer, ata, recv, mint, P);
+    // The shim's create-idempotent still passes the legacy SysvarRent key as a 7th account (the ATA
+    // program ignores it) — scripts/verify-burn-close.cjs documents the same known, harmless
+    // difference. Everything else must match exactly.
+    const ours = createIx.keys.map((k) => [k.pubkey.toBase58(), !!k.isSigner, !!k.isWritable]);
+    const lib = libCreate.keys.map((k) => [k.pubkey.toBase58(), !!k.isSigner, !!k.isWritable]);
+    ok(`${label}: CreateIdempotent — programId, data and the first ${lib.length} accounts = the library's; the extra is SysvarRent`,
+      createIx.programId.toBase58() === libCreate.programId.toBase58() && Buffer.compare(Buffer.from(createIx.data), Buffer.from(libCreate.data)) === 0
+        && JSON.stringify(ours.slice(0, lib.length)) === JSON.stringify(lib) && ours.length - lib.length <= 1
+        && (ours.length === lib.length || ours[ours.length - 1][0] === "SysvarRent111111111111111111111111111111111"), { ours, lib });
+    ok(`${label}: exactly two instructions, fee payer = the payer`, tx.instructions.length === 2 && tx.feePayer.toBase58() === PAYER);
+    ok(`${label}: the only signer the message requires is the payer`, tx.compileMessage().header.numRequiredSignatures === 1);
+  }
+  {
+    let msg = "";
+    try { mod.buildSkrPayTx(web3, shim, { payer: PAYER, quote: mkQuote({ receiverAta: web3.Keypair.generate().publicKey.toBase58() }), source: PAYER, blockhash: randHash() }); } catch (e) { msg = e.message; }
+    ok("a quote whose receiving account is not the receiver's derived account is refused before signing", /does not match the receiver/.test(msg), msg);
+  }
+
+  // ═══ 2. the quote is checked before signing ═════════════════════════════════════════════════
+  console.log("\n2. the quote is validated before a wallet is asked to sign\n");
+  ok("a good quote passes", mod.validateQuote(mkQuote()) === null);
+  ok("a quote naming another mint is refused", /different token/.test(mod.validateQuote(mkQuote({ mint: web3.Keypair.generate().publicKey.toBase58() })) || ""));
+  ok("an unknown token program is refused", /program/.test(mod.validateQuote(mkQuote({ program: "11111111111111111111111111111111" })) || ""));
+  ok("an amountUi that is not the amountRaw is refused (the sheet must print what is signed)", /self-consistent/.test(mod.validateQuote(mkQuote({ amountUi: "5" })) || ""));
+  ok("a non-integer / leading-zero / negative amount is refused", ["0", "012", "-5", "5.5", "abc", ""].every((a) => mod.validateQuote(mkQuote({ amountRaw: a })) !== null));
+  ok("a malformed receiver is refused", mod.validateQuote(mkQuote({ receiver: "nope" })) !== null);
+  ok("a quote with no issuedAt (or expiresAt <= issuedAt) is refused — its life must be knowable", mod.validateQuote(mkQuote({ issuedAt: undefined })) !== null && mod.validateQuote(mkQuote({ issuedAt: 5, expiresAt: 5 })) !== null);
+  let r = await mod.fetchQuote(async () => resp(503, { success: false, error: "skr_price_unavailable" }), PAYER);
+  ok("503 skr_price_unavailable → kind 'price' (no amount is ever guessed)", r.ok === false && r.kind === "price", r);
+  r = await mod.fetchQuote(async () => { throw new Error("offline"); }, PAYER);
+  ok("a network failure → kind 'offline'", r.ok === false && r.kind === "offline", r);
+  r = await mod.fetchQuote(async () => resp(200, mkQuote({ mint: "x".repeat(44) })), PAYER);
+  ok("a 200 whose quote fails validation → refused as 'error'", r.ok === false && r.kind === "error", r);
+  r = await mod.fetchQuote(async () => resp(200, mkQuote()), PAYER);
+  ok("a valid quote is returned", r.ok === true && r.quote.amountRaw === "50000000", r);
+
+  // Review of #421, P3-4: freshness is how long the quote has been HERE, never the phone's clock
+  // against the server's expiresAt (a slow phone clock saw a dead quote as fresh).
+  console.log("\n2b. quote freshness is measured from when it arrived, not against the server's clock\n");
+  {
+    const fetched = (await mod.fetchQuote(async () => resp(200, mkQuote()), PAYER)).quote;
+    ok("a quote that just arrived is fresh", mod.quoteStale(fetched) === false);
+    // A SLOW phone clock: the server's expiresAt looks 10 minutes away to the phone, but 9.5 minutes
+    // of the quote's 10-minute life have passed on the stopwatches.
+    const slowClock = { ...fetched, issuedAt: Date.now() - 600e3 * 5, expiresAt: Date.now() - 600e3 * 5 + 600e3 };   // server time far from the phone's: irrelevant
+    const aged = { ...fetched, _wall0: Date.now() - 570e3, _perf0: (typeof performance !== "undefined" ? performance.now() : 0) - 570e3 };
+    ok("9.5 of its 10 minutes elapsed → stale, whatever the phone clock says about expiresAt", mod.quoteStale({ ...aged, expiresAt: Date.now() + 3600e3 * 24, issuedAt: Date.now() + 3600e3 * 24 - 600e3 }) === true);
+    ok("the life is the server's own span (expiresAt − issuedAt), so a phone clock years off changes nothing", mod.quoteStale(slowClock) === false);
+    ok("a stopwatch that jumped (wall clock far ahead) can only make it stricter", mod.quoteStale({ ...fetched, _wall0: Date.now() - 3600e3 }) === true);
+    ok("a quote with no usable life is stale", mod.quoteStale({ ...fetched, issuedAt: 10, expiresAt: 10 }) === true);
+  }
+
+  // ═══ 3. reading the payer's SKR ═════════════════════════════════════════════════════════════
+  console.log("\n3. the payer's SKR — look-alikes and frozen accounts do not count\n");
+  {
+    const acct = (pubkey, o) => ({ pubkey, account: { data: { parsed: { info: { mint: SKR_MINT, owner: PAYER, state: "initialized", tokenAmount: { amount: "0" }, ...o } } } } });
+    const res = await mod.readSkrAccounts(async () => ({ value: [
+      acct("A1", { tokenAmount: { amount: "30000000" } }),
+      acct("A2", { tokenAmount: { amount: "70000000" } }),
+      acct("A3", { tokenAmount: { amount: "999999999" }, state: "frozen" }),
+      acct("A4", { tokenAmount: { amount: "999999999" }, owner: web3.Keypair.generate().publicKey.toBase58() }),
+      acct("A5", { tokenAmount: { amount: "999999999" }, mint: web3.Keypair.generate().publicKey.toBase58() }),
+    ] }), PAYER);
+    ok("total counts only the owner's unfrozen SKR; the transfer source is the richest such account", res.total === 100000000n && res.best.pubkey === "A2", { total: String(res.total), best: res.best && res.best.pubkey });
+    let threw = false; try { await mod.readSkrAccounts(async () => { throw new Error("rpc down"); }, PAYER); } catch (_) { threw = true; }
+    ok("an RPC failure throws (the sheet says 'could not read', never 'you have none')", threw);
+    threw = false; try { await mod.readSkrAccounts(async () => ({}), PAYER); } catch (_) { threw = true; }
+    ok("a malformed answer throws too", threw);
+  }
+
+  // ═══ 4. ORDER: record → submit → redeem ════════════════════════════════════════════════════
+  console.log("\n4. the recovery record is written BEFORE submission and BEFORE any redemption request\n");
+  const quote = mkQuote();
+  const source = web3.Keypair.generate().publicKey.toBase58();
+  const INTENT = "intent.mac";
+  async function payAndRedeem({ fetchImpl, storage, refreshIntent, prov }) {
+    const events = [];
+    const origRpc = global.window.CluckUtil.rpc;
+    global.window.CluckUtil.rpc = async (m, p) => { if (m === "sendTransaction") events.push("send"); return origRpc(m, p); };
+    const origSet = storage.setItem; storage.setItem = (k, v) => { events.push("save"); return origSet(k, v); };
+    const fetchFn = async (u, o) => { events.push("session"); return fetchImpl(u, o); };
+    let res, out = null;
+    try {
+      // Log the moment the wallet is actually ASKED to sign / sign-and-send.
+      const base = prov || provider();
+      const wrapped = { ...base };
+      if (typeof base.signTransaction === "function") wrapped.signTransaction = async (tx) => { events.push("sign"); return base.signTransaction(tx); };
+      if (typeof base.signAndSendTransaction === "function") wrapped.signAndSendTransaction = async (tx) => { events.push("wallet"); return base.signAndSendTransaction(tx); };
+      res = await mod.paySkr({ provider: wrapped, owner: PAYER, quote, source, payIntent: INTENT, storage });
+      if (res.status === "sent") out = await mod.redeemRecord({ fetchFn, storage, wallet: PAYER, refreshIntent });
+    } finally { global.window.CluckUtil.rpc = origRpc; }
+    return { res, out, events };
+  }
+  const grantBody = { success: true, via: "paid-skr", pass: "t:abc.def", days: 7, termDays: 7, recovered: false };
+  {
+    reset(); const st = memStorage();
+    const bodies = [];
+    const { res, out, events } = await payAndRedeem({ storage: st, fetchImpl: async (u, o) => { bodies.push(JSON.parse(o.body)); return resp(200, grantBody); } });
+    ok("landed → status 'sent'", res.status === "sent" && !!res.sig, res);
+    ok("ORDER: save (the ATTEMPT) → wallet asked to sign → save (the signature) → send → session", events.join(",") === "save,sign,save,send,session", events);
+    const sent = web3.Transaction.from(Buffer.from(state.sent[0], "base64"));
+    ok("the submitted transaction is the built one: 2 instructions, signed by the payer alone", sent.instructions.length === 2 && sent.verifySignatures() && sent.signatures.length === 1 && sent.feePayer.toBase58() === PAYER);
+    ok("the session request carries wallet, payIntent, paySig, payKind:'skr' and the quote token", bodies[0].wallet === PAYER && bodies[0].payIntent === INTENT && bodies[0].paySig === res.sig && bodies[0].payKind === "skr" && bodies[0].skrQuote === "body.mac", bodies[0]);
+    ok("a grant clears the record and returns the pass", out.kind === "granted" && out.pass === "t:abc.def" && mod.loadRecord(st, PAYER) === null, out);
+  }
+  {
+    // A record that cannot be stored means the WALLET IS NEVER ASKED (review of #421: a signAndSend
+    // wallet broadcasts inside the call, so the save has to come before it, not after).
+    reset(); const st = memStorage({ throwOnSet: true });
+    const { res, events } = await payAndRedeem({ storage: st, fetchImpl: async () => resp(200, grantBody) });
+    ok("storage throws → the wallet is NEVER asked to sign, nothing is sent: status 'failed'", res.status === "failed" && !events.includes("sign") && !events.includes("send") && state.sent.length === 0, { res, events });
+    reset(); const st2 = memStorage({ silentDrop: true });
+    const r2 = await payAndRedeem({ storage: st2, fetchImpl: async () => resp(200, grantBody) });
+    ok("storage that silently drops the write (read-back mismatch) → the wallet is never asked either", r2.res.status === "failed" && !r2.events.includes("sign") && state.sent.length === 0, r2);
+  }
+  console.log("\n4b. a wallet that can ONLY signAndSendTransaction (it broadcasts inside the call)\n");
+  {
+    // Fake send-only wallet: signs and "broadcasts" in one call and hands back the signature.
+    const bs58 = require("bs58");
+    const sendOnly = (over = {}) => ({ publicKey: { toString: () => PAYER }, signAndSendTransaction: async (tx) => { tx.partialSign(payerKp); return { signature: bs58.encode(tx.signature) }; }, ...over });
+    reset(); let st = memStorage();
+    let r = await payAndRedeem({ storage: st, prov: sendOnly(), fetchImpl: async () => resp(200, grantBody) });
+    ok("send-only wallet: the ATTEMPT is saved BEFORE the wallet is asked (save → wallet → save → session)", r.events.join(",") === "save,wallet,save,session", r.events);
+    ok("…and the signature is filled in once the wallet returns it; a grant clears it", r.res.status === "sent" && r.out.kind === "granted" && mod.loadRecord(st, PAYER) === null, r);
+    reset(); st = memStorage({ throwOnSet: true });
+    r = await payAndRedeem({ storage: st, prov: sendOnly(), fetchImpl: async () => resp(200, grantBody) });
+    ok("send-only wallet + a save failure → the wallet is NEVER asked (it would have broadcast with nothing recoverable)", r.res.status === "failed" && !r.events.includes("wallet"), r);
+    reset(); st = memStorage();
+    r = await payAndRedeem({ storage: st, prov: sendOnly({ signAndSendTransaction: async (tx) => { tx.partialSign(payerKp); throw new Error("the wallet connection dropped after sending"); } }), fetchImpl: async () => resp(200, grantBody) });
+    const kept = mod.loadRecord(st, PAYER);
+    ok("send-only wallet throws AFTER possibly broadcasting → 'unconfirmed' with NO signature, the attempt record KEPT (not cleared as 'failed')", r.res.status === "unconfirmed" && r.res.sig === null && kept && kept.attempt === true && kept.paySig === null, { res: r.res, kept });
+    // …and a send-only wallet that cleanly declines.
+    reset(); st = memStorage();
+    r = await payAndRedeem({ storage: st, prov: sendOnly({ signAndSendTransaction: async () => { const e = new Error("User rejected the request."); e.code = 4001; throw e; } }), fetchImpl: async () => resp(200, grantBody) });
+    ok("send-only wallet declines → 'declined', the attempt is cleared", r.res.status === "declined" && mod.loadRecord(st, PAYER) === null, r);
+  }
+  console.log("\n4c. resolving an ATTEMPT (no signature yet): only a PROVABLY complete search releases it (Codex, #421 round 2)\n");
+  {
+    const ISSUED = Date.now();                         // the quote's SERVER issuedAt
+    const sec = (ms) => Math.floor(ms / 1000);
+    const ATT_BH = randHash();                         // the blockhash the attempt's transaction was built with
+    const mkAttempt = (over = {}, storage) => { const st = storage || memStorage(); mod.saveRecord(st, { wallet: PAYER, paySig: null, attempt: true, skrQuote: "q.t", payIntent: INTENT, at: Date.now(), recentBlockhash: ATT_BH, lastValidBlockHeight: 1000, amountUi: "50", amountRaw: "50000000", receiverAta: quote.receiverAta, quoteIssuedAt: ISSUED, ...over }); return st; };
+    const PAY = "F".repeat(88);
+    const ixOf = (o = {}) => ({ parsed: { type: "transferChecked", info: { mint: SKR_MINT, destination: quote.receiverAta, authority: PAYER, tokenAmount: { amount: "50000000" }, ...o } } });
+    const txOf = (ix, bh = ATT_BH) => ({ meta: { err: null, innerInstructions: [] }, transaction: { message: { recentBlockhash: bh, instructions: [ix] } } });
+    const noise = (n, base = 100) => Array.from({ length: n }, (_, i) => ({ signature: "N" + i + "x".repeat(60), err: null, blockTime: sec(ISSUED) + base + (n - i) }));   // newest first
+    const old = (n) => Array.from({ length: n }, (_, i) => ({ signature: "O" + i + "x".repeat(60), err: null, blockTime: sec(ISSUED) - 3600 - i }));   // an hour before the quote
+    // A chain whose getSignaturesForAddress honours limit + before, like the real one.
+    const chain = (o) => {
+      const calls = { sigs: 0, txs: 0, log: [] };
+      const rpcFn2 = async (method, params) => {
+        if (method === "getBlockHeight") return o.height;
+        if (method === "isBlockhashValid") return o.noContext ? { value: o.valid } : { context: { slot: o.slot === undefined ? 5000 : o.slot }, value: o.valid };
+        if (method === "getSignaturesForAddress") {
+          calls.sigs++; calls.log.push({ method, cfg: params[1] });
+          // A node that has not reached minContextSlot answers an error (-32016) until it has.
+          if (params[1] && params[1].minContextSlot !== undefined && o.nodeSlot !== undefined && o.nodeSlot < params[1].minContextSlot) { const e = new Error("Minimum context slot has not been reached"); e.rpcError = true; throw e; } if (o.sigsThrowOnPage && calls.sigs >= o.sigsThrowOnPage) throw new Error("rpc"); if (o.sigsThrow) throw new Error("rpc");
+          const cfg = params[1] || {}; const i = cfg.before ? o.sigs.findIndex((e) => e.signature === cfg.before) + 1 : 0;
+          return o.sigs.slice(i, i + (cfg.limit || 1000));
+        }
+        if (method === "getTransaction") { calls.txs++; calls.log.push({ method, cfg: params[1] }); if (o.txThrow && o.txThrow === params[0]) throw new Error("rpc"); return Object.prototype.hasOwnProperty.call(o.txs || {}, params[0]) ? o.txs[params[0]] : txOf({ parsed: { type: "transfer", info: {} } }); }
+        throw new Error("unexpected " + method);
+      };
+      rpcFn2.calls = calls; return rpcFn2;
+    };
+    const payEntry = (extra = 0) => ({ signature: PAY, err: null, blockTime: sec(ISSUED) + 20 + extra });
+    const nf = async () => resp(200, grantBody);
+    const kept = (st) => !!mod.loadRecord(st, PAYER);
+    let st = mkAttempt();
+    ok("an attempt cannot be redeemed (no signature) → retry, nothing posted", (await mod.redeemRecord({ fetchFn: async () => { throw new Error("must not post"); }, storage: st, wallet: PAYER })).kind === "retry");
+
+    let posted = null;
+    let out = await mod.checkPayment({ fetchFn: async (u, o) => { posted = JSON.parse(o.body); return resp(200, grantBody); }, storage: st, wallet: PAYER, rpc: chain({ height: 100, valid: true, sigs: [payEntry()], txs: { [PAY]: txOf(ixOf()) } }) });
+    ok("the search finds the wallet's payment (mint, account, exact amount, authority = the wallet) → redeemed with THAT signature", out.kind === "granted" && posted && posted.paySig === PAY, { out, posted });
+
+    for (const [label, ix] of [["another amount", ixOf({ tokenAmount: { amount: "49999999" } })], ["another destination", ixOf({ destination: "SomeOtherAccount1111111111111111111111111111" })], ["another authority", ixOf({ authority: web3.Keypair.generate().publicKey.toBase58() })], ["another mint", ixOf({ mint: web3.Keypair.generate().publicKey.toBase58() })]]) {
+      st = mkAttempt();
+      out = await mod.checkPayment({ fetchFn: nf, storage: st, wallet: PAYER, rpc: chain({ height: 100, valid: true, sigs: [payEntry(), ...old(3)], txs: { [PAY]: txOf(ix) } }) });
+      ok("a lookalike transaction (" + label + ") is not taken for the payment; blockhash still live → KEPT", out.kind === "retry" && kept(st), out);
+    }
+
+    // ── P2: the search must be COMPLETE before anything is released ──
+    st = mkAttempt();
+    out = await mod.checkPayment({ fetchFn: nf, storage: st, wallet: PAYER, rpc: chain({ height: 5000, valid: false, sigs: [...noise(3), ...old(5)], txs: {} }) });
+    ok("searched back past the quote's time bound, nothing there, blockhash proven dead → 'never-landed' (the ONE release)", out.kind === "never-landed" && !kept(st), out);
+
+    st = mkAttempt();
+    const deep = [...noise(119), payEntry(), ...old(5)];     // the payment is the 120th newest — beyond the first page of 100
+    out = await mod.checkPayment({ fetchFn: nf, storage: st, wallet: PAYER, rpc: chain({ height: 5000, valid: false, sigs: deep, txs: { [PAY]: txOf(ixOf()) } }) });
+    ok("PAYMENT BEYOND THE FIRST PAGE (blockhash dead) → found by paging, redeemed, NOT released as never-landed", out.kind === "granted", out);
+
+    st = mkAttempt();
+    out = await mod.checkPayment({ fetchFn: nf, storage: st, wallet: PAYER, rpc: chain({ height: 5000, valid: false, sigs: noise(1200), txs: {} }) });
+    ok("the page cap is hit before the time bound (busy wallet) → 'cannot-confirm', record KEPT — never never-landed", out.kind === "cannot-confirm" && kept(st), out);
+
+    st = mkAttempt();
+    out = await mod.checkPayment({ fetchFn: nf, storage: st, wallet: PAYER, rpc: chain({ height: 5000, valid: false, sigs: [payEntry(), ...old(3)], txs: { [PAY]: null } }) });
+    ok("getTransaction is NULL for the real payment (blockhash dead) → 'cannot-confirm', KEPT", out.kind === "cannot-confirm" && kept(st), out);
+    st = mkAttempt();
+    out = await mod.checkPayment({ fetchFn: nf, storage: st, wallet: PAYER, rpc: chain({ height: 5000, valid: false, sigs: [payEntry(), ...old(3)], txs: { [PAY]: { meta: null } } }) });
+    ok("a candidate with no meta is also 'cannot-confirm', KEPT", out.kind === "cannot-confirm" && kept(st), out);
+    st = mkAttempt();
+    out = await mod.checkPayment({ fetchFn: nf, storage: st, wallet: PAYER, rpc: chain({ height: 5000, valid: false, sigs: [payEntry(), ...old(3)], txThrow: PAY, txs: {} }) });
+    ok("getTransaction ERRORS mid-search → 'cannot-confirm', KEPT", out.kind === "cannot-confirm" && kept(st), out);
+    st = mkAttempt();
+    out = await mod.checkPayment({ fetchFn: nf, storage: st, wallet: PAYER, rpc: chain({ height: 5000, valid: false, sigs: [...noise(150), ...old(3)], sigsThrowOnPage: 2, txs: {} }) });
+    ok("getSignaturesForAddress ERRORS on page 2 → 'cannot-confirm', KEPT", out.kind === "cannot-confirm" && kept(st), out);
+    st = mkAttempt();
+    out = await mod.checkPayment({ fetchFn: nf, storage: st, wallet: PAYER, rpc: async (m) => { throw new Error("rpc down"); } });
+    ok("every RPC call failing → 'cannot-confirm', KEPT", out.kind === "cannot-confirm" && kept(st), out);
+    st = mkAttempt({ quoteIssuedAt: undefined });
+    out = await mod.checkPayment({ fetchFn: nf, storage: st, wallet: PAYER, rpc: chain({ height: 5000, valid: false, sigs: old(3), txs: {} }) });
+    ok("an attempt with no server-time bound recorded can prove nothing → 'cannot-confirm', KEPT", out.kind === "cannot-confirm" && kept(st), out);
+    st = mkAttempt();
+    out = await mod.checkPayment({ fetchFn: nf, storage: st, wallet: PAYER, rpc: chain({ height: 5000, valid: true, sigs: old(3), txs: {} }) });
+    ok("searched everything, nothing, but the blockhash is still valid (it could still land) → KEPT, retry", out.kind === "retry" && kept(st), out);
+    st = mkAttempt();
+    out = await mod.checkPayment({ fetchFn: nf, storage: st, wallet: PAYER, rpc: chain({ height: 100, valid: false, sigs: old(3), txs: {} }) });
+    ok("height not past the limit → KEPT even if isBlockhashValid says false", out.kind === "retry" && kept(st), out);
+
+    // ── P2-1 (round 3): never-landed needs a search at a view at least as new as the expiry proof ──
+    st = mkAttempt();
+    out = await mod.checkPayment({ fetchFn: nf, storage: st, wallet: PAYER, rpc: chain({ height: 5000, valid: false, slot: 5000, nodeSlot: 4990, sigs: [], txs: {} }) });
+    ok("LAGGING HISTORY (the node is behind the slot that proved the blockhash dead; its list is empty) → 'cannot-confirm', record KEPT — the user can NOT pay again", out.kind === "cannot-confirm" && kept(st), out);
+    st = mkAttempt();
+    out = await mod.checkPayment({ fetchFn: nf, storage: st, wallet: PAYER, rpc: chain({ height: 5000, valid: false, slot: 5000, nodeSlot: 5000, sigs: [], txs: {} }) });
+    ok("a caught-up node, complete search, no match → 'never-landed' (the one release)", out.kind === "never-landed" && !kept(st), out);
+    {
+      st = mkAttempt(); const c = chain({ height: 5000, valid: false, slot: 5000, nodeSlot: 6000, sigs: [...noise(150), ...old(3)], txs: {} });
+      await mod.checkPayment({ fetchFn: nf, storage: st, wallet: PAYER, rpc: c });
+      const hist = c.calls.log.filter((l) => l.method === "getSignaturesForAddress"), txs = c.calls.log.filter((l) => l.method === "getTransaction");
+      ok("EVERY history page is asked at commitment 'confirmed' with minContextSlot = the slot that proved the expiry", hist.length >= 2 && hist.every((l) => l.cfg.commitment === "confirmed" && l.cfg.minContextSlot === 5000), hist.map((l) => l.cfg));
+      ok("…and every getTransaction at commitment 'confirmed'", txs.length > 0 && txs.every((l) => l.cfg.commitment === "confirmed"), txs.map((l) => l.cfg));
+    }
+    st = mkAttempt();
+    out = await mod.checkPayment({ fetchFn: nf, storage: st, wallet: PAYER, rpc: chain({ height: 5000, valid: false, noContext: true, sigs: [], txs: {} }) });
+    ok("an expiry answer that does not say which slot it was read at is no proof → not released ('retry', KEPT)", out.kind !== "never-landed" && kept(st), out);
+    {
+      st = mkAttempt(); const c = chain({ height: 100, valid: true, sigs: old(2), txs: {} });
+      await mod.checkPayment({ fetchFn: nf, storage: st, wallet: PAYER, rpc: c });
+      ok("blockhash still valid: still searched at 'confirmed' (no slot bound to meet yet)", c.calls.log.filter((l) => l.method === "getSignaturesForAddress").every((l) => l.cfg.commitment === "confirmed" && l.cfg.minContextSlot === undefined));
+    }
+    st = mkAttempt();
+    {
+      let n = 0; const flaky = chain({ height: 5000, valid: false, slot: 5000, sigs: [payEntry(), ...old(3)], txs: { [PAY]: txOf(ixOf()) } });
+      const wrapped = async (m, p) => { if (m === "getSignaturesForAddress" && n++ < 2) { const e = new Error("Minimum context slot has not been reached"); e.rpcError = true; throw e; } return flaky(m, p); };
+      out = await mod.checkPayment({ fetchFn: nf, storage: st, wallet: PAYER, rpc: wrapped });
+      ok("a node that catches up within a couple of tries is retried, not given up on → payment found and redeemed", out.kind === "granted", out);
+    }
+
+    // ── P2-2 (round 3): a candidate must be THIS attempt's transaction ──
+    {
+      const OTHER_BH = randHash();
+      const OLDER = "E".repeat(88);
+      st = mkAttempt(); let posted2 = false;
+      const older = { signature: OLDER, err: null, blockTime: sec(ISSUED) - 300 };    // 5 min before the quote, within the search window
+      out = await mod.checkPayment({ fetchFn: async () => { posted2 = true; return resp(200, grantBody); }, storage: st, wallet: PAYER, rpc: chain({ height: 100, valid: true, sigs: [older, ...old(2)], txs: { [OLDER]: txOf(ixOf(), OTHER_BH) } }) });
+      ok("an IDENTICAL older transfer with a DIFFERENT blockhash is skipped: nothing redeemed, the attempt SURVIVES (its blockhash is still valid)", out.kind === "retry" && !posted2 && kept(st) && mod.loadRecord(st, PAYER).attempt === true, out);
+      st = mkAttempt(); posted = null;
+      out = await mod.checkPayment({ fetchFn: async (u, o) => { posted = JSON.parse(o.body); return resp(200, grantBody); }, storage: st, wallet: PAYER, rpc: chain({ height: 100, valid: true, sigs: [payEntry(), older, ...old(2)], txs: { [PAY]: txOf(ixOf()), [OLDER]: txOf(ixOf(), OTHER_BH) } }) });
+      ok("with both present, the transaction with the attempt's blockhash is the one found and redeemed", out.kind === "granted" && posted.paySig === PAY, { out, posted });
+      st = mkAttempt();
+      out = await mod.checkPayment({ fetchFn: nf, storage: st, wallet: PAYER, rpc: chain({ height: 5000, valid: false, slot: 5000, sigs: [older, ...old(2)], txs: { [OLDER]: txOf(ixOf(), OTHER_BH) } }) });
+      ok("an older lookalike never counts as the payment, even after expiry: nothing matches → 'never-landed' (and it was NOT redeemed)", out.kind === "never-landed", out);
+      st = mkAttempt({ recentBlockhash: undefined });
+      out = await mod.checkPayment({ fetchFn: nf, storage: st, wallet: PAYER, rpc: chain({ height: 5000, valid: false, slot: 5000, sigs: [payEntry(), ...old(2)], txs: { [PAY]: txOf(ixOf()) } }) });
+      ok("an attempt with no saved blockhash cannot match anything → 'cannot-confirm', KEPT", out.kind === "cannot-confirm" && kept(st), out);
+    }
+    {
+      // A candidate found by SEARCH that the server refuses definitively, while the attempt's
+      // blockhash can still produce the real transaction: the attempt is NOT deleted.
+      const refuse = async () => resp(200, { success: false, error: "this payment landed after its quote expired", code: "outside_window", definitive: true });
+      st = mkAttempt();
+      let r1 = await mod.checkPayment({ fetchFn: refuse, storage: st, wallet: PAYER, rpc: chain({ height: 100, valid: true, sigs: [payEntry(), ...old(2)], txs: { [PAY]: txOf(ixOf()) } }) });
+      const att = mod.loadRecord(st, PAYER);
+      ok("search-found candidate refused while the blockhash is VALID → evidence kept, the ATTEMPT restored and still watching", r1.kind === "refused" && r1.watching === true && att && att.attempt === true && att.paySig === null && att.ignoreSigs.includes(PAY) && mod.loadStuck(st, PAYER).some((x) => x.paySig === PAY), { r1, att });
+      const r2 = await mod.checkPayment({ fetchFn: refuse, storage: st, wallet: PAYER, rpc: chain({ height: 100, valid: true, sigs: [payEntry(), ...old(2)], txs: { [PAY]: txOf(ixOf()) } }) });
+      ok("…and that candidate is ignored on the next check (no loop of refusals)", r2.kind === "retry" && kept(st), r2);
+      st = mkAttempt();
+      r1 = await mod.checkPayment({ fetchFn: refuse, storage: st, wallet: PAYER, rpc: chain({ height: 5000, valid: false, slot: 5000, sigs: [payEntry(), ...old(2)], txs: { [PAY]: txOf(ixOf()) } }) });
+      ok("the same refusal once the blockhash is proven dead (nothing else can land) → released to the support list as before", r1.kind === "refused" && !r1.watching && !kept(st) && mod.loadStuck(st, PAYER).some((x) => x.paySig === PAY), r1);
+
+      // ── Codex round 4 on #421, P2: the stored attempt is NEVER deleted (or overwritten with the
+      // candidate) before the decision is on disk. The first cut saved the candidate over the attempt,
+      // let the refusal clear it, then tried to restore the attempt — a restore whose failure was
+      // swallowed and reported as `watching: true` with no active record left at all.
+      const live = () => chain({ height: 100, valid: true, sigs: [payEntry(), ...old(2)], txs: { [PAY]: txOf(ixOf()) } });
+      {
+        const base = memStorage(); const writes = [];
+        const stTrace = { getItem: base.getItem, removeItem: (k) => { writes.push({ op: "remove", k }); return base.removeItem(k); }, setItem: (k, v) => { writes.push({ op: "set", k, v }); return base.setItem(k, v); } };
+        mkAttempt({}, stTrace); writes.length = 0;
+        const r = await mod.checkPayment({ fetchFn: refuse, storage: stTrace, wallet: PAYER, rpc: live() });
+        const recWrites = writes.filter((w) => w.k.startsWith("clkn_seeker_skrpay:") || (!w.k.startsWith("clkn_seeker_skrstuck:")));
+        ok("live blockhash, candidate refused: the active record key is NEVER removed", r.kind === "refused" && r.watching === true && !recWrites.some((w) => w.op === "remove"), writes);
+        ok("…and every write to it is still the ATTEMPT (paySig null) — the candidate is never written over it", recWrites.filter((w) => w.op === "set").every((w) => { const j = JSON.parse(w.v); return j.paySig === null && j.attempt === true; }), recWrites);
+        ok("…the support entry was stored BEFORE the attempt's ignore list", writes.findIndex((w) => w.k.startsWith("clkn_seeker_skrstuck:")) < writes.findIndex((w) => w.op === "set" && !w.k.startsWith("clkn_seeker_skrstuck:")), writes.map((w) => w.op + ":" + w.k.slice(0, 20)));
+      }
+      {
+        // The ignore-list write FAILS: the attempt is untouched (still the guard), the answer still watches.
+        const base = memStorage(); let breakRec = false;
+        const stBreak = { getItem: base.getItem, removeItem: base.removeItem, setItem: (k, v) => { if (breakRec && !k.startsWith("clkn_seeker_skrstuck:")) throw new Error("QuotaExceededError"); return base.setItem(k, v); } };
+        mkAttempt({}, stBreak); breakRec = true;
+        const r = await mod.checkPayment({ fetchFn: refuse, storage: stBreak, wallet: PAYER, rpc: live() });
+        const att = mod.loadRecord(stBreak, PAYER);
+        ok("the restore/ignore write fails → the ATTEMPT is still stored, unchanged, and the answer is refused + watching", r.kind === "refused" && r.watching === true && att && att.attempt === true && att.paySig === null, { r, att });
+        ok("…the evidence (support entry) was still stored", mod.loadStuck(stBreak, PAYER).some((x) => x.paySig === PAY));
+        const r2 = await mod.checkPayment({ fetchFn: refuse, storage: stBreak, wallet: PAYER, rpc: live() });
+        ok("…a later check meets the same refusal again but NEVER releases the attempt", r2.kind === "refused" && r2.watching === true && kept(stBreak), r2);
+      }
+      {
+        // The support-entry write FAILS (storage exhausted) in candidate mode: attempt intact, still watching.
+        const base = memStorage();
+        const stNoStuck = { getItem: base.getItem, removeItem: base.removeItem, setItem: (k, v) => { if (k.startsWith("clkn_seeker_skrstuck:")) throw new Error("QuotaExceededError"); return base.setItem(k, v); } };
+        mkAttempt({}, stNoStuck);
+        const r = await mod.checkPayment({ fetchFn: refuse, storage: stNoStuck, wallet: PAYER, rpc: live() });
+        ok("support entry cannot be stored → the attempt is kept (keptActive + watching), nothing released", r.kind === "refused" && r.keptActive === true && r.watching === true && kept(stNoStuck) && mod.loadRecord(stNoStuck, PAYER).attempt === true, r);
+        // Even with the blockhash DEAD, no release without the evidence on disk.
+        mkAttempt({}, stNoStuck);
+        const rd = await mod.checkPayment({ fetchFn: refuse, storage: stNoStuck, wallet: PAYER, rpc: chain({ height: 5000, valid: false, slot: 5000, sigs: [payEntry(), ...old(2)], txs: { [PAY]: txOf(ixOf()) } }) });
+        ok("dead blockhash but the support entry cannot be stored → the attempt is still KEPT (never released without its evidence)", rd.kind === "refused" && rd.keptActive === true && kept(stNoStuck), rd);
+      }
+      {
+        // A candidate that only comes back "retry" leaves the attempt exactly as it was (never written over).
+        st = mkAttempt();
+        const before = JSON.stringify(mod.loadRecord(st, PAYER));
+        const r = await mod.checkPayment({ fetchFn: async () => resp(503, { success: false, error: "unavailable" }), storage: st, wallet: PAYER, rpc: live() });
+        ok("candidate redemption 'retry' → the stored attempt is byte-for-byte unchanged", r.kind === "retry" && JSON.stringify(mod.loadRecord(st, PAYER)) === before, r);
+      }
+      // Codex round 4 on #421, P1: the sheet honours `watching` — a refused search candidate keeps the
+      // record (and so the "Check payment" state), never a fresh pay button.
+      {
+        const pg = fs.readFileSync(path.join(ROOT, "src", "seeker", "passgate.jsx"), "utf8");
+        const branch = pg.slice(pg.indexOf('out.kind === "refused" && out.watching'), pg.indexOf('} else if (out.kind === "refused") {'));
+        ok("passgate: a refused + watching outcome keeps the stored record on screen (setRec(loadRecord…)), never setRec(null)", branch.length > 0 && /setRec\(loadRecord\(store\(\), wallet\.address\)\)/.test(branch) && !/setRec\(null\)/.test(branch), branch.slice(0, 200));
+        ok("passgate: …and that branch comes BEFORE the plain refused branch that clears the record", pg.indexOf('out.kind === "refused" && out.watching') < pg.indexOf('} else if (out.kind === "refused") {'));
+      }
+    }
+
+    // ── P2: no device timestamp is a chain-time bound ──
+    for (const skew of [+10 * 60e3, -10 * 60e3, +60 * 60e3, -60 * 60e3]) {
+      st = mkAttempt({ at: Date.now() + skew });          // the PHONE's clock: wrong by `skew`
+      out = await mod.checkPayment({ fetchFn: nf, storage: st, wallet: PAYER, rpc: chain({ height: 5000, valid: false, sigs: [payEntry(), ...old(3)], txs: { [PAY]: txOf(ixOf()) } }) });
+      ok("phone clock " + (skew > 0 ? "+" : "") + skew / 60e3 + " min off → the real payment is still found and redeemed (blockhash dead)", out.kind === "granted", out);
+    }
+    {
+      const src = fs.readFileSync(path.join(ROOT, "src", "seeker", "skr-pay.js"), "utf8");
+      const fn = src.slice(src.indexOf("async function findAttempt"), src.indexOf("// \"Check payment\""));
+      ok("source: findAttempt never reads rec.at or Date.now() (the phone's clock)", !/rec\.at\b|Date\.now\(/.test(fn));
+    }
+
+    // ── P2: the support entry is stored BEFORE the active record is cleared ──
+    {
+      const refuse = (code) => async () => resp(200, { success: false, error: "this payment landed after its quote expired", code, definitive: true });
+      const base = memStorage(); let breakStuck = true;
+      const stBroken = { ...base, setItem: (k, v) => { if (breakStuck && k.startsWith("clkn_seeker_skrstuck:")) throw new Error("QuotaExceededError"); return base.setItem(k, v); }, getItem: base.getItem, removeItem: base.removeItem };
+      mod.saveRecord(stBroken, { wallet: PAYER, paySig: "S".repeat(88), skrQuote: "q.t", payIntent: INTENT, at: Date.now(), amountUi: "50" });
+      let o = await mod.redeemRecord({ fetchFn: refuse("outside_window"), storage: stBroken, wallet: PAYER });
+      const act = mod.loadRecord(stBroken, PAYER);
+      ok("saveStuck throws (storage exhausted) → the ACTIVE record is NOT cleared and still carries the signature", o.kind === "refused" && o.keptActive === true && o.sig === "S".repeat(88) && act && act.paySig === "S".repeat(88) && mod.loadStuck(stBroken, PAYER).length === 0, { o, act });
+      breakStuck = false;
+      o = await mod.redeemRecord({ fetchFn: refuse("outside_window"), storage: stBroken, wallet: PAYER });
+      ok("…and once storage works, the same refusal stores the support entry FIRST and then clears the active record", o.kind === "refused" && !o.keptActive && mod.loadRecord(stBroken, PAYER) === null && mod.loadStuck(stBroken, PAYER).length === 1, o);
+      const order = []; const base2 = memStorage();
+      const stOrder = { setItem: (k, v) => { order.push(k.startsWith("clkn_seeker_skrstuck:") ? "stuck-saved" : "record-saved"); return base2.setItem(k, v); }, getItem: base2.getItem, removeItem: (k) => { order.push("record-cleared"); return base2.removeItem(k); } };
+      mod.saveRecord(stOrder, { wallet: PAYER, paySig: "T".repeat(88), skrQuote: "q.t", payIntent: INTENT, at: Date.now(), amountUi: "50" }); order.length = 0;
+      await mod.redeemRecord({ fetchFn: refuse("skr_quote_invalid"), storage: stOrder, wallet: PAYER });
+      ok("write order on a definitive refusal: support entry saved, THEN the active record cleared", order.join(",") === "stuck-saved,record-cleared", order);
+    }
+  }
+
+  // ═══ 5. the four outcomes stay apart ═══════════════════════════════════════════════════════
+  console.log("\n5. landed / failed / unconfirmed / declined\n");
+  {
+    reset(); state.sendMode = "reject"; const st = memStorage();
+    const { res } = await payAndRedeem({ storage: st, fetchImpl: async () => resp(200, grantBody) });
+    ok("the NODE refused it → 'failed', record cleared, retry is safe", res.status === "failed" && mod.loadRecord(st, PAYER) === null, res);
+  }
+  {
+    reset(); state.statusMode = "failed"; const st = memStorage();
+    const { res } = await payAndRedeem({ storage: st, fetchImpl: async () => resp(200, grantBody) });
+    ok("it landed and FAILED on-chain → 'failed', record cleared (nobody was paid)", res.status === "failed" && /failed on-chain/.test(res.error || "") && mod.loadRecord(st, PAYER) === null, res);
+  }
+  {
+    reset(); state.sendMode = "transport"; state.statusMode = "none"; const st = memStorage();
+    const { res, events } = await payAndRedeem({ storage: st, fetchImpl: async () => resp(200, grantBody) });
+    ok("a transport failure with no status → 'unconfirmed' (NOT failed, NOT sent), signature kept", res.status === "unconfirmed" && !!res.sig, res);
+    ok("…and the record was stored before the submit that threw, and stays", events[0] === "save" && mod.loadRecord(st, PAYER) && mod.loadRecord(st, PAYER).paySig === res.sig, events);
+  }
+  {
+    reset(); const st = memStorage();
+    const { res } = await payAndRedeem({ storage: st, fetchImpl: async () => resp(200, grantBody), prov: provider({ signTransaction: async () => { const e = new Error("User rejected the request."); e.code = 4001; throw e; } }) });
+    ok("declined in the wallet → 'declined', no record, nothing sent", res.status === "declined" && mod.loadRecord(st, PAYER) === null && state.sent.length === 0, res);
+  }
+  {
+    reset(); const st = memStorage();
+    const other = web3.Keypair.generate().publicKey.toBase58();
+    const { res } = await payAndRedeem({ storage: st, fetchImpl: async () => resp(200, grantBody), prov: provider({ publicKey: { toString: () => other } }) });
+    ok("the wallet switched accounts → refused before building anything; nothing sent, nothing stored", res.status === "failed" && /switched accounts/.test(res.error || "") && state.sent.length === 0 && mod.loadRecord(st, PAYER) === null, res);
+  }
+
+  // ═══ 6. redemption: keep on retryable, clear on grant/definitive ═══════════════════════════
+  console.log("\n6. redemption — retryable keeps the record, a grant or a definitive refusal clears it\n");
+  function seeded() { reset(); const st = memStorage(); mod.saveRecord(st, { wallet: PAYER, paySig: "S".repeat(88), skrQuote: "q.t", payIntent: INTENT, at: Date.now(), recentBlockhash: randHash(), lastValidBlockHeight: 1000, amountUi: "50" }); return st; }
+  const redeem = (st, fetchFn, refreshIntent) => mod.redeemRecord({ fetchFn, storage: st, wallet: PAYER, refreshIntent });
+  {
+    let st = seeded();
+    let out = await redeem(st, async () => resp(503, { success: false, error: "could not check this payment right now", retry: true, code: "skr_unavailable" }));
+    ok("a 503 'unavailable' → retry, record KEPT", out.kind === "retry" && !!mod.loadRecord(st, PAYER), out);
+    out = await redeem(st, async () => { throw new Error("network"); });
+    ok("a transport failure → retry, record KEPT", out.kind === "retry" && !!mod.loadRecord(st, PAYER), out);
+    out = await redeem(st, async () => resp(200, { success: false, error: "the chain has not shown this payment yet", retry: true, definitive: false, code: "skr_not_found_yet" }));
+    ok("'not visible yet' → retry, record KEPT", out.kind === "retry" && !!mod.loadRecord(st, PAYER), out);
+    out = await redeem(st, async () => resp(502, undefined));
+    ok("an HTML/non-JSON 502 → retry, record KEPT", out.kind === "retry" && !!mod.loadRecord(st, PAYER), out);
+    out = await redeem(st, async () => resp(200, grantBody));
+    ok("REOPEN: re-posting the kept record after the outage → granted, record cleared", out.kind === "granted" && mod.loadRecord(st, PAYER) === null, out);
+  }
+  for (const [code, error, status] of [["amount_too_low", "amount too low", 200], ["different_wallet", "payment was made by a different wallet", 403], ["outside_window", "this payment landed after its quote expired, so it was priced on a stale number", 200], ["used_elsewhere", "this payment was already used for a platform-access month", 409]]) {
+    const st = seeded();
+    const out = await redeem(st, async () => resp(status, { success: false, error, code, definitive: true }));
+    ok(`DEFINITIVE '${code}' → refused with its reason, record cleared`, out.kind === "refused" && out.error === error && out.code === code && mod.loadRecord(st, PAYER) === null, out);
+  }
+  {
+    // P3-4/6: a payment that LANDED but cannot buy a pass is never dropped silently.
+    for (const [code, error] of [["outside_window", "this payment landed after its quote expired, so it was priced on a stale number"], ["skr_quote_invalid", "skr quote invalid — request a new one"], ["multiple_payers", "more than one wallet's SKR was spent in this transaction"]]) {
+      const st = seeded();
+      const out = await redeem(st, async () => resp(code === "skr_quote_invalid" ? 401 : 200, { success: false, error, code, definitive: true }));
+      const stuck = mod.loadStuck(st, PAYER);
+      ok(`'${code}' (it landed) → active record released, but KEPT as 'needs attention' with its signature, amount and reason`,
+        out.kind === "refused" && out.stuck === true && out.sig === "S".repeat(88) && mod.loadRecord(st, PAYER) === null
+          && stuck.length === 1 && stuck[0].paySig === "S".repeat(88) && stuck[0].amountUi === "50" && stuck[0].code === code && stuck[0].error === error, { out, stuck });
+    }
+    const st = seeded();
+    const out = await redeem(st, async () => resp(200, { success: false, error: "the payment transaction failed on chain", code: "tx_failed", definitive: true }));
+    ok("a transaction that FAILED on chain moved nothing → nothing is kept as 'needs attention'", out.kind === "refused" && out.stuck === false && mod.loadStuck(st, PAYER).length === 0, out);
+    const st2 = seeded();
+    await redeem(st2, async () => resp(200, { success: false, error: "x", code: "outside_window", definitive: true }));
+    ok("a new payment's record does not erase the 'needs attention' entry (separate key)", (() => { mod.saveRecord(st2, { wallet: PAYER, paySig: "N".repeat(88), skrQuote: "q", payIntent: INTENT, at: Date.now(), amountUi: "50" }); return mod.loadStuck(st2, PAYER).length === 1 && !!mod.loadRecord(st2, PAYER); })());
+    mod.dismissStuck(st2, PAYER, "S".repeat(88));
+    ok("only the person's own Dismiss removes it", mod.loadStuck(st2, PAYER).length === 0);
+    const cap = memStorage();
+    for (let i = 0; i < 8; i++) mod.saveStuck(cap, { wallet: PAYER, paySig: "P" + i, amountUi: "1", code: "x", error: "y", at: i });
+    ok("the list is bounded (newest 5)", mod.loadStuck(cap, PAYER).length === 5 && mod.loadStuck(cap, PAYER)[4].paySig === "P7");
+  }
+  {
+    // pay intent expiry
+    let st = seeded(); const seen = [];
+    let out = await redeem(st, async (u, o) => { const b = JSON.parse(o.body); seen.push(b.payIntent); return b.payIntent === "fresh.intent" ? resp(200, grantBody) : resp(401, { success: false, error: "pay intent expired — connect again" }); }, async () => "fresh.intent");
+    ok("'pay intent expired' → one fresh sign-in, the same signature re-posted with the new intent → granted", out.kind === "granted" && seen.join(",") === INTENT + ",fresh.intent", { out, seen });
+    st = seeded();
+    out = await redeem(st, async () => resp(401, { success: false, error: "pay intent expired — connect again" }), async () => null);
+    ok("…and if the person does not sign in again → 'signin', record KEPT", out.kind === "signin" && !!mod.loadRecord(st, PAYER), out);
+    st = seeded();
+    out = await redeem(st, async () => resp(401, { success: false, error: "pay intent expired — connect again" }), null);
+    ok("…an automatic reopen never prompts: no refresher → 'signin', record KEPT", out.kind === "signin" && !!mod.loadRecord(st, PAYER), out);
+    ok("with no record there is nothing to post", (await mod.redeemRecord({ fetchFn: async () => { throw new Error("must not be called"); }, storage: memStorage(), wallet: PAYER })).kind === "none");
+    const old = memStorage(); old.setItem("clkn_seeker_skrpay:" + PAYER, JSON.stringify({ wallet: PAYER, paySig: "S", at: Date.now() - 9 * 24 * 3600e3 }));
+    ok("a record older than 8 days is dropped, not replayed", mod.loadRecord(old, PAYER) === null);
+    const other = memStorage(); other.setItem("clkn_seeker_skrpay:" + PAYER, JSON.stringify({ wallet: "SomeoneElse", paySig: "S", at: Date.now() }));
+    ok("a record for another wallet is never loaded", mod.loadRecord(other, PAYER) === null);
+  }
+
+  // ═══ 7. "Check payment" — releasing a payment that never landed ════════════════════════════
+  console.log("\n7. Check payment — only a provably dead blockhash releases a record\n");
+  const notFound = async () => resp(200, { success: false, error: "the chain has not shown this payment yet", retry: true, code: "skr_not_found_yet" });
+  {
+    let st = seeded(); state.statusMode = "none"; state.height = 5000; state.blockhashValid = false;
+    let out = await mod.checkPayment({ fetchFn: notFound, storage: st, wallet: PAYER, rpc });
+    ok("not visible + node says the blockhash is dead (height past, isBlockhashValid false) → 'never-landed', record cleared", out.kind === "never-landed" && mod.loadRecord(st, PAYER) === null, out);
+    st = seeded(); state.height = 5000; state.blockhashValid = true;
+    out = await mod.checkPayment({ fetchFn: notFound, storage: st, wallet: PAYER, rpc });
+    ok("blockhash still valid → the record is KEPT (it could still land)", out.kind === "retry" && !!mod.loadRecord(st, PAYER), out);
+    st = seeded(); state.height = 100; state.blockhashValid = false;
+    out = await mod.checkPayment({ fetchFn: notFound, storage: st, wallet: PAYER, rpc });
+    ok("height not past the limit → KEPT even if isBlockhashValid says false", out.kind === "retry" && !!mod.loadRecord(st, PAYER), out);
+    st = seeded(); state.statusMode = "failed";
+    out = await mod.checkPayment({ fetchFn: notFound, storage: st, wallet: PAYER, rpc });
+    ok("it landed and failed on-chain → released as never paid", out.kind === "never-landed" && mod.loadRecord(st, PAYER) === null, out);
+    st = seeded(); state.statusMode = "landed";
+    out = await mod.checkPayment({ fetchFn: notFound, storage: st, wallet: PAYER, rpc });
+    ok("it landed but the service has not caught up → KEPT (never released while it is on chain)", out.kind === "retry" && !!mod.loadRecord(st, PAYER), out);
+    st = seeded(); state.statusMode = "landed";
+    out = await mod.checkPayment({ fetchFn: async () => resp(200, grantBody), storage: st, wallet: PAYER, rpc });
+    ok("a grant short-circuits the chain check", out.kind === "granted" && mod.loadRecord(st, PAYER) === null, out);
+  }
+
+  // ═══ 8. source-level guards on the page ════════════════════════════════════════════════════
+  console.log("\n8. source guards — no web3.js layout encoder, one signing seam, no hardcoded amount\n");
+  {
+    const files = ["skr-pay.js", "passgate.jsx"].map((f) => fs.readFileSync(path.join(ROOT, "src", "seeker", f), "utf8").replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, ""));
+    const all = files.join("\n");
+    ok("no SystemProgram.transfer / web3.js token encoder in the page code", !/SystemProgram\.transfer|createTransferInstruction\b|toBufferLE/.test(all));
+    ok("no direct sendTransaction / getSignatureStatuses / signTransaction call outside sign.js", !/sendTransaction|getSignatureStatuses|\.signTransaction\(|signAndSendTransaction/.test(all));
+    ok("the SKR amount is never a literal in the page code (it is the server's quote)", !/50000000|"50"|=\s*50\b/.test(all));
+  }
+
+  console.log(`\n${fail ? fail + " FAILED, " : ""}${pass} passed`);
+  process.exit(fail ? 1 : 0);
+})().catch((e) => { console.error(e); process.exit(1); });
