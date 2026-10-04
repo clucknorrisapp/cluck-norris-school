@@ -703,6 +703,10 @@
   line-height: 1.5;
 }
 .seeker-passgate-err { color: var(--red-soft, var(--red)); margin-top: 10px; }
+/* The SKR payment adds a quote line, a button and an outcome card — taller than the old sheet. */
+.seeker-passgate { max-height: 90vh; overflow-y: auto; }
+.seeker-passgate-skr { margin-top: 12px; }
+.seeker-passgate-skr .seeker-btn { width: 100%; min-height: 44px; }
 
 /* ── 2i. Hatchery ───────────────────────────────────────────────────────────────────────────── */
 .seeker-hatch-form {

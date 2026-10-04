@@ -17,7 +17,11 @@ const ok = (name, cond, detail) => { if (cond) console.log("  ✓ " + name); els
 // the production fail-closed path (refuses AND leaves nothing consumed).
 function fakeSigStore() {
   const set = new Set(); let failing = false;
-  return { add: (s) => { if (!s || set.has(s)) return false; if (failing) return false; set.add(s); return true; }, has: (s) => set.has(s), size: () => set.size, fail: (v) => { failing = v; } };
+  const legs = new Map();
+  return { add: (s) => { if (!s || set.has(s)) return false; if (failing) return false; set.add(s); return true; }, has: (s) => set.has(s), size: () => set.size, fail: (v) => { failing = v; },
+    // the leg claim (lib/sigstore.js): first claimant owns the signature as {kind, wallet}
+    claimLeg: (sig, kind, wallet) => { const e = legs.get(sig); if (e) return { ok: true, claimed: false, leg: e }; if (failing) return { ok: false }; const leg = { kind, wallet }; legs.set(sig, leg); return { ok: true, claimed: true, leg }; },
+    getLeg: (sig) => legs.get(sig) || null };
 }
 function fakeKv({ throwOnSet } = {}) { const m = new Map(); let sets = 0; return { get: (k, d) => (m.has(k) ? m.get(k) : d), set: (k, v) => { sets++; if (throwOnSet) throw new Error("disk full"); m.set(k, v); }, sets: () => sets, raw: m }; }
 

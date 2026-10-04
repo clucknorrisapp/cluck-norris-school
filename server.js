@@ -3975,7 +3975,7 @@ app.use((req, res, next) => {
 // endpoint keeps its own gate (the tools pass, the receipt sign-in, the payment checks), and the
 // store UA refusal below still answers 403 to the education editions on these — now WITH the
 // CORS headers, so that app reads the refusal instead of an opaque network error.
-const SEEKER_API_RE = /^\/api\/(tool-gate\/(config|challenge|session)|seeker\/reclaimable|seeker\/swap\/(config|quote|tx)|wallet-xray|snapshot|trace|airdrop\/record|lock\/(create-tx|record)|locks|burn-(scan|token-info|receipt)|hatchery\/(config|build|submit|minted))$/;
+const SEEKER_API_RE = /^\/api\/(tool-gate\/(config|challenge|session|skr-quote)|seeker\/reclaimable|seeker\/swap\/(config|quote|tx)|wallet-xray|snapshot|trace|airdrop\/record|lock\/(create-tx|record)|locks|burn-(scan|token-info|receipt)|hatchery\/(config|build|submit|minted))$/;
 app.use((req, res, next) => {
   const origin = String(req.get("origin") || "");
   if (!origin || !STORE_APP_ORIGINS.has(origin) || !SEEKER_API_RE.test(req.path)) return next();
@@ -9720,6 +9720,23 @@ const TOOLGATE = {
   // cluck-gate.js re-reads the config right before it builds the transfer for that reason.
   get lamports() { return TOOLGATE_TERMS.current().lamports; },
   get days() { return TOOLGATE_TERMS.current().days; },
+  // The Seeker app's SKR-paid pass (docs/SEEKER_SKR_PASS_DESIGN.md): { usd, days } while the
+  // current schedule entry carries an `skr` term, else null. The USD figure is the entry's
+  // (owner, 2026-09-24: $1); TOOLGATE_SKR_PASS_USD overrides it for QUOTING only — an issued quote
+  // pins its own amount, so changing the knob never moves a pass already bought. Bounded
+  // (0 < usd <= 50) so a typo cannot quote a four-figure pass; out of range → ignored, loudly, once.
+  get skrPass() {
+    const t = TOOLGATE_TERMS.current();
+    if (!t.skr) return null;
+    let usd = t.skr.usd;
+    const raw = process.env.TOOLGATE_SKR_PASS_USD;
+    if (raw) {
+      const n = Number(raw);
+      if (Number.isFinite(n) && n > 0 && n <= 50) usd = n;
+      else if (!TOOLGATE._skrPassEnvWarned) { TOOLGATE._skrPassEnvWarned = true; console.error(`[tool-pass] TOOLGATE_SKR_PASS_USD=${raw} is outside (0, 50] — IGNORED, quoting the schedule's $${t.skr.usd}.`); }
+    }
+    return { usd, days: t.days };
+  },
 };
 for (const k of ["TOOLGATE_LAMPORTS", "TOOLGATE_DAYS"]) {
   if (process.env[k] && String(process.env[k]) !== String(k === "TOOLGATE_DAYS" ? TOOLGATE.days : TOOLGATE.lamports)) {
@@ -9731,6 +9748,7 @@ for (const k of ["TOOLGATE_LAMPORTS", "TOOLGATE_DAYS"]) {
 // paywall failed open for the whole first-fetch window after each deploy.
 const TOOL_PASS_QUALIFY = require("./lib/tool-pass-qualify");
 const SKR_MINT = TOOL_PASS_QUALIFY.SKR_MINT;
+const TOOL_PASS_SKR = require("./lib/tool-pass-skr");
 // A persisted price is trusted only if it is a finite positive number (Codex, round 13 P2: a
 // stored -1 would otherwise be loaded at boot and make the sanity band refuse every valid tick).
 const loadedPrice = (k) => { const v = Number(kv.get(k, 0)); return Number.isFinite(v) && v > 0 ? v : 0; };
@@ -9750,10 +9768,25 @@ function refreshSkrPrice(now) {
       if (!a.ok) { console.warn("[tool-gate] SKR price refresh rejected: " + a.reason); return; }
       toolGatePrice.skrUsd = a.price;
       kv.set("toolGateSkrUsd", a.price); kv.set("toolGateSkrUsdAt", now);
+      noteSkrAnchor(a.price, now);   // observe only — the quote path's own history (see below); the door is unchanged
     } catch (e) { console.warn("[tool-gate] SKR price refresh failed:", e.message); }
     finally { toolGatePrice.skrP = null; }
   })();
   return toolGatePrice.skrP;
+}
+// The SKR-paid pass QUOTES from its own price history, not from acceptPrice()'s single re-anchoring
+// last-good (review of #421, P2; lib/tool-pass-skr.js quotePriceGate). Every tick the door accepts
+// is also noted here, persisted so a restart does not forget it.
+function skrAnchors() { const a = kv.get("toolGateSkrAnchors", []); return Array.isArray(a) ? a : []; }
+function noteSkrAnchor(price, now) {
+  try { kv.set("toolGateSkrAnchors", TOOL_PASS_SKR.pushAnchor(skrAnchors(), price, now)); } catch (_) { /* history only */ }
+}
+// Keep the history filling without waiting for traffic: a quote needs several accepted ticks, and
+// a quiet server (a fresh deploy) would otherwise answer 503 until enough people had opened the
+// pass sheet. One Jupiter read every 5 minutes. TOOLGATE_SKR_WARMUP_OFF=1 disables it (tests).
+if (!/^(1|true|yes)$/i.test(process.env.TOOLGATE_OFF || "") && !/^(1|true|yes)$/i.test(process.env.TOOLGATE_SKR_WARMUP_OFF || "")) {
+  setTimeout(() => { refreshSkrPrice(Date.now()); }, 20e3).unref();
+  setInterval(() => { refreshSkrPrice(Date.now()); }, 5 * 60e3).unref();
 }
 
 // SERVER-SIDE enforcement of the tools pass (2026-09-10, reworked the same night after a
@@ -9942,6 +9975,74 @@ app.get("/api/tool-gate/challenge", rateLimit("pay", { windowMs: 60000, max: 30 
   try { return res.status(200).json({ success: true, ...issueToolPassChallenge(wallet, String(req.query.purpose || "")) }); }
   catch (e) { return res.status(503).json({ success: false, error: e.message }); }
 });
+// ── The Seeker app's SKR-paid pass (docs/SEEKER_SKR_PASS_DESIGN.md) ───────────────────────────
+// A dollar price in a moving token is pinned by a server-signed QUOTE (lib/tool-pass-skr.js):
+// {wallet, amountRaw, iat, exp} under HMAC. The server signs nothing on chain and creates no
+// account — the app's own transaction opens the receiver's SKR account (idempotent) and pays it.
+// SKR never graces: no sanity-banded SKR price → no quote (503), never a guessed amount.
+const SKR_QUOTE_PRICE_MAX_AGE_MS = 15 * 60e3;   // an accepted tick older than this is stale → no quote
+const SKR_QUOTE_PRICE_REFRESH_MS = 60e3;        // …and one older than this is re-read before quoting
+let skrMintInfoCache = null;                    // { program, decimals } — both immutable, cached for good
+async function skrMintInfo() {
+  if (skrMintInfoCache) return skrMintInfoCache;
+  const j = await rpc.rpcJson("getAccountInfo", [SKR_MINT, { encoding: "jsonParsed", commitment: "confirmed" }]);
+  const v = j && j.result && j.result.value;
+  const parsed = v && v.data && v.data.parsed;
+  const program = v && v.owner, decimals = parsed && parsed.info && parsed.info.decimals;
+  // Read from the chain, never assumed (the mint is legacy SPL today; the program is a seed of the
+  // receiver's ATA, so a wrong guess would derive the wrong account).
+  if (!parsed || parsed.type !== "mint" || !TOOL_PASS_SKR.TOKEN_PROGRAMS.has(program) || !Number.isInteger(decimals)) throw new Error("could not read the SKR mint account");
+  skrMintInfoCache = { program, decimals };
+  return skrMintInfoCache;
+}
+// GET /api/tool-gate/skr-quote?wallet=
+app.get("/api/tool-gate/skr-quote", rateLimit("pay", { windowMs: 60000, max: 30 }), async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  const wallet = String(req.query.wallet || "").trim();
+  if (!SOL_ADDR_RE.test(wallet) || wallet === SOL_UNLOCK_WALLET) return res.status(400).json({ success: false, error: "need wallet" });
+  if (/^(1|true|yes)$/i.test(process.env.TOOLGATE_OFF || "")) return res.status(409).json({ success: false, error: "gate_off" });
+  if (!process.env.PREMIUM_ACCESS_KEY) return res.status(503).json({ success: false, error: "pass issuer not configured" });
+  const sp = TOOLGATE.skrPass;
+  if (!sp) return res.status(404).json({ success: false, error: "skr_pass_unavailable" });
+  const now = Date.now();
+  const priceAge = () => now - Number(kv.get("toolGateSkrUsdAt", 0));
+  if (!toolGatePrice.skrUsd || !(priceAge() <= SKR_QUOTE_PRICE_REFRESH_MS)) { try { await refreshSkrPrice(now); } catch (_) { /* judged below */ } }
+  const price = toolGatePrice.skrUsd;
+  if (!(Number.isFinite(price) && price > 0) || !(priceAge() <= SKR_QUOTE_PRICE_MAX_AGE_MS)) {
+    return res.status(503).json({ success: false, error: "skr_price_unavailable" });
+  }
+  // The quote's own guard: enough accepted ticks in the last 24 h, and this price within 3× of
+  // their median. A cold start or a ratcheted/spiked tick refuses to quote — no amount.
+  const gate = TOOL_PASS_SKR.quotePriceGate({ anchors: skrAnchors(), current: price, now: Date.now() });
+  if (!gate.ok) { console.warn("[tool-gate] SKR quote refused: " + gate.reason); return res.status(503).json({ success: false, error: "skr_price_unavailable" }); }
+  let info, amountRaw, ata;
+  try { info = await skrMintInfo(); } catch (e) { console.warn("[tool-gate] SKR mint read failed:", e.message); return res.status(503).json({ success: false, error: "skr_chain_unavailable" }); }
+  try {
+    amountRaw = TOOL_PASS_SKR.skrAmountRaw(sp.usd, price, info.decimals);
+    ata = TOOL_PASS_SKR.receiverAta({ receiver: SOL_UNLOCK_WALLET, mint: SKR_MINT, program: info.program });
+  } catch (e) { console.warn("[tool-gate] SKR quote maths failed:", e.message); return res.status(503).json({ success: false, error: "skr_price_unavailable" }); }
+  // Whether the receiving account exists yet (the first payer opens it, ~0.002 SOL, and the confirm
+  // sheet says so). null = could not tell; the app then warns as if it may be needed — the create
+  // instruction is idempotent, so it is harmless either way.
+  let receiverAtaExists = null;
+  try { const a = await rpc.rpcJson("getAccountInfo", [ata, { encoding: "base64", commitment: "confirmed" }]); if (a && a.result) receiverAtaExists = !!a.result.value; } catch (_) { /* unknown */ }
+  const q = TOOL_PASS_SKR.issueSkrQuote({ secret: process.env.PREMIUM_ACCESS_KEY, wallet, amountRaw, now });
+  if (!q) return res.status(503).json({ success: false, error: "pass issuer not configured" });
+  return res.status(200).json({
+    success: true, mint: SKR_MINT, decimals: info.decimals, program: info.program,
+    usd: sp.usd, priceUsd: price, amountRaw, amountUi: TOOL_PASS_SKR.rawToUi(amountRaw, info.decimals), days: sp.days,
+    receiver: SOL_UNLOCK_WALLET, receiverAta: ata, receiverAtaExists, issuedAt: q.iat, expiresAt: q.exp, quote: q.token,
+  });
+});
+// The SKR leg of POST /api/tool-gate/session. Verification (chain) and redemption (pure, unit-
+// tested) are separate: nothing is consumed unless every check passed, and an outage is `unavailable`.
+async function redeemSkrPayment({ wallet, paySig, skrQuote }) {
+  const secret = process.env.PREMIUM_ACCESS_KEY;
+  const quote = skrQuote ? TOOL_PASS_SKR.verifySkrQuote({ secret, token: skrQuote, wallet }) : null;
+  const v = await TOOL_PASS_SKR.verifySkrPaymentTx({ rpcJson: (m, p) => rpc.rpcJson(m, p), sig: paySig, wallet, mint: SKR_MINT, receiver: SOL_UNLOCK_WALLET });
+  return redeemPaidPass({ paySig, wallet, verified: v, sigStore, kv, quote, quoteInvalid: !!skrQuote && !quote,
+    usedElsewhere: (s) => !!require("./lib/hub/access").sigUsedInRegistry(hubStore.readRegistry(kv) || {}, s) });
+}
 // POST /api/tool-gate/session — the only issuer of tools-pass tokens (see the block above).
 // Body: { wallet, message, signature (base64), paySig? }  — or  { wallet, payIntent, paySig }.
 app.post("/api/tool-gate/session", rateLimit("pay", { windowMs: 60000, max: 30 }), async (req, res) => {
@@ -9987,6 +10088,15 @@ app.post("/api/tool-gate/session", rateLimit("pay", { windowMs: 60000, max: 30 }
   const paySig = String(b.paySig || "").trim();
   if (paySig) {
     if (paySig.length < 80 || paySig.length > 100) return res.status(400).json({ success: false, error: "bad payment signature" });
+    // The SKR leg (the Seeker app). Entered by an explicit skrQuote OR payKind:"skr" (a recovery on
+    // a device that no longer holds the quote); the SOL leg below is untouched and never reached.
+    if (b.skrQuote || String(b.payKind || "") === "skr") {
+      let sr;
+      try { sr = await redeemSkrPayment({ wallet, paySig, skrQuote: String(b.skrQuote || "") }); }
+      catch (e) { console.warn("[tool-gate] SKR redemption error:", e.message); return res.status(503).json({ success: false, error: "could not check this payment right now — try again in a moment; nothing was consumed", code: "skr_unavailable", retry: true }); }
+      if (!sr.ok) return res.status(sr.status || 200).json({ success: false, error: sr.error, code: sr.code, retry: !!sr.retry, definitive: !!sr.definitive, needed: sr.needed, amountRaw: sr.amountRaw });
+      return res.status(200).json({ success: true, via: "paid-skr", recovered: sr.recovered, amountRaw: sr.amountRaw, termDays: sr.termDays, pass: "t:" + issueToolPass(wallet, "paid", sr.ttlMs), days: sr.days });
+    }
     let v;
     // Minimum 1 lamport here: the real minimum is the one in force WHEN THE PAYMENT LANDED, and
     // redeemPaidPass checks it against the terms schedule at the transaction's block time.
@@ -10317,7 +10427,10 @@ app.get("/api/tool-gate/config", async (req, res) => {
     // The Seeker app's door: its OWN $ figure (holdUsd here, TOOLGATE.skrUsd) in SKR, live-priced.
     // A client that does not offer the door ignores this block; a null skrNeeded means "no price
     // right now" (the app says so).
-    skr: { mint: SKR_MINT, holdUsd: TOOLGATE.skrUsd, priceUsd: skrUsd, skrNeeded: skrUsd ? Math.ceil(TOOLGATE.skrUsd / skrUsd) : null, door: "skr" },
+    skr: { mint: SKR_MINT, holdUsd: TOOLGATE.skrUsd, priceUsd: skrUsd, skrNeeded: skrUsd ? Math.ceil(TOOLGATE.skrUsd / skrUsd) : null, door: "skr",
+      // The SKR-paid pass (Seeker app only): the dollar figure and days come from the terms schedule,
+      // skrNeeded is the live approximation for the sheet's sentence — the EXACT amount is the quote's.
+      pass: (() => { const sp = TOOLGATE.skrPass; return sp ? { usd: sp.usd, days: sp.days, skrNeeded: skrUsd ? Math.ceil(sp.usd / skrUsd) : null } : null; })() },
   });
 });
 // ── /host-image: owner's permanent image host (Arweave via the funded Turbo key) ─────────────
@@ -10420,6 +10533,10 @@ app.get("/api/verify-sol-payment", async (req, res) => {
     // A payment already claimed as a Lock-to-Earn platform month lands in this same wallet
     // (deep dive P1-051, the sibling of the tools-pass check in lib/tool-pass-redeem.js).
     if (sigStore.has("hub-access:" + sig) || require("./lib/hub/access").sigUsedInRegistry(hubStore.readRegistry(kv) || {}, sig)) return res.status(200).json({ success: false, error: "This payment was already used for a platform-access month." });
+    // The leg claim comes first (lib/tool-pass-redeem.js claimSolLeg): this route shares the "sol:"
+    // key with the SOL and SKR pass legs, so it must not consume a signature one of them owns.
+    const legClaim = require("./lib/tool-pass-redeem").claimSolLeg(sigStore, sig, v.payer);
+    if (!legClaim.ok) return res.status(200).json({ success: false, error: legClaim.error });
     if (!sigStore.add("sol:" + sig)) {
       return res.status(200).json({ success: false, error: "This payment was already redeemed — each transfer unlocks once." });
     }
