@@ -3072,5 +3072,6 @@
   "A payment of {amount} SKR was sent but could not buy a pass: {reason}. Keep this signature and contact support: {sig}": "{amount} SKR का भुगतान भेजा गया, पर वह पास नहीं खरीद सका: {reason}। इस सिग्नेचर को संभालकर रखें और सपोर्ट से संपर्क करें: {sig}",
   "Dismiss": "हटाएँ",
   "Needs attention": "ध्यान देने की ज़रूरत है",
-  "We can't tell yet whether this payment went through. If SKR left your wallet, look in your wallet's history and contact support.": "हम अभी यह नहीं बता सकते कि यह भुगतान पूरा हुआ या नहीं। अगर SKR आपके वॉलेट से निकल गया है, तो अपने वॉलेट का इतिहास देखें और सपोर्ट से संपर्क करें।"
+  "We can't tell yet whether this payment went through. If SKR left your wallet, look in your wallet's history and contact support.": "हम अभी यह नहीं बता सकते कि यह भुगतान पूरा हुआ या नहीं। अगर SKR आपके वॉलेट से निकल गया है, तो अपने वॉलेट का इतिहास देखें और सपोर्ट से संपर्क करें।",
+  "This app has an in-app swap, in the Toolkit and on the Swap tab. This page isn't telling you to use it — only that it exists.": "इस ऐप में एक इन-ऐप स्वैप है — टूलकिट में और Swap टैब पर। यह पेज आपसे इसका उपयोग करने को नहीं कह रहा — बस यह कि यह मौजूद है।"
 }

@@ -3072,5 +3072,6 @@
   "A payment of {amount} SKR was sent but could not buy a pass: {reason}. Keep this signature and contact support: {sig}": "Pembayaran {amount} SKR terkirim tetapi tidak bisa membeli pass: {reason}. Simpan tanda tangan ini dan hubungi dukungan: {sig}",
   "Dismiss": "Tutup",
   "Needs attention": "Perlu perhatian",
-  "We can't tell yet whether this payment went through. If SKR left your wallet, look in your wallet's history and contact support.": "Kami belum bisa memastikan apakah pembayaran ini berhasil. Jika SKR keluar dari dompetmu, lihat riwayat dompetmu dan hubungi dukungan."
+  "We can't tell yet whether this payment went through. If SKR left your wallet, look in your wallet's history and contact support.": "Kami belum bisa memastikan apakah pembayaran ini berhasil. Jika SKR keluar dari dompetmu, lihat riwayat dompetmu dan hubungi dukungan.",
+  "This app has an in-app swap, in the Toolkit and on the Swap tab. This page isn't telling you to use it — only that it exists.": "Aplikasi ini punya swap di dalam aplikasi, di Perangkat dan di tab Swap. Halaman ini tidak menyuruhmu memakainya — hanya memberi tahu bahwa itu ada."
 }
