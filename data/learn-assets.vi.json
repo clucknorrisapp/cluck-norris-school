@@ -1359,15 +1359,15 @@
     "event": "Ava Labs được thành lập bởi Emin Gun Sirer, Kevin Sekniqi và Ted Yin"
    },
    {
-    "year": "March 2020",
+    "year": "tháng 3/2020",
     "event": "Mã nguồn Avalanche được phát hành mã nguồn mở"
    },
    {
-    "year": "July 2020",
+    "year": "tháng 7/2020",
     "event": "Đợt mở bán token công khai huy động ~$42 triệu trong khoảng bốn tiếng rưỡi"
    },
    {
-    "year": "September 2020",
+    "year": "tháng 9/2020",
     "event": "Mainnet Avalanche đi vào hoạt động"
    },
    {
@@ -1375,15 +1375,15 @@
     "event": "Subnet và hệ sinh thái DeFi mở rộng; AVAX đạt đỉnh lịch sử trong thị trường tăng giá"
    },
    {
-    "year": "Dec 2024",
+    "year": "tháng 12/2024",
     "event": "Nâng cấp Avalanche9000 (Etna): subnet trở thành 'L1', chi phí ra mắt giảm ~99%"
    },
    {
-    "year": "Apr 2025",
+    "year": "tháng 4/2025",
     "event": "Nâng cấp Octane giảm mạnh phí giao dịch C-Chain"
    },
    {
-    "year": "Nov 2025",
+    "year": "tháng 11/2025",
     "event": "Nâng cấp Granite: thời gian block động (hoàn tất dưới 2 giây) và ký giao dịch sinh trắc học"
    },
    {
@@ -1790,15 +1790,15 @@
     "event": "Mạng lưới chuyển sang một mức nền người dùng hàng ngày ổn định hơn; các nâng cấp Catchain và công cụ tiếp tục; mạng lưới tính toán AI Cocoon ra mắt trên mainnet vào tháng 12."
    },
    {
-    "year": "Apr 2026",
+    "year": "tháng 4/2026",
     "event": "Catchain 2.0 chạy (~400ms mỗi block, ~0.6s finality); Telegram stake ~2.2M TON, tiếp quản vai trò vận hành của Foundation, và trở thành validator lớn nhất của TON theo kế hoạch MTONGA."
    },
    {
-    "year": "May 2026",
+    "year": "tháng 5/2026",
     "event": "Durov công bố lộ trình bảy bước 'Make TON Great Again': Telegram làm nhà vận hành/validator chính cùng với việc cắt phí ~6 lần; giá TON tăng vọt và dòng vốn staking tăng mạnh."
    },
    {
-    "year": "Jun 2026",
+    "year": "tháng 6/2026",
     "event": "Một cuộc bỏ phiếu cộng đồng (~81%) đổi tên Toncoin trở lại thành Gram (GRAM), có hiệu lực từ ngày 15 tháng 6 — tỷ lệ 1:1, không cần migration, hồi sinh cái tên nguyên gốc năm 2018."
    }
   ],
@@ -2203,11 +2203,11 @@
     "event": "NEAR huy động vốn venture qua nhiều vòng (các nhà hậu thuẫn gồm Andreessen Horowitz, đơn vị dẫn dắt một vòng năm 2020) và phát triển thiết kế proof-of-stake sharded của mình."
    },
    {
-    "year": "April 2020",
+    "year": "tháng 4/2020",
     "event": "Mainnet NEAR ra mắt; mạng lưới trở thành do cộng đồng vận hành hoàn toàn vào tháng 9 năm 2020."
    },
    {
-    "year": "October 2020",
+    "year": "tháng 10/2020",
     "event": "Một cuộc bỏ phiếu cộng đồng kích hoạt việc chuyển token NEAR, mở ra giao dịch và staking."
    },
    {
@@ -2219,7 +2219,7 @@
     "event": "NEAR đổi thương hiệu quanh 'chain abstraction'; ra mắt Chain Signatures và, vào tháng 11 năm 2024, NEAR Intents."
    },
    {
-    "year": "August 2024",
+    "year": "tháng 8/2024",
     "event": "Nightshade 2.0 chạy, bổ sung stateless validation để hạ chi phí phần cứng validator và cải thiện phi tập trung hóa."
    },
    {
@@ -2354,11 +2354,11 @@
     "event": "Testnet có thưởng của Sui ra mắt; Mysten Labs đóng một vòng Series B $300M do FTX Ventures dẫn dắt (với a16z, Binance Labs, Jump và những nhà khác) ở định giá ~$2B."
    },
    {
-    "year": "April-May 2023",
+    "year": "tháng 4–5/2023",
     "event": "Ra mắt token SUI và phân phối cộng đồng quanh thời điểm mainnet chạy."
    },
    {
-    "year": "May 2023",
+    "year": "tháng 5/2023",
     "event": "Mainnet Sui chạy với token SUI, staking, và smart contract Move."
    },
    {
@@ -2366,7 +2366,7 @@
     "event": "Đồng thuận dựa trên DAG Mysticeti lên mainnet, cắt finality xuống khoảng 400ms."
    },
    {
-    "year": "May 2025",
+    "year": "tháng 5/2025",
     "event": "DEX Cetus bị khai thác ~$223M; các validator phối hợp để đóng băng phần lớn số tiền bị đánh cắp on-chain, khơi mào một cuộc tranh luận về việc Sui thực sự phi tập trung đến đâu."
    },
    {
@@ -2485,19 +2485,19 @@
     "event": "Đội ngũ lõi xây dựng Diem (trước đây là Libra), dự án blockchain của Meta, tạo ra ngôn ngữ Move và nghiên cứu Block-STM"
    },
    {
-    "year": "2022 (Jan)",
+    "year": "tháng 1/2022",
     "event": "Meta xếp Diem lại; Aptos Labs tách ra để tiếp tục công nghệ như một L1 độc lập"
    },
    {
-    "year": "2022 (Mar-Jul)",
+    "year": "tháng 3–7/2022",
     "event": "Huy động ~$200M (a16z, Tiger Global, Multicoin) rồi ~$150M nữa (FTX Ventures, Jump Crypto); chạy các testnet có thưởng"
    },
    {
-    "year": "2022 (Oct)",
+    "year": "tháng 10/2022",
     "event": "Mainnet chạy ngày 18 tháng 10; airdrop APT cho những người dùng testnet sớm. Đợt ra mắt bị chỉ trích về phân bổ token nặng VC và việc công bố tokenomics"
    },
    {
-    "year": "2023 (Jan)",
+    "year": "tháng 1/2023",
     "event": "APT đạt đỉnh mọi thời đại quanh $20 — một mức mà nó đã ở dưới xa kể từ đó (giảm ~97% đến giữa năm 2026)"
    },
    {

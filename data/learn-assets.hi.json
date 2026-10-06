@@ -1359,15 +1359,15 @@
     "event": "Ava Labs की स्थापना Emin Gun Sirer, Kevin Sekniqi, और Ted Yin द्वारा"
    },
    {
-    "year": "March 2020",
+    "year": "मार्च 2020",
     "event": "Avalanche codebase open source के रूप में जारी"
    },
    {
-    "year": "July 2020",
+    "year": "जुलाई 2020",
     "event": "सार्वजनिक टोकन बिक्री लगभग साढ़े चार घंटे में ~$42 मिलियन जुटाती है"
    },
    {
-    "year": "September 2020",
+    "year": "सितंबर 2020",
     "event": "Avalanche mainnet लाइव होता है"
    },
    {
@@ -1375,15 +1375,15 @@
     "event": "Subnets और DeFi ecosystem का विस्तार होता है; AVAX बुल मार्केट के दौरान अपने सर्वकालिक उच्च पर पहुँचता है"
    },
    {
-    "year": "Dec 2024",
+    "year": "दिसंबर 2024",
     "event": "Avalanche9000 (Etna) अपग्रेड: subnets 'L1s' बनते हैं, लॉन्च लागत ~99% घटती है"
    },
    {
-    "year": "Apr 2025",
+    "year": "अप्रैल 2025",
     "event": "Octane अपग्रेड C-Chain ट्रांज़ैक्शन फीस को तेज़ी से घटाता है"
    },
    {
-    "year": "Nov 2025",
+    "year": "नवंबर 2025",
     "event": "Granite अपग्रेड: dynamic block times (sub-2s finality) और biometric ट्रांज़ैक्शन signing"
    },
    {
@@ -1790,15 +1790,15 @@
     "event": "नेटवर्क दैनिक उपयोगकर्ताओं की एक स्थिर आधार-रेखा की ओर बढ़ता है; Catchain और टूलिंग अपग्रेड जारी रहते हैं; दिसंबर में Cocoon AI-कंप्यूट नेटवर्क mainnet पर लॉन्च होता है।"
    },
    {
-    "year": "Apr 2026",
+    "year": "अप्रैल 2026",
     "event": "Catchain 2.0 लाइव होता है (~400ms ब्लॉक, ~0.6s finality); Telegram ~2.2M TON stake करता है, Foundation की परिचालन भूमिका संभालता है, और MTONGA योजना के तहत TON का सबसे बड़ा validator बन जाता है।"
    },
    {
-    "year": "May 2026",
+    "year": "मई 2026",
     "event": "Durov सात-चरणीय 'Make TON Great Again' रोडमैप प्रकाशित करते हैं: Telegram लीड ऑपरेटर/validator के रूप में साथ ही ~6x फीस कटौती; TON की कीमत उछलती है और staking प्रवाह बढ़ता है।"
    },
    {
-    "year": "Jun 2026",
+    "year": "जून 2026",
     "event": "एक सामुदायिक वोट (~81%) Toncoin का नाम वापस Gram (GRAM) कर देता है, जो 15 जून से प्रभावी — 1:1, कोई migration नहीं, मूल 2018 नाम को पुनर्जीवित करता है।"
    }
   ],
@@ -2203,11 +2203,11 @@
     "event": "NEAR कई राउंड के ज़रिए venture funding जुटाता है (समर्थकों में Andreessen Horowitz शामिल है, जिसने 2020 का एक राउंड लीड किया) और अपना sharded proof-of-stake डिज़ाइन विकसित करता है।"
    },
    {
-    "year": "April 2020",
+    "year": "अप्रैल 2020",
     "event": "NEAR mainnet लॉन्च होता है; नेटवर्क सितंबर 2020 तक पूरी तरह समुदाय-संचालित हो जाता है।"
    },
    {
-    "year": "October 2020",
+    "year": "अक्टूबर 2020",
     "event": "एक सामुदायिक वोट NEAR token transfers सक्षम करता है, ट्रेडिंग और staking खोलता है।"
    },
    {
@@ -2219,7 +2219,7 @@
     "event": "NEAR 'chain abstraction' के इर्द-गिर्द रीब्रांड करता है; Chain Signatures और, नवंबर 2024 में, NEAR Intents लॉन्च करता है।"
    },
    {
-    "year": "August 2024",
+    "year": "अगस्त 2024",
     "event": "Nightshade 2.0 लाइव होता है, validator हार्डवेयर लागत कम करने और विकेंद्रीकरण सुधारने के लिए stateless validation जोड़ता है।"
    },
    {
@@ -2354,11 +2354,11 @@
     "event": "Sui का incentivized testnet लॉन्च होता है; Mysten Labs, FTX Ventures (a16z, Binance Labs, Jump और अन्य के साथ) के नेतृत्व में ~$2B के मूल्यांकन पर $300M Series B बंद करता है।"
    },
    {
-    "year": "April-May 2023",
+    "year": "अप्रैल–मई 2023",
     "event": "mainnet go-live के इर्द-गिर्द SUI token लॉन्च और सामुदायिक वितरण।"
    },
    {
-    "year": "May 2023",
+    "year": "मई 2023",
     "event": "Sui mainnet, SUI token, staking, और Move स्मार्ट कॉन्ट्रैक्ट के साथ लाइव होता है।"
    },
    {
@@ -2366,7 +2366,7 @@
     "event": "Mysticeti DAG-आधारित consensus mainnet पर पहुँचता है, finality को लगभग 400ms तक घटाता है।"
    },
    {
-    "year": "May 2025",
+    "year": "मई 2025",
     "event": "Cetus DEX ~$223M के लिए exploit होता है; validators अधिकांश चुराए गए funds को on-chain फ़्रीज़ करने के लिए समन्वय करते हैं, यह बहस छेड़ते हुए कि Sui वास्तव में कितना विकेंद्रीकृत है।"
    },
    {
@@ -2485,19 +2485,19 @@
     "event": "Core टीम Diem (पूर्व में Libra), Meta का ब्लॉकचेन प्रोजेक्ट बनाती है, Move भाषा और Block-STM शोध बनाती है"
    },
    {
-    "year": "2022 (Jan)",
+    "year": "जनवरी 2022",
     "event": "Meta, Diem को टाल देता है; Aptos Labs तकनीक को एक स्वतंत्र L1 के रूप में जारी रखने के लिए अलग हो जाता है"
    },
    {
-    "year": "2022 (Mar-Jul)",
+    "year": "मार्च–जुलाई 2022",
     "event": "~$200M जुटाता है (a16z, Tiger Global, Multicoin) फिर ~$150M और (FTX Ventures, Jump Crypto); incentivized testnets चलाता है"
    },
    {
-    "year": "2022 (Oct)",
+    "year": "अक्टूबर 2022",
     "event": "Mainnet 18 अक्टूबर को लॉन्च होता है; प्रारंभिक testnet उपयोगकर्ताओं को APT airdrop। लॉन्च VC-भारी token आवंटन और tokenomics प्रकटीकरण को लेकर आलोचना खींचता है"
    },
    {
-    "year": "2023 (Jan)",
+    "year": "जनवरी 2023",
     "event": "APT लगभग $20 के आसपास अपने all-time high पर पहुँचता है — एक स्तर जिसके यह तब से काफ़ी नीचे रहा है (मध्य-2026 तक ~97% नीचे)"
    },
    {

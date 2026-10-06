@@ -1359,15 +1359,15 @@
     "event": "Ava Labs fundada por Emin Gun Sirer, Kevin Sekniqi e Ted Yin"
    },
    {
-    "year": "March 2020",
+    "year": "março de 2020",
     "event": "Base de código da Avalanche lançada como open source"
    },
    {
-    "year": "July 2020",
+    "year": "julho de 2020",
     "event": "Venda pública de tokens arrecada ~$42 milhões em cerca de quatro horas e meia"
    },
    {
-    "year": "September 2020",
+    "year": "setembro de 2020",
     "event": "A mainnet da Avalanche entra no ar"
    },
    {
@@ -1375,15 +1375,15 @@
     "event": "Subnets e o ecossistema DeFi se expandem; a AVAX atinge sua máxima histórica durante o bull market"
    },
    {
-    "year": "Dec 2024",
+    "year": "dezembro de 2024",
     "event": "Upgrade Avalanche9000 (Etna): subnets viram 'L1s', custos de lançamento cortados ~99%"
    },
    {
-    "year": "Apr 2025",
+    "year": "abril de 2025",
     "event": "Upgrade Octane reduz acentuadamente as taxas de transação da C-Chain"
    },
    {
-    "year": "Nov 2025",
+    "year": "novembro de 2025",
     "event": "Upgrade Granite: tempos de bloco dinâmicos (finality em menos de 2s) e assinatura biométrica de transações"
    },
    {
@@ -1790,15 +1790,15 @@
     "event": "A rede se estabiliza em uma base mais constante de usuários diários; os upgrades do Catchain e do ferramental continuam; a rede de computação para IA Cocoon é lançada na mainnet em dezembro."
    },
    {
-    "year": "Apr 2026",
+    "year": "abril de 2026",
     "event": "O Catchain 2.0 entra no ar (blocos de ~400ms, finalidade de ~0,6s); o Telegram faz staking de ~2.2M TON, assume o papel operacional da Foundation e se torna o maior validador da TON sob o plano MTONGA."
    },
    {
-    "year": "May 2026",
+    "year": "maio de 2026",
     "event": "Durov publica o roadmap de sete etapas 'Make TON Great Again': Telegram como operador/validador líder mais um corte de taxas de ~6x; o preço do TON dispara e as entradas de staking crescem fortemente."
    },
    {
-    "year": "Jun 2026",
+    "year": "junho de 2026",
     "event": "Uma votação da comunidade (~81%) renomeia o Toncoin de volta para Gram (GRAM), com efeito em 15 de junho — 1:1, sem migração, revivendo o nome original de 2018."
    }
   ],
@@ -2203,11 +2203,11 @@
     "event": "A NEAR levanta capital de risco em múltiplas rodadas (entre os investidores está a Andreessen Horowitz, que liderou uma rodada em 2020) e desenvolve seu design proof-of-stake com sharding."
    },
    {
-    "year": "April 2020",
+    "year": "abril de 2020",
     "event": "A mainnet da NEAR é lançada; a rede passa a ser totalmente operada pela comunidade em setembro de 2020."
    },
    {
-    "year": "October 2020",
+    "year": "outubro de 2020",
     "event": "Uma votação da comunidade habilita as transferências do token NEAR, abrindo o trading e o staking."
    },
    {
@@ -2219,7 +2219,7 @@
     "event": "A NEAR se reposiciona em torno da 'chain abstraction'; lança as Chain Signatures e, em novembro de 2024, o NEAR Intents."
    },
    {
-    "year": "August 2024",
+    "year": "agosto de 2024",
     "event": "O Nightshade 2.0 entra no ar, adicionando stateless validation para reduzir os custos de hardware dos validadores e melhorar a descentralização."
    },
    {
@@ -2354,11 +2354,11 @@
     "event": "A testnet incentivada da Sui é lançada; a Mysten Labs fecha uma Series B de $300M liderada pela FTX Ventures (com a16z, Binance Labs, Jump e outros) a uma avaliação de ~$2B."
    },
    {
-    "year": "April-May 2023",
+    "year": "abril–maio de 2023",
     "event": "Lançamento do token SUI e distribuição à comunidade em torno da estreia da mainnet."
    },
    {
-    "year": "May 2023",
+    "year": "maio de 2023",
     "event": "A mainnet da Sui entra no ar com o token SUI, staking e smart contracts em Move."
    },
    {
@@ -2366,7 +2366,7 @@
     "event": "O consenso baseado em DAG Mysticeti chega à mainnet, cortando a finalidade para cerca de 400ms."
    },
    {
-    "year": "May 2025",
+    "year": "maio de 2025",
     "event": "O DEX Cetus é explorado em ~$223M; os validadores se coordenam para congelar a maior parte dos fundos roubados on-chain, acendendo um debate sobre o quão descentralizada a Sui realmente é."
    },
    {
@@ -2485,19 +2485,19 @@
     "event": "A equipe central constrói a Diem (antes Libra), o projeto de blockchain da Meta, criando a linguagem Move e a pesquisa do Block-STM"
    },
    {
-    "year": "2022 (Jan)",
+    "year": "janeiro de 2022",
     "event": "A Meta engaveta a Diem; a Aptos Labs faz o spin-off para continuar a tecnologia como uma L1 independente"
    },
    {
-    "year": "2022 (Mar-Jul)",
+    "year": "março–julho de 2022",
     "event": "Levanta ~$200M (a16z, Tiger Global, Multicoin) e depois mais ~$150M (FTX Ventures, Jump Crypto); roda testnets incentivadas"
    },
    {
-    "year": "2022 (Oct)",
+    "year": "outubro de 2022",
     "event": "A mainnet é lançada em 18 de outubro; airdrop de APT para os primeiros usuários da testnet. O lançamento atrai críticas pela alocação de tokens pesada em VCs e pela divulgação das tokenomics"
    },
    {
-    "year": "2023 (Jan)",
+    "year": "janeiro de 2023",
     "event": "O APT atinge seu topo histórico em torno de $20 — um nível do qual ficou muito abaixo desde então (queda de ~97% até meados de 2026)"
    },
    {

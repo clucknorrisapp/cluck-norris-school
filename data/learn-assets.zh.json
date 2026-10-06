@@ -1359,15 +1359,15 @@
     "event": "Ava Labs 由 Emin Gun Sirer、Kevin Sekniqi 和 Ted Yin 创立"
    },
    {
-    "year": "March 2020",
+    "year": "2020年3月",
     "event": "Avalanche 代码库以开源形式发布"
    },
    {
-    "year": "July 2020",
+    "year": "2020年7月",
     "event": "公开代币销售在约四个半小时内募集约 $42M"
    },
    {
-    "year": "September 2020",
+    "year": "2020年9月",
     "event": "Avalanche 主网正式上线"
    },
    {
@@ -1375,15 +1375,15 @@
     "event": "子网和 DeFi 生态扩张；AVAX 在牛市中创下历史最高价"
    },
    {
-    "year": "Dec 2024",
+    "year": "2024年12月",
     "event": "Avalanche9000（Etna）升级：子网变为 'L1'，启动成本削减约 99%"
    },
    {
-    "year": "Apr 2025",
+    "year": "2025年4月",
     "event": "Octane 升级大幅降低 C-Chain 交易费用"
    },
    {
-    "year": "Nov 2025",
+    "year": "2025年11月",
     "event": "Granite 升级：动态出块时间（低于 2 秒的最终性）和生物识别交易签名"
    },
    {
@@ -1790,15 +1790,15 @@
     "event": "网络的日活用户转入更平稳的基线；Catchain 与工具链升级持续推进；Cocoon AI 算力网络于 12 月上线主网。"
    },
    {
-    "year": "Apr 2026",
+    "year": "2026年4月",
     "event": "Catchain 2.0 上线（约 400ms 出块、约 0.6 秒最终确认）；Telegram 质押约 2.2M TON，接管 Foundation 的运营职能，并在 MTONGA 计划下成为 TON 最大的验证者。"
    },
    {
-    "year": "May 2026",
+    "year": "2026年5月",
     "event": "Durov 发布七步“Make TON Great Again”路线图：Telegram 担任主运营方/验证者，外加约 6 倍的手续费下调；TON 价格飙升，质押资金大量涌入。"
    },
    {
-    "year": "Jun 2026",
+    "year": "2026年6月",
     "event": "社区投票（约 81% 赞成）将 Toncoin 改回 Gram（GRAM），自 6 月 15 日起生效——1:1 兑换、无需迁移，重新启用 2018 年的原始名称。"
    }
   ],
@@ -2203,11 +2203,11 @@
     "event": "NEAR 通过多轮融资获得风险投资（投资方包括 Andreessen Horowitz，后者领投了 2020 年的一轮），并开发其分片权益证明设计。"
    },
    {
-    "year": "April 2020",
+    "year": "2020年4月",
     "event": "NEAR 主网上线；网络于 2020 年 9 月转为完全由社区运营。"
    },
    {
-    "year": "October 2020",
+    "year": "2020年10月",
     "event": "社区投票开启 NEAR 代币转账，交易和质押正式开放。"
    },
    {
@@ -2219,7 +2219,7 @@
     "event": "NEAR 围绕“链抽象”重塑品牌；推出 Chain Signatures，并于 2024 年 11 月推出 NEAR Intents。"
    },
    {
-    "year": "August 2024",
+    "year": "2024年8月",
     "event": "Nightshade 2.0 上线，加入无状态验证，降低验证者硬件成本、改善去中心化。"
    },
    {
@@ -2354,11 +2354,11 @@
     "event": "Sui 的激励测试网上线；Mysten Labs 完成由 FTX Ventures 领投（a16z、Binance Labs、Jump 等参投）的 $300M B 轮融资，估值约 $2B。"
    },
    {
-    "year": "April-May 2023",
+    "year": "2023年4–5月",
     "event": "SUI 代币发行与社区分发，与主网上线同步进行。"
    },
    {
-    "year": "May 2023",
+    "year": "2023年5月",
     "event": "Sui 主网上线，带来 SUI 代币、质押和 Move 智能合约。"
    },
    {
@@ -2366,7 +2366,7 @@
     "event": "基于 DAG 的 Mysticeti 共识登陆主网，把最终确认压缩到约 400ms。"
    },
    {
-    "year": "May 2025",
+    "year": "2025年5月",
     "event": "Cetus DEX 遭攻击，损失约 $223M；验证者协同在链上冻结了大部分被盗资金，引发关于 Sui 究竟有多去中心化的争论。"
    },
    {
@@ -2485,19 +2485,19 @@
     "event": "核心团队打造 Meta 的区块链项目 Diem（前身 Libra），创造出 Move 语言和 Block-STM 研究成果"
    },
    {
-    "year": "2022 (Jan)",
+    "year": "2022年1月",
     "event": "Meta 搁置 Diem；Aptos Labs 剥离独立，以独立 L1 的形式延续这项技术"
    },
    {
-    "year": "2022 (Mar-Jul)",
+    "year": "2022年3–7月",
     "event": "先融资约 $200M（a16z、Tiger Global、Multicoin），随后再融约 $150M（FTX Ventures、Jump Crypto）；运行激励测试网"
    },
    {
-    "year": "2022 (Oct)",
+    "year": "2022年10月",
     "event": "主网于 10 月 18 日上线；向早期测试网用户空投 APT。发布因代币分配偏向 VC 和代币经济学披露不足而招致批评"
    },
    {
-    "year": "2023 (Jan)",
+    "year": "2023年1月",
     "event": "APT 触及约 $20 的历史高点——此后价格长期远低于该水平（至 2026 年年中已下跌约 97%）"
    },
    {
