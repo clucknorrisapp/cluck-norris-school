@@ -156,6 +156,7 @@ const AI_LANGS = {
   en: "English",
   zh: "Simplified Chinese (简体中文)",
   es: "Spanish",
+  it: "Italian",
   pt: "Portuguese (Brazil)",
   ru: "Russian",
   tr: "Turkish",
