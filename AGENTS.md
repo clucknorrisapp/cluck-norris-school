@@ -606,9 +606,11 @@ grant material. Translations live in `public/i18n/*.json` (+ `*.school.json`, `*
 the count in sync when adding one. ⚠️ A new language is wired into MANY lists, not one — `public/i18n.js`
 (picker + detection), `public/read-aloud.js`, `server.js` (`AI_LANGS`, `I18N_MT_LANGNAMES`,
 `ttsLangCode`), `classroom.html` / `crypto-school.html`, `src/shared.jsx`, `scripts/build-curriculum.cjs`
-and the `LANGS` arrays in the audit/tests. Not yet extended (owner call, follow-ups): the `/learn`
-asset pages (`LEARN_TR_LANGS` + `data/learn-assets.<lang>.json`, 18 assets), and the pinned google/ios
-store bundles, which stay at seven (`excludeLangs` in `store-edition/store-edition.json` makes
+and the `LANGS` arrays in the audit/tests, plus the `/learn` asset pages (`LEARN_TR_LANGS`, the
+chrome dictionaries in `lib/learn-pages.js` and `data/learn-assets.<lang>.json`, all ten since
+2026-10-06). `scripts/lang-lists-test.cjs` (CI) fails when a picker language is missing from any
+server-side list — Italian was missing from the tutor's `AI_LANGS` until 2026-10-06. Not yet
+extended (owner call, follow-up): the pinned google/ios store bundles, which stay at seven (`excludeLangs` in `store-edition/store-edition.json` makes
 `build-store-edition.mjs` drop ko/tr/id from the shipped picker and dictionaries; extend
 `store-render-scan.cjs` and remove it to ship ten).
 

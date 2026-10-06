@@ -615,6 +615,11 @@ jobs:
       # positional data.content[0].text read, fails here instead of on production.
       - name: app Claude call shapes (Sonnet 5.5)
         run: node scripts/claude-models-test.cjs
+      # Every picker language must reach every server-side list that serves a learner in it
+      # (tutor reply language, machine translation, read-aloud, /learn pages and their files).
+      # Italian sat in the picker for months with no tutor entry; nothing noticed.
+      - name: language lists cover the picker
+        run: node scripts/lang-lists-test.cjs
       # Replays thousands of ticks against the REAL engine gate logic (lib/engine-decisions.js,
       # zero deps). Every scenario is a live incident from 2026-08-27/28 — the decay loop, the
       # buyback stall, sleeve starvation — plus a fuzz pinning the caps/floors/pacing invariants.
