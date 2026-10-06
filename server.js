@@ -156,6 +156,7 @@ const AI_LANGS = {
   en: "English",
   zh: "Simplified Chinese (简体中文)",
   es: "Spanish",
+  it: "Italian",
   pt: "Portuguese (Brazil)",
   ru: "Russian",
   tr: "Turkish",
@@ -19000,7 +19001,7 @@ function loadLearnAssets() {
 // Translations: data/learn-assets.<lang>.json (same shape, translated fields only) is
 // overlay-merged per-asset onto the English base — a missing file/asset/field falls back
 // to English, so a partial translation degrades gracefully instead of 404ing.
-const LEARN_TR_LANGS = ["es", "it", "pt", "vi", "zh", "hi"];
+const LEARN_TR_LANGS = ["es", "it", "pt", "vi", "zh", "hi", "ko", "tr", "id"];
 const _learnTrCache = new Map(); // lang -> {at, map: slug->overlay}
 function loadLearnTranslations(lang) {
   const now = Date.now();

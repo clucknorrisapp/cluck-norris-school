@@ -41,7 +41,7 @@ const opt = (n, d) => { const i = args.indexOf("--" + n); return i >= 0 ? args[i
 const has = (n) => args.includes("--" + n);
 const SITE = opt("site", "http://127.0.0.1:3111");
 const BASE = opt("base", "https://clucknorris.app");
-const LANGS = String(opt("langs", "en,es,hi,it,pt,vi,zh")).split(",").map((s) => s.trim()).filter(Boolean);
+const LANGS = String(opt("langs", "en,es,hi,it,pt,vi,zh,ko,tr,id")).split(",").map((s) => s.trim()).filter(Boolean);
 const SURFACES = String(opt("surfaces", "belt,incubator,lplab,library")).split(",");
 const OUT = path.resolve(opt("out", "tts-prewarm.json"));
 const PER_MIN = parseInt(opt("per-min", "50"), 10);
