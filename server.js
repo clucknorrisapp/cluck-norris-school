@@ -13158,6 +13158,11 @@ app.get("/api/cuna-stake/config", async (req, res) => {
       ok: true,
       armed: p.armed,
       startedAt: p.startedAt,
+      // Started once and now disarmed = the programme has STOPPED (owner, 2026-11-09: "stop lock
+      // to earn"), which is not the same page as "not launched yet". disarm() keeps startedAt, so
+      // this is the one signal that tells the two apart; the page swaps "lock now" for a stopped
+      // notice on it.
+      ended: !p.armed && !!p.startedAt,
       mint: p.config.mint,
       decimals: 9,
       terms: {
