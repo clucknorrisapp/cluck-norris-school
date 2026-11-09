@@ -120,8 +120,17 @@
 <div class="wrap">
 
   <h1>CUNA LOCK TO EARN</h1>
-  <p class="sub">Lock your CUNA and earn a share of the tokens the vesting schedules release every
+  <p class="sub" id="lede">Lock your CUNA and earn a share of the tokens the vesting schedules release every
   day. Non-custodial &mdash; the lock is yours, on Jupiter&rsquo;s program. We never hold anything.</p>
+
+  <div id="ended" class="note" hidden>
+    <b class="disp">LOCK TO EARN HAS STOPPED</b><br/>
+    The CUNA lock-to-earn program is no longer running. Locks don&rsquo;t earn anything now, and a
+    new lock made today won&rsquo;t either. Your locks are still yours on Jupiter Lock &mdash; when
+    one ends, claim it at <a href="https://clucknorris.app/locker-room" target="_blank" rel="noopener">the Locker Room</a>
+    or on <a href="https://lock.jup.ag" target="_blank" rel="noopener">Jupiter</a>. Connect your
+    wallet below to see your locks and what they earned before the program stopped.
+  </div>
 
   <div id="notlive" class="note" hidden>
     <b class="disp">NOT LIVE YET</b><br/>
@@ -317,7 +326,15 @@
     return fetch("/api/cuna-stake/config").then(function (r) { return r.json(); }).then(function (d) {
       if (!d || !d.ok) throw new Error((d && d.error) || "could not read the program");
       CFG = d; DEC = d.decimals || 9;
-      $("notlive").hidden = !!d.armed;
+      // Stopped (started once, now disarmed) is its own state: no "lock now", no lock builder,
+      // no pool presented as something still being paid. Only "not launched yet" gets #notlive.
+      var ended = !!d.ended;
+      $("notlive").hidden = !!d.armed || ended;
+      $("ended").hidden = !ended;
+      $("buildCard").hidden = ended;
+      if (ended) {
+        $("lede").textContent = "This program has stopped. Nothing is earning and nothing new is being paid out from the pool.";
+      }
       // A scan that has never succeeded reports a pool of "0", and "0 CUNA" reads as a real
       // number rather than a failure to read the chain — say so instead of showing a false zero.
       // A scan that DID succeed at some point but is now stale still has a real (if aging) figure
@@ -326,6 +343,9 @@
       if (poolFailed) {
         $("pool").textContent = "—";
         $("poolsub").innerHTML = '<span class="bad">Couldn’t read the chain</span>';
+      } else if (ended) {
+        $("pool").textContent = "STOPPED";
+        $("poolsub").textContent = "The program has stopped. Nothing is being paid out from the pool.";
       } else {
         $("pool").textContent = toTokens(d.poolTodayRaw) + " CUNA";
         // Deliberately does NOT quote a percentage or the size of the treasury's unlock (owner,
@@ -341,8 +361,8 @@
       $("tDur").textContent = days(d.terms.minDurationDays);
       $("tMin").textContent = d.terms.minLockRaw && d.terms.minLockRaw !== "0"
         ? toTokens(d.terms.minLockRaw) + " CUNA" : "any amount";
-      $("tCount").textContent = d.armed ? String(d.qualifyingLocks) : "not started";
-      $("tLocked").textContent = d.armed ? toTokens(d.totalQualifyingRaw) + " CUNA" : "not started";
+      $("tCount").textContent = d.armed ? String(d.qualifyingLocks) : ended ? "stopped" : "not started";
+      $("tLocked").textContent = d.armed ? toTokens(d.totalQualifyingRaw) + " CUNA" : ended ? "stopped" : "not started";
       buildTermChoices();
     }).catch(function (e) {
       $("poolsub").innerHTML = '<span class="bad">' + esc(e.message) + "</span>";
@@ -641,11 +661,14 @@
             // "earning" (qualifies AND the program is armed) is the only state that gets the
             // green EARNING pill. A qualifying lock while disarmed gets WILL EARN instead — real,
             // but not yet paying — so nobody reads a green pill as money already moving.
-            var head = l.earning
-              ? '<span class="pill" style="background:#12603f">EARNING</span>'
-              : l.qualifies
-                ? '<span class="pill">WILL EARN</span>'
-                : '<span class="pill">NOT EARNING</span>';
+            // Stopped programme: no lock earns, so no lock may read as "will earn".
+            var head = (CFG && CFG.ended)
+              ? '<span class="pill">PROGRAM STOPPED</span>'
+              : l.earning
+                ? '<span class="pill" style="background:#12603f">EARNING</span>'
+                : l.qualifies
+                  ? '<span class="pill">WILL EARN</span>'
+                  : '<span class="pill">NOT EARNING</span>';
             // Jupiter holds the tokens until the recipient claims. Say so on the lock itself,
             // where it is actually actionable, not only in the general note above.
             if (l.fullyVestedAt && now >= l.fullyVestedAt) {
@@ -658,7 +681,8 @@
             // on 12M+ liquid CUNA — they are not locked out at all, they simply have not been
             // told that a second lock works.
             var why = "";
-            if (!l.qualifies) {
+            // The "lock some more today" nudge below is exactly wrong once the programme has stopped.
+            if (!l.qualifies && !(CFG && CFG.ended)) {
               // The weighting rule is per-release now: this is the ONE reason a whole lock can
               // still fail even though part of it might otherwise qualify — nothing in it is
               // locked 90 days or more. Matches the exact string lib/cuna-staking.js emits.
@@ -706,7 +730,7 @@
         // qualifying-but-disarmed lock should read as "will earn", not "none of your locks meet
         // the terms".
         var anyQualifying = d.locks.some(function (l) { return l.qualifies; });
-        if (d.locks.length && !anyQualifying) {
+        if (d.locks.length && !anyQualifying && !(CFG && CFG.ended)) {
           h = '<div class="note" style="margin:0 0 12px"><b class="disp">NOT EARNING YET</b><br/>' +
               "None of your locks meet the terms. That does not mean waiting &mdash; a new lock " +
               "earns on its own, whatever your existing ones look like." +
@@ -749,7 +773,9 @@
             return '<div class="row"><span>' + esc(dateOf(p.at)) + ' <span class="muted">' + tx + "</span></span><b>" + toTokens(p.amountRaw) + " CUNA</b></div>";
           }).join("");
         }
-        if (!d.armed) {
+        if (CFG && CFG.ended) {
+          h += '<p class="muted" style="margin-top:10px">The program has stopped, so nothing more is being earned. The figures above are what this wallet earned before it stopped.</p>';
+        } else if (!d.armed) {
           h += '<p class="muted" style="margin-top:10px">The program hasn’t started, so nothing has been earned yet.</p>';
         }
         $("mine").innerHTML = h;
