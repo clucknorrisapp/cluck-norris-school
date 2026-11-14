@@ -239,10 +239,12 @@ function world(opts = {}) {
       kv: w.kv, rpcJson: ch.rpcJson, conn: ch.conn, attempts: createAttemptStore(w.attemptsDir),
       loadSigner: () => w.signer, env: () => w.env,
       alert: (text, key) => { w.alerts.push({ text, key }); return w.alertReturns === undefined ? 1 : w.alertReturns; },
-      now: () => w.clock.t * 1000, isStaging: () => !!w.staging, mints: { cuna: CUNA, clkn: CLKN }, treasury: TREASURY,
+      now: () => w.clock.t * 1000, isStaging: () => !!w.staging, mints: { cuna: CUNA, clkn: CLKN }, treasury: opts.treasury || TREASURY,
       clknUsd: () => 0.0002, failpoint: (name, info) => { const f = w.fp[name]; if (f) f(info); },
       log: process.env.DBG ? console : { warn() {}, log() {}, error() {} },
       limits: opts.limits,
+      // The stub chain's slots start near 1000, far below the real epoch; tests pick their own.
+      memoEpochSlot: opts.memoEpochSlot != null ? opts.memoEpochSlot : 0,
     });
     return w.m;
   };
@@ -616,6 +618,7 @@ t("two monitors (two kvstore copies on one DATA_DIR) ticking interleaved: exactl
   const m2 = freshMonitorModule().createMonitor({
     kv: kv2, rpcJson: w.ch.rpcJson, conn: w.ch.conn, attempts: createAttemptStore(w.attemptsDir), loadSigner: () => w.signer, env: () => w.env,
     alert: () => 1, now: () => w.clock.t * 1000, mints: { cuna: CUNA, clkn: CLKN }, treasury: TREASURY, log: { warn() {}, log() {}, error() {} },
+    memoEpochSlot: 0,
   });
   w.ch.addIncoming({ from: A, amount: cuna(10) });
   w.ch.addIncoming({ from: B, amount: cuna(20) });
@@ -642,6 +645,7 @@ t("a second process with a STALE journal and a lagging directory listing: its cl
   const mB = freshMonitorModule().createMonitor({
     kv: staleKv, rpcJson: w.ch.rpcJson, conn: w.ch.conn, attempts: laggyStore, loadSigner: () => w.signer, env: () => w.env,
     alert: () => 1, now: () => w.clock.t * 1000, mints: { cuna: CUNA, clkn: CLKN }, treasury: TREASURY, log: { warn() {}, log() {}, error() {} },
+    memoEpochSlot: 0,
   });
   await mB.tick("B, stale");
   assert.ok(claims.some((c) => c.exists), "B reached the claim and O_EXCL refused it");
@@ -1151,6 +1155,88 @@ t("status is a pure read: it never ticks", async () => {
 });
 
 // ── The list converter (scripts/cuna-migration-list.cjs) ──────────────────────────────────────
+section("paying from the treasury (owner, 2026-11-14)");
+
+t("CUNA_MIGRATION_PAYER_SOURCE=treasury loads MM_OPERATOR_SECRET_TREASURY; both sources, a missing key or an unknown source are refused", () => {
+  const { loadPayerSignerFromEnv } = freshMonitorModule();
+  const kp = web3.Keypair.generate();
+  const b58 = bs58.encode(kp.secretKey), arr = JSON.stringify(Array.from(kp.secretKey));
+  const s = loadPayerSignerFromEnv({ CUNA_MIGRATION_PAYER_SOURCE: "treasury", MM_OPERATOR_SECRET_TREASURY: arr });
+  assert.ok(s.keypair.publicKey.equals(kp.publicKey)); assert.strictEqual(s.source, "treasury");
+  assert.ok(/set only one/.test(loadPayerSignerFromEnv({ CUNA_MIGRATION_PAYER_SOURCE: "treasury", MM_OPERATOR_SECRET_TREASURY: arr, CUNA_MIGRATION_PAYER_SECRET: b58 }).refused));
+  assert.ok(/is not set/.test(loadPayerSignerFromEnv({ CUNA_MIGRATION_PAYER_SOURCE: "treasury" }).refused));
+  assert.ok(/does not parse/.test(loadPayerSignerFromEnv({ CUNA_MIGRATION_PAYER_SOURCE: "treasury", MM_OPERATOR_SECRET_TREASURY: "nope" }).refused));
+  assert.ok(/not a known source/.test(loadPayerSignerFromEnv({ CUNA_MIGRATION_PAYER_SOURCE: "clkn", MM_OPERATOR_SECRET_TREASURY: arr }).refused));
+  // Without the source, the dedicated path still refuses the treasury key.
+  assert.ok(/MM_OPERATOR_SECRET_TREASURY/.test(loadPayerSignerFromEnv({ CUNA_MIGRATION_PAYER_SECRET: b58, MM_OPERATOR_SECRET_TREASURY: arr }).refused));
+});
+
+t("treasury mode pays once from the treasury; without the env the treasury is refused, and with it any other payer is refused", async () => {
+  const A = pk();
+  const tkp = web3.Keypair.generate(), T = tkp.publicKey.toBase58();
+  // on purpose: the treasury pays
+  let w = world({ payerKp: tkp, treasury: T, env: { CUNA_MIGRATION_PAYER_SOURCE: "treasury" }, signer: { keypair: tkp, source: "treasury" } });
+  await w.configure({ rows: [row(A, 100)] });
+  assert.strictEqual(w.m.armFacts().armed, true, JSON.stringify(w.m.armFacts()));
+  assert.strictEqual(w.m.armFacts().payerSource, "treasury");
+  w.ch.addIncoming({ from: A, amount: cuna(10) });
+  await w.tick(3); await w.tick(3);
+  assert.strictEqual(deliveredOf(w, A), owed(cuna(10))); assert.strictEqual(w.ch.sends.length, 1);
+  // the treasury key loaded, but the env no longer says treasury: nothing arms
+  w.env = { CUNA_MIGRATION_ON: "1" };
+  assert.strictEqual(w.m.armFacts().armed, false); assert.ok(/does not match/.test(w.m.armFacts().payerWhy), w.m.armFacts().payerWhy);
+  // a dedicated key that happens to be the treasury, with the env set: still refused (the source must say treasury)
+  w.env = { CUNA_MIGRATION_ON: "1", CUNA_MIGRATION_PAYER_SOURCE: "treasury" }; w.signer = { keypair: tkp };
+  assert.strictEqual(w.m.armFacts().armed, false); assert.ok(/pay from it on purpose/.test(w.m.armFacts().payerWhy), w.m.armFacts().payerWhy);
+  // setPayer: the treasury needs the env, and the env allows only the treasury
+  w = world({ treasury: T });
+  assert.strictEqual(w.m.setPayer(T).ok, false, "treasury without the env");
+  w = world({ treasury: T, env: { CUNA_MIGRATION_PAYER_SOURCE: "treasury" } });
+  assert.strictEqual(w.m.setPayer(w.payer).ok, false, "a non-treasury payer with the env");
+  assert.ok(w.m.setPayer(T).ok);
+  // the treasury can never be on the list or be the receive wallet
+  assert.strictEqual(w.m.setList([row(T, 1)]).ok, false);
+  assert.strictEqual((await w.m.setReceive(T)).ok, false);
+});
+
+t("the payer-history scan floor: payouts above it are still caught after a lost journal; the real floor predates this code", async () => {
+  assert.ok(M.MEMO_EPOCH_SLOT > 466132529 && M.MEMO_EPOCH_SLOT < 469370219, "between the snapshot slot and the 2026-11-14 15:00 UTC slot");
+  const A = pk();
+  const w = world({ memoEpochSlot: 900 }); await w.configure({ rows: [row(A, 1000)] });
+  w.ch.addIncoming({ from: A, amount: cuna(40) });
+  await w.tick(3);
+  assert.strictEqual(deliveredOf(w, A), owed(cuna(40)));
+  assert.ok(w.kv.setVerified("cunaMigJournal", M.emptyJournal()));
+  fs.rmSync(w.attemptsDir, { recursive: true, force: true });
+  await w.tick(3);
+  assert.strictEqual(w.ch.sends.length, 1, "no new payout");
+  assert.strictEqual(w.journal().halted.code, "unknown_memo");
+});
+
+t("the payout shape check: only compute budget, the recipient's CLKN ATA create, ONE CLKN TransferChecked of the planned amount and the memo, signed by the payer alone", () => {
+  const { assertPayoutShape } = freshMonitorModule();
+  const payerKp = web3.Keypair.generate(), payer = payerKp.publicKey, owner = new web3.PublicKey(pk()), mint = new web3.PublicKey(CLKN);
+  const src = spl.getAssociatedTokenAddressSync(mint, payer, false), dst = spl.getAssociatedTokenAddressSync(mint, owner, true);
+  const build = (mut = {}) => {
+    const tx = new web3.Transaction({ feePayer: payer, blockhash: bs58.encode(Buffer.alloc(32, 7)), lastValidBlockHeight: 10 })
+      .add(web3.ComputeBudgetProgram.setComputeUnitLimit({ units: 100000 }))
+      .add(web3.ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 1 }))
+      .add(spl.createAssociatedTokenAccountIdempotentInstruction(payer, dst, owner, mut.ataMint || mint))
+      .add(spl.createTransferCheckedInstruction(src, mut.mint || mint, mut.dst || dst, payer, mut.amount || 5n, 9))
+      .add(new web3.TransactionInstruction({ keys: [], programId: new web3.PublicKey("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr"), data: Buffer.from("CLKN migration x #1") }));
+    if (mut.extra) tx.add(mut.extra);
+    return tx;
+  };
+  const x = { payer: payer.toBase58(), mint: CLKN, src: src.toBase58(), dst: dst.toBase58(), owner: owner.toBase58(), amountRaw: "5" };
+  assertPayoutShape(build(), x);
+  const other = new web3.PublicKey(CUNA);
+  assert.throws(() => assertPayoutShape(build({ extra: web3.SystemProgram.transfer({ fromPubkey: payer, toPubkey: owner, lamports: 1 }) }), x), /unexpected instructions/);
+  assert.throws(() => assertPayoutShape(build({ mint: other }), x), /planned CLKN amount/);
+  assert.throws(() => assertPayoutShape(build({ amount: 6n }), x), /planned CLKN amount/);
+  assert.throws(() => assertPayoutShape(build({ dst: spl.getAssociatedTokenAddressSync(mint, new web3.PublicKey(pk()), true) }), x), /planned CLKN amount/);
+  assert.throws(() => assertPayoutShape(build({ ataMint: other }), x), /ATA create/);
+});
+
 section("the list converter");
 
 t("decimal CUNA/CLKN become exact raw-integer strings; a value with more than 9 decimals or a float-only form is refused", () => {

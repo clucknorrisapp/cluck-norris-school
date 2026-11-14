@@ -13591,9 +13591,12 @@ async function cunaOpsAlert(text, dedupeKey, opts = {}) {
 // 27,700 per 1,000,000 CUNA up to their snapshot row, and lockers get a one-time Day-0 batch. The
 // decisions are lib/cuna-migration.js, the tick lib/cuna-migration-monitor.js, the owner's steps
 // docs/CUNA_MIGRATION_RUNBOOK.md. SHIPS DISARMED: nothing sends unless kv cunaMigArmed is true AND
-// CUNA_MIGRATION_ON=1 AND CUNA_MIGRATION_OFF is not 1 AND this is not staging AND the dedicated
-// payer secret is loaded and matches the configured payer. With CUNA_MIGRATION_PAYER_SECRET unset it
-// is a safe no-op. It never touches the lock-to-earn, burn or engine state (no cunaStake*/cunaBurn*/
+// CUNA_MIGRATION_ON=1 AND CUNA_MIGRATION_OFF is not 1 AND this is not staging AND the payer key is
+// loaded and matches the configured payer. The owner chose to pay from the TREASURY (2026-11-14):
+// CUNA_MIGRATION_PAYER_SOURCE=treasury loads the existing MM_OPERATOR_SECRET_TREASURY, the payer must
+// then be the treasury, and assertPayoutShape lets a payout carry nothing but one CLKN TransferChecked
+// to the recipient. With neither that nor a dedicated CUNA_MIGRATION_PAYER_SECRET set it is a safe
+// no-op. It never touches the lock-to-earn, burn or engine state (no cunaStake*/cunaBurn*/
 // cunaEngineArmed key, no vault project) and never moves CUNA. Alerts go to the treasury operator
 // room ({burn:true}), never the CUNA public room, OnlyRose or X.
 let CUNA_MIG_SIGNER;   // undefined = not loaded yet; null = unset; {keypair} | {refused}

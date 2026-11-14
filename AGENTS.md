@@ -44,8 +44,12 @@ does not tell you how to write software; use your judgement for that.
 
 > 🔁 **Touching the CUNA → CLKN migration? Read `docs/CUNA_MIGRATION_RUNBOOK.md` first.** The monitor
 > (`lib/cuna-migration*.js`) pays CLKN for CUNA sent to the owner's receive wallet and runs the Day-0
-> locker batch. It ships DISARMED: kv `cunaMigArmed` AND `CUNA_MIGRATION_ON=1` AND a dedicated
-> `CUNA_MIGRATION_PAYER_SECRET`, with `CUNA_MIGRATION_OFF=1` the kill. The payout list is the owner's
+> locker batch. It ships DISARMED: kv `cunaMigArmed` AND `CUNA_MIGRATION_ON=1` AND a payer key, with
+> `CUNA_MIGRATION_OFF=1` the kill. **The owner chose to pay from the TREASURY (2026-11-14: "we are
+> going to pay out of the current wallet we have keys set up on")** — `CUNA_MIGRATION_PAYER_SOURCE=treasury`
+> loads the existing `MM_OPERATOR_SECRET_TREASURY`. That is the one sanctioned exception to "never
+> automate with the treasury key"; it stays safe only because `assertPayoutShape` lets a payout carry
+> nothing but one CLKN `TransferChecked` to a listed wallet — never loosen that check. The payout list is the owner's
 > upload, never committed. Never pay outside its journal; an attempt file under
 > `${DATA_DIR}/cuna-migration/attempts/` is never deleted.
 

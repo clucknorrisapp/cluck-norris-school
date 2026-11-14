@@ -13,7 +13,7 @@ The monitor that pays CLKN for CUNA sent in, and the one-time Day-0 batch for lo
 | `CUNA_MIGRATION_ON=1` | Railway env |
 | `CUNA_MIGRATION_OFF` is not `1` | Railway env (the hard kill; it always wins) |
 | not staging (`STAGING=1` never pays) | Railway env |
-| `CUNA_MIGRATION_PAYER_SECRET` is loaded and its pubkey is the configured payer | Railway env + `payer=` |
+| the payer key is loaded and its pubkey is the configured payer: the treasury key with `CUNA_MIGRATION_PAYER_SOURCE=treasury` (the owner's choice), or a dedicated `CUNA_MIGRATION_PAYER_SECRET` | Railway env + `payer=` |
 | the kv store is persistent and loaded cleanly | the `/data` volume |
 | the journal is not halted | `ack=` clears a halt |
 
@@ -37,11 +37,28 @@ With the payer secret unset the whole thing is a safe no-op: it detects and reco
 
 1. **A fresh receive wallet.** It must be a plain wallet, not the treasury, the payer or a wallet on
    the list. If you use it for anything else, those moves show up as held noise.
-2. **A dedicated payer hot wallet.** Its secret goes in Railway as `CUNA_MIGRATION_PAYER_SECRET`
-   (base58 or a JSON byte array). The server refuses it if it is the same key as
-   `MM_OPERATOR_SECRET`, any `MM_OPERATOR_SECRET_*` or `CUNA_BURN_SECRET`. It also refuses it if it
-   is the treasury, the receive wallet, a listed wallet or the CLKN mint authority. Fund it only with
-   what the migration needs (see step 3).
+2. **The payer.** The owner's choice (2026-11-14: *"we are going to pay out of the current wallet we
+   have keys set up on"*) is the **treasury**, `2zMCUkE9pBjcC7ihtLqm28EsCoEHVmCdJYr5262EuPy8`, whose key
+   the server already holds as `MM_OPERATOR_SECRET_TREASURY`. Set `CUNA_MIGRATION_PAYER_SOURCE=treasury`
+   in Railway and `payer=` the treasury address. Nothing new is pasted anywhere. This is a deliberate
+   exception to the repo's "never automate with the treasury key" posture, and the code narrows it:
+   - with the env set, the payer can ONLY be the treasury, and the loaded key must BE the treasury;
+     without it, the treasury is refused as payer exactly as before;
+   - before anything is signed, every payout transaction is checked to be exactly compute budget, an
+     idempotent CLKN account create for the recipient, ONE `TransferChecked` of CLKN from the
+     treasury's CLKN account for the planned amount, and the memo (`assertPayoutShape`). Any other
+     instruction, mint, amount, destination or signer throws and nothing is signed. It can never send
+     SOL, CUNA or any other token the treasury holds;
+   - every send is still bounded by the wallet's own row and by the list total.
+   The treasury also pays other things (buy-comp, the Hub desk). Their CLKN outflows come out of the
+   same balance, so the status's `payer.clknRaw` is the figure to watch; when it is short, payouts wait
+   and you get one alert.
+
+   The other option, if you ever want it, is a dedicated hot wallet in `CUNA_MIGRATION_PAYER_SECRET`
+   (base58 or a JSON byte array, and no `CUNA_MIGRATION_PAYER_SOURCE`). The server refuses that key if
+   it is the same key as `MM_OPERATOR_SECRET`, any `MM_OPERATOR_SECRET_*` or `CUNA_BURN_SECRET`, or if
+   it is the treasury, the receive wallet, a listed wallet or the CLKN mint authority. Setting both
+   sources is refused. Either way, fund the payer with what the migration needs (see step 3).
 3. **The list,** converted from your ledger. Rows are `{wallet, sendCuna, locks, rew}`, with CUNA and
    CLKN as decimal numbers:
 
@@ -115,7 +132,8 @@ When the payer is short, nothing is sent. The entry stays due and you get one al
 
 ### 4. Arm (two flags)
 
-1. In Railway, set `CUNA_MIGRATION_PAYER_SECRET` and `CUNA_MIGRATION_ON=1`, then redeploy.
+1. In Railway, set `CUNA_MIGRATION_PAYER_SOURCE=treasury` (or a dedicated `CUNA_MIGRATION_PAYER_SECRET`)
+   and `CUNA_MIGRATION_ON=1`, then redeploy.
 2. Arm:
 
    ```
@@ -227,7 +245,7 @@ curl -X POST -H "x-premium-key: $K" "$A?ack=<halt code>"
 | Code | Meaning |
 | --- | --- |
 | `anomaly` | A payout landed with the wrong CLKN deltas, or a second payout landed for one entry. The entry stays frozen as `anomaly` after the ack and is never retried. |
-| `unknown_memo` | The payer's history holds a migration payout the journal does not own: the journal was lost or edited. Compare the chain against the status before you ack. |
+| `unknown_memo` | The payer's history holds a migration payout the journal does not own: the journal was lost or edited. Compare the chain against the status before you ack. The history is read back only to slot 469,300,000 (2026-11-14, before this code existed), so a long-lived payer like the treasury stays cheap to scan. |
 | `orphan_attempt` / `attempt_mismatch` | An attempt file has no journal entry, or disagrees with it. |
 | `credit_mismatch` | The credited totals do not add up from the entries. Resolve it first, or the next tick halts again. |
 | `two_live` | Two live attempts were found for one entry. |
@@ -248,7 +266,8 @@ token account of the receive wallet** while the window is open.
 
 | Var | Default | Effect |
 | --- | --- | --- |
-| `CUNA_MIGRATION_PAYER_SECRET` | unset (no-op) | the dedicated payer key (secret, Railway only) |
+| `CUNA_MIGRATION_PAYER_SOURCE` | unset | `treasury` = pay from the treasury with the existing `MM_OPERATOR_SECRET_TREASURY` (owner's choice, 2026-11-14); the payer must then be the treasury |
+| `CUNA_MIGRATION_PAYER_SECRET` | unset (no-op) | a dedicated payer key instead (secret, Railway only); refused if set together with the source above |
 | `CUNA_MIGRATION_ON` | unset | `=1` is the second arm flag |
 | `CUNA_MIGRATION_OFF` | unset | `=1` is the hard kill |
 | `CUNA_MIGRATION_MAX_CLKN_RAW` | list total | lowers the global cap; it can never raise it |
