@@ -47,25 +47,36 @@ function convertRows(rows) {
   return { rows: out };
 }
 
-// JSON.parse with each number kept as its exact source text (Node 22+ passes it to the reviver).
+// JSON.parse with each number kept as its exact source text, on every Node version (CI runs 20; the
+// reviver's `context.source` is Node 22+ only). Every number literal OUTSIDE a string is rewritten
+// as a JSON string of its own text before parsing, so no amount ever passes through a double; toRaw
+// then refuses anything that is not a plain non-negative decimal (a minus sign, an exponent).
+const NUMBER_RE = /-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?/y;
 function parseExact(text) {
-  let sourceSeen = false;
-  const parsed = JSON.parse(text, function (k, v, ctx) {
-    if (typeof v === "number") {
-      if (ctx && typeof ctx.source === "string") { sourceSeen = true; return ctx.source; }
-      return v;
-    }
-    return v;
-  });
-  return { parsed, exact: sourceSeen || !/\d\.\d/.test(text) };
+  const s = String(text);
+  let out = "", i = 0;
+  while (i < s.length) {
+    const ch = s[i];
+    if (ch === '"') {
+      let j = i + 1;
+      while (j < s.length && s[j] !== '"') j += s[j] === "\\" ? 2 : 1;
+      if (j >= s.length) throw new Error("the ledger has an unterminated string");
+      out += s.slice(i, j + 1); i = j + 1;
+    } else if (ch === "-" || (ch >= "0" && ch <= "9")) {
+      NUMBER_RE.lastIndex = i;
+      const m = NUMBER_RE.exec(s);
+      if (!m) throw new Error(`the ledger has a malformed number at character ${i}`);
+      out += JSON.stringify(m[0]); i += m[0].length;
+    } else { out += ch; i += 1; }
+  }
+  return { parsed: JSON.parse(out), exact: true };
 }
 
 if (require.main === module) {
   const file = process.argv[2];
   if (!file) { console.error("usage: node scripts/cuna-migration-list.cjs <ledger.json> > upload.json"); process.exit(2); }
   try {
-    const { parsed, exact } = parseExact(fs.readFileSync(file, "utf8"));
-    if (!exact) throw new Error("this Node cannot read JSON numbers exactly — quote the amounts as strings, or use Node 22+");
+    const { parsed } = parseExact(fs.readFileSync(file, "utf8"));
     const body = convertRows(parsed);
     const M = require("../lib/cuna-migration");
     const v = M.validateList(body.rows);

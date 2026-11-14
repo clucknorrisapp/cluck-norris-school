@@ -1273,6 +1273,15 @@ t("the CLI reads JSON numbers from their source text (never through a float) and
   fs.writeFileSync(f, `[{"wallet":"${a}","sendCuna":1.0000000001,"locks":0,"rew":0}]`);
   const bad = require("child_process").spawnSync(process.execPath, [path.join(__dirname, "cuna-migration-list.cjs"), f], { encoding: "utf8" });
   assert.notStrictEqual(bad.status, 0); assert.ok(/more than 9 decimals/.test(bad.stderr));
+  // Exact on every Node version (CI runs 20): a number a double cannot hold survives, digits inside a
+  // string are left alone, and a negative or exponent amount is refused, never converted.
+  const p2 = conv.parseExact(`[{"wallet":"${a} 1.5","sendCuna":123456789.123456789,"locks":0.000000001,"rew":"7","allowOffCurve":true}]`).parsed;
+  assert.strictEqual(p2[0].wallet, `${a} 1.5`); assert.strictEqual(p2[0].sendCuna, "123456789.123456789");
+  assert.strictEqual(p2[0].allowOffCurve, true);
+  assert.strictEqual(conv.convertRows(p2).rows[0].sendInMaxCunaRaw, "123456789123456789");
+  assert.strictEqual(conv.convertRows(p2).rows[0].day0LocksClknRaw, "1");
+  assert.throws(() => conv.convertRows(conv.parseExact(`[{"wallet":"${a}","sendCuna":-1}]`).parsed), /not a plain non-negative decimal/);
+  assert.throws(() => conv.convertRows(conv.parseExact(`[{"wallet":"${a}","sendCuna":4.155E+4}]`).parsed), /not a plain non-negative decimal/);
 });
 
 // ── Adversarial review (2026-11-14): each case below failed against the code before its fix ──
