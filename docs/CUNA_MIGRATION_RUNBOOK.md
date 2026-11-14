@@ -79,6 +79,10 @@ curl -X POST -H "x-premium-key: $K" "$A?window=1&start=<UNIX_START>"          # 
 - `list=1` checks every row: a valid address, raw integer strings, no duplicates, and no receive
   wallet, payer or treasury on the list. It refuses the whole upload on any error. Once a transfer is
   journaled, the list cannot be replaced.
+- An **off-curve** wallet (a program-derived address such as a Jupiter Lock escrow or a vault) is
+  refused: nobody can sign for it, so CLKN paid there is gone. List the lock's *recipient* instead. If
+  you have checked an off-curve row and still want it paid, put `"allowOffCurve": true` on that row
+  of the ledger (the converter passes it through, and it is part of the sha256).
 
 ### 2. Check it against your PDF
 
@@ -180,9 +184,18 @@ creates nothing new. A wallet that is both a holder and a locker gets both, inde
    be dead it must have failed on chain, or been not found on two reads at least 60 s apart, both
    past `lastValidBlockHeight + 150`. While live, it is rebroadcast with the **identical bytes**,
    which carry the same signature. A new attempt is built only when every earlier attempt is dead.
-4. **A memo on every payout.** Every payout carries `CLKN migration <key> #<n>`. Before sending
-   anything, the monitor reads the payer's own history. A memo the journal cannot account for halts
-   everything, even after a total kv loss.
+4. **A memo on every payout.** Every payout carries `CLKN migration <key> #<n>`. Every tick, armed
+   or not, the monitor reads the history of every payer the journal has ever used (so rotating the
+   payer does not hide the old one), past a durable cursor, at finalized. A memo row counts only if
+   that payer **signed** the transaction: anyone can send dust that names the payer, and that does
+   nothing. One of our attempts that landed while the journal judged it dead is revived and recorded
+   from the chain; if the entry was already paid by a retry, that is an `anomaly` halt. A payer-signed
+   memo the journal does not own (a lost or restored journal) halts once and is adopted into its
+   entry as a live attempt, so that entry can never be paid again, even after the ack.
+5. **An error is final only at finalized.** A payout that shows an error at processed or confirmed
+   may still land cleanly on the canonical fork, so it stays live until finalized.
+6. **A dead attempt is not forgotten.** Every attempt judged expired has its status asked again on
+   each tick. If it turns up, it is revived.
 
 ## Held reasons
 
@@ -194,7 +207,10 @@ creates nothing new. A wallet that is both a holder and a locker gets both, inde
 | `before_window` / `after_window` | the transfer landed outside the window | handle individually |
 | `multi_sender` | more than one owner's CUNA fell in the transaction | look at it on chain |
 | `no_sender` / `no_transfer_witness` | CUNA rose, but no single sender and transfer instruction explain it | look at it on chain |
-| `no_rise` | the receive wallet's CUNA did not rise (for example, your own sale; that one is silent) | nothing |
+| (not an entry) `no_rise` | the receive wallet's CUNA did not rise (for example, your own sale). Counted in `skipped.noRise`, silent | nothing |
+| (not an entry) dust | a transfer of **less than 1 whole CUNA**, from anyone, listed or not. Never credited. Counted in `skipped.dust`, per listed wallet in `skipped.listed`, the last 100 in `skipped.recent` | handle individually if it matters |
+| `recipient_ata_closed` | the wallet was paid before and has since closed its CLKN account; re-creating it on every payout would let it drain the payer's SOL | pay by hand |
+| `off_curve` | the recipient is off the curve and its row does not carry `allowOffCurve` | check the address |
 | `sender_is_payer` | the payer wallet sent CUNA in | nothing |
 | `attempts_exhausted` | three payout attempts died on chain | look at the payer and RPC, then pay by hand if owed |
 | `owner` | you held it | — |
@@ -215,9 +231,18 @@ curl -X POST -H "x-premium-key: $K" "$A?ack=<halt code>"
 | `orphan_attempt` / `attempt_mismatch` | An attempt file has no journal entry, or disagrees with it. |
 | `credit_mismatch` | The credited totals do not add up from the entries. Resolve it first, or the next tick halts again. |
 | `two_live` | Two live attempts were found for one entry. |
+| `memo_conflict` | Two payer-signed transactions carry the same `<key> #<n>`. |
 
-The monitor also refuses to run, and alerts, when the kv store is not persistent or failed to load,
-or when the journal holds more than 5,000 entries.
+The monitor refuses to run, and alerts, when the kv store is not persistent or failed to load. It
+refuses **new sends** (but keeps resolving payouts in flight and keeps detecting) when the journal
+holds more than 5,000 *payable* entries (Day 0, or a send-in that was credited); held entries do not
+count. Payouts go out one per recipient per tick.
+
+A signature walk that meets more than 20 pages (20,000 signatures) on one address no longer stalls:
+it picks up where it got to on the next tick, and nothing is processed out of chain order meanwhile
+(`lastTick.detect` reads `walk_in_progress`). Every receive-wallet token account ever seen, and the
+receive wallet's CUNA ATA, is walked for good, even after it is closed; still, **do not close a
+token account of the receive wallet** while the window is open.
 
 ## Env reference
 

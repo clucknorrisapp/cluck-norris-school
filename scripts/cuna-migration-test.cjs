@@ -66,10 +66,16 @@ function makeChain({ receive, payer }) {
     rpcFail: new Set(), txUnavailable: new Set(),
     mintAuthority: null, accountOwners: new Map(),
     sends: [], ataOwner: new Map(),
+    payers: new Set([payer]),            // every address whose history / balances the stub answers as a payer
+    atas: new Set(), closedAtas: new Set(),
+    historyHide: new Set(),              // payout sigs a lagging node leaves out of the payer's history
   };
   ch.addReceiveAcct = (pubkey = pk(), program = TOKEN) => { ch.receiveAccts.push({ pubkey, program }); return pubkey; };
   ch.knowWallet = (w) => { ch.ataOwner.set(spl.getAssociatedTokenAddressSync(new web3.PublicKey(CLKN), new web3.PublicKey(w), true).toBase58(), w); };
-  ch.payerAta = () => spl.getAssociatedTokenAddressSync(new web3.PublicKey(CLKN), new web3.PublicKey(payer), false).toBase58();
+  ch.payerAta = (p = payer) => spl.getAssociatedTokenAddressSync(new web3.PublicKey(CLKN), new web3.PublicKey(p), false).toBase58();
+  ch.clknAtaOf = (w) => spl.getAssociatedTokenAddressSync(new web3.PublicKey(CLKN), new web3.PublicKey(w), true).toBase58();
+  // A transaction from a stranger that merely names the payer and carries a migration memo.
+  ch.addForeignMemo = (memo, toPayer = payer) => { const sig = randSig(); ch.payouts.set(sig, { recipient: pk(), amount: 0n, memo, slot: ++ch.slot, err: null, deliveredAmt: 0n, blockTime: T0, payer: toPayer, foreign: pk() }); return sig; };
 
   // One incoming CUNA transfer, in the jsonParsed shape the RPC returns.
   ch.addIncoming = ({ from, amount, to, also = [], slot, blockTime, err = null, sig = randSig(), extraFrom = null, noWitness = false, closeSource = false, mutate }) => {
@@ -98,11 +104,12 @@ function makeChain({ receive, payer }) {
     return sig;
   };
 
-  function land(sig, { recipient, amount, memo }, mode) {
+  function land(sig, { recipient, amount, memo, feePayer, dst }, mode) {
     const payerShort = ch.payerClkn < amount;
     const err = (mode === "failErr" || payerShort) ? { InstructionError: [3, { Custom: 1 }] } : null;
     const deliveredAmt = err ? 0n : (mode === "wrongAmount" ? amount - 1n : amount);
-    ch.payouts.set(sig, { recipient, amount, memo, slot: ++ch.slot, err, deliveredAmt, blockTime: T0 + 500 });
+    ch.payouts.set(sig, { recipient, amount, memo, slot: ++ch.slot, err, deliveredAmt, blockTime: T0 + 500, payer: feePayer });
+    if (dst && !err) { ch.atas.add(dst); ch.closedAtas.delete(dst); }   // a failed transaction rolls the ATA create back too
     if (!err) { ch.delivered.set(recipient, (ch.delivered.get(recipient) || 0n) + deliveredAmt); ch.payerClkn -= deliveredAmt; }
   }
 
@@ -110,14 +117,14 @@ function makeChain({ receive, payer }) {
     const tx = web3.Transaction.from(bytes);
     assert.ok(tx.verifySignatures(), "a payout reached the chain unsigned");
     const sig = bs58.encode(tx.signature);
-    let recipient = null, amount = null, memo = null, ataIdem = false;
+    let recipient = null, amount = null, memo = null, ataIdem = false, dst = null;
     for (const ix of tx.instructions) {
       const pid = ix.programId.toBase58();
-      if (pid === TOKEN && ix.data[0] === 12) { amount = ix.data.readBigUInt64LE(1); recipient = ch.ataOwner.get(ix.keys[2].pubkey.toBase58()) || ("ata:" + ix.keys[2].pubkey.toBase58()); assert.strictEqual(ix.keys[1].pubkey.toBase58(), CLKN); assert.strictEqual(ix.data[9], 9); }
+      if (pid === TOKEN && ix.data[0] === 12) { amount = ix.data.readBigUInt64LE(1); dst = ix.keys[2].pubkey.toBase58(); recipient = ch.ataOwner.get(ix.keys[2].pubkey.toBase58()) || ("ata:" + ix.keys[2].pubkey.toBase58()); assert.strictEqual(ix.keys[1].pubkey.toBase58(), CLKN); assert.strictEqual(ix.data[9], 9); }
       if (pid === "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL") ataIdem = ix.data.length === 1 && ix.data[0] === 1;
       if (pid === "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr") memo = ix.data.toString("utf8");
     }
-    return { tx, sig, recipient, amount, memo, ataIdem };
+    return { tx, sig, recipient, amount, memo, ataIdem, dst, feePayer: tx.feePayer.toBase58() };
   }
 
   ch.conn = {
@@ -161,11 +168,15 @@ function makeChain({ receive, payer }) {
   }
   function payoutTx(sig) {
     const p = ch.payouts.get(sig);
-    const pre = [{ accountIndex: 1, mint: CLKN, owner: payer, uiTokenAmount: { amount: "1000000000000000000000" } }];
-    const post = [{ accountIndex: 1, mint: CLKN, owner: payer, uiTokenAmount: { amount: (10n ** 21n - p.deliveredAmt).toString() } },
+    const P = p.payer || payer;
+    const pre = [{ accountIndex: 1, mint: CLKN, owner: P, uiTokenAmount: { amount: "1000000000000000000000" } }];
+    const post = [{ accountIndex: 1, mint: CLKN, owner: P, uiTokenAmount: { amount: (10n ** 21n - p.deliveredAmt).toString() } },
                   { accountIndex: 2, mint: CLKN, owner: p.recipient, uiTokenAmount: { amount: p.deliveredAmt.toString() } }];
-    return { slot: p.slot, blockTime: p.blockTime, meta: { err: p.err, preTokenBalances: pre, postTokenBalances: post, innerInstructions: [] },
-      transaction: { message: { accountKeys: [{ pubkey: payer }, { pubkey: pk() }, { pubkey: pk() }], instructions: [] } } };
+    const keys = p.foreign
+      ? [{ pubkey: p.foreign, signer: true, writable: true }, { pubkey: P, signer: false, writable: true }]
+      : [{ pubkey: P, signer: true, writable: true }, { pubkey: pk(), signer: false, writable: true }, { pubkey: pk(), signer: false, writable: true }];
+    return { slot: p.slot, blockTime: p.blockTime, meta: { err: p.err, preTokenBalances: p.foreign ? [] : pre, postTokenBalances: p.foreign ? [] : post, innerInstructions: [] },
+      transaction: { message: { accountKeys: keys, instructions: [] } } };
   }
 
   ch.rpcJson = async (method, params) => {
@@ -177,19 +188,20 @@ function makeChain({ receive, payer }) {
       case "getAccountInfo": {
         const a = params[0];
         if (a === CLKN) return ok({ value: { owner: TOKEN, executable: false, data: { parsed: { info: { decimals: 9, mintAuthority: ch.mintAuthority } } } } });
+        if (ch.atas.has(a) && !ch.closedAtas.has(a)) return ok({ value: { owner: TOKEN, executable: false, data: ["AAAA", "base64"] } });
         if (ch.accountOwners.has(a)) return ok({ value: { owner: ch.accountOwners.get(a), executable: false, data: ["AAAA", "base64"] } });
         return ok({ value: null });
       }
       case "getTokenAccountsByOwner": {
         const [owner, f] = params;
         if (owner === receive && f.mint === CUNA) return ok({ value: ch.receiveAccts.map((a) => ({ pubkey: a.pubkey, account: { owner: a.program, data: { parsed: { info: { mint: CUNA, owner: receive, tokenAmount: { amount: "0" } } } } } })) });
-        if (owner === payer && f.mint === CLKN) return ok({ value: [{ pubkey: ch.payerAta(), account: { owner: TOKEN, data: { parsed: { info: { mint: CLKN, owner: payer, tokenAmount: { amount: ch.payerClkn.toString() } } } } } }] });
+        if (ch.payers.has(owner) && f.mint === CLKN) return ok({ value: [{ pubkey: ch.payerAta(owner), account: { owner: TOKEN, data: { parsed: { info: { mint: CLKN, owner: payer, tokenAmount: { amount: ch.payerClkn.toString() } } } } } }] });
         return ok({ value: [] });
       }
       case "getSignaturesForAddress": {
         const [addr, o] = params;
         let rows;
-        if (addr === payer) rows = [...ch.payouts.entries()].map(([s, p]) => ({ signature: s, slot: p.slot, err: p.err, memo: p.memo ? `[${p.memo.length}] ${p.memo}` : null }));
+        if (ch.payers.has(addr)) rows = [...ch.payouts.entries()].filter(([s, p]) => (p.payer || payer) === addr && !ch.historyHide.has(s)).map(([s, p]) => ({ signature: s, slot: p.slot, err: p.err, memo: p.memo ? `[${p.memo.length}] ${p.memo}` : null }));
         else rows = sigsFor(addr);
         rows.sort((a, b) => (b.slot - a.slot) || (a.signature < b.signature ? 1 : -1));   // newest first
         if (o.until) { const i = rows.findIndex((r) => r.signature === o.until); if (i >= 0) rows = rows.slice(0, i); }
@@ -230,6 +242,7 @@ function world(opts = {}) {
       now: () => w.clock.t * 1000, isStaging: () => !!w.staging, mints: { cuna: CUNA, clkn: CLKN }, treasury: TREASURY,
       clknUsd: () => 0.0002, failpoint: (name, info) => { const f = w.fp[name]; if (f) f(info); },
       log: process.env.DBG ? console : { warn() {}, log() {}, error() {} },
+      limits: opts.limits,
     });
     return w.m;
   };
@@ -712,7 +725,7 @@ t("the per-tick limit is honoured", async () => {
 
 section("held, never paid");
 
-t("unlisted sender, multiple senders, no rise (quiet for the owner's own outflow), no transfer witness, sender = payer: all held, nothing paid", async () => {
+t("unlisted sender, multiple senders, no transfer witness, sender = payer: all held, nothing paid; no rise (the owner's own outflow) is counted, never an entry and never alerted", async () => {
   const A = pk(), U = pk();
   const w = world(); await w.configure({ rows: [row(A, 100)] });
   w.ch.addIncoming({ from: U, amount: cuna(5) });
@@ -725,7 +738,8 @@ t("unlisted sender, multiple senders, no rise (quiet for the owner's own outflow
   } });
   await w.tick(3);
   const reasons = w.entries().map(([, e]) => e.reason).sort();
-  assert.deepStrictEqual(reasons, ["multi_sender", "no_rise", "no_transfer_witness", "sender_is_payer", "unlisted_sender"]);
+  assert.deepStrictEqual(reasons, ["multi_sender", "no_transfer_witness", "sender_is_payer", "unlisted_sender"]);
+  assert.strictEqual(w.journal().skipped.noRise, 1);
   assert.strictEqual(w.ch.sends.length, 0);
   assert.ok(w.alerts.some((a) => /HELD \(unlisted_sender\)/.test(a.text)));
   assert.ok(!w.alerts.some((a) => /no_rise/.test(a.text)), "the owner selling CUNA out by hand is not alerted");
@@ -1173,6 +1187,233 @@ t("the CLI reads JSON numbers from their source text (never through a float) and
   fs.writeFileSync(f, `[{"wallet":"${a}","sendCuna":1.0000000001,"locks":0,"rew":0}]`);
   const bad = require("child_process").spawnSync(process.execPath, [path.join(__dirname, "cuna-migration-list.cjs"), f], { encoding: "utf8" });
   assert.notStrictEqual(bad.status, 0); assert.ok(/more than 9 decimals/.test(bad.stderr));
+});
+
+// ── Adversarial review (2026-11-14): each case below failed against the code before its fix ──
+section("review: an error is final only at finalized");
+
+t("judgeAttempt: an err at processed or confirmed is WAIT; only an err at finalized is failed", () => {
+  const a = { paySig: "x", n: 1, clknRaw: "5", recipient: "r", lastValidBlockHeight: 100, at: 0 };
+  const o = { nowS: 1, payer: "p", clknMint: CLKN };
+  const err = { InstructionError: [3, { Custom: 1 }] };
+  assert.strictEqual(M.judgeAttempt(a, { status: { err, confirmationStatus: "processed" } }, o).verdict, "wait");
+  assert.strictEqual(M.judgeAttempt(a, { status: { err, confirmationStatus: "confirmed" } }, o).verdict, "wait");
+  assert.strictEqual(M.judgeAttempt(a, { status: { err, confirmationStatus: "finalized" } }, o).verdict, "failed");
+});
+
+t("an error seen at PROCESSED does not kill the attempt: no second payout is built, and when the same bytes land cleanly it pays ONCE", async () => {
+  const A = pk();
+  const w = world(); await w.configure({ rows: [row(A, 1000)] });
+  w.ch.addIncoming({ from: A, amount: cuna(400) });
+  w.ch.sendModes = ["failErr"]; w.ch.statusCommitment = "processed";
+  await w.m.tick("t1");
+  const first = w.ch.sends[0];
+  w.advance(1, 5); await w.m.tick("t2");
+  assert.strictEqual(new Set(w.ch.sends.map((x) => x.sig)).size, 1, "no attempt #2 while #1 is not final");
+  // the errored fork is dropped; #1 lands without error on the canonical fork
+  const p1 = w.ch.payouts.get(first.sig); p1.err = null; p1.deliveredAmt = p1.amount;
+  w.ch.delivered.set(A, (w.ch.delivered.get(A) || 0n) + p1.amount);
+  w.ch.statusCommitment = "finalized";
+  await w.tick(3);
+  assert.strictEqual(deliveredOf(w, A), owed(cuna(400)));
+  assert.strictEqual(w.entries()[0][1].state, "paid");
+  assert.strictEqual(new Set(w.ch.sends.map((x) => x.sig)).size, 1);
+});
+
+t("…and an error that reaches FINALIZED is failed: exactly one retry, paid once", async () => {
+  const A = pk();
+  const w = world(); await w.configure({ rows: [row(A, 1000)] });
+  w.ch.addIncoming({ from: A, amount: cuna(40) });
+  w.ch.sendModes = ["failErr"]; w.ch.statusCommitment = "processed";
+  await w.tick(2);
+  assert.strictEqual(w.entries()[0][1].attempts[0].outcome, "live");
+  w.ch.statusCommitment = "finalized";
+  await w.tick(4);
+  const e = w.entries()[0][1];
+  assert.strictEqual(e.attempts[0].outcome, "failed"); assert.strictEqual(e.state, "paid");
+  assert.strictEqual(deliveredOf(w, A), owed(cuna(40))); assert.strictEqual(uniqueLandedFor(w, A), 1);
+});
+
+section("review: the memo witness runs every tick, over every payer, and only counts payer-signed rows");
+
+t("a payout wrongly judged dead lands late on a lagging node AFTER its retry paid: with nothing left due, the witness still revives it and the second landing halts as an anomaly", async () => {
+  const A = pk();
+  const w = world(); await w.configure({ rows: [row(A, 1000)] });
+  w.ch.addIncoming({ from: A, amount: cuna(30) });
+  await w.m.tick("t");
+  const s1 = w.ch.sends[0].sig;
+  w.ch.statusLag.set(s1, 1000); w.ch.historyHide.add(s1);    // the node shows neither its status nor its history
+  w.advance(400, 0); await w.m.tick("t");
+  w.advance(5, 61); await w.m.tick("t");                     // judged expired; attempt #2 sent and lands
+  await w.tick(2);
+  assert.strictEqual(w.entries()[0][1].state, "paid");
+  assert.strictEqual(uniqueLandedFor(w, A), 2, "the setup: both attempts landed on chain");
+  w.ch.statusLag.set(s1, 0); w.ch.historyHide.delete(s1);    // the node catches up; nothing is due any more
+  await w.tick(3);
+  assert.strictEqual(w.journal().halted && w.journal().halted.code, "anomaly", "the double payment is flagged");
+  assert.strictEqual(w.entries()[0][1].state, "anomaly");
+  assert.strictEqual(w.m.armFacts().armed, false);
+});
+
+t("a stranger's transaction that names the payer with a migration memo does not halt anything; the holder is paid", async () => {
+  const A = pk();
+  const w = world(); await w.configure({ rows: [row(A, 1000)] });
+  w.ch.addForeignMemo("CLKN migration grief #1");
+  w.ch.addIncoming({ from: A, amount: cuna(400) });
+  await w.tick(3);
+  assert.strictEqual(w.journal().halted, null);
+  assert.strictEqual(deliveredOf(w, A), owed(cuna(400)));
+});
+
+t("a payer-SIGNED memo the journal does not own halts ONCE; it is adopted into its entry, so after the ack nothing re-halts and nothing pays twice", async () => {
+  const A = pk();
+  const w = world(); await w.configure({ rows: [row(A, 1000)] });
+  w.ch.addIncoming({ from: A, amount: cuna(40) });
+  await w.tick(3);
+  assert.ok(w.kv.setVerified("cunaMigJournal", M.emptyJournal()));
+  fs.rmSync(w.attemptsDir, { recursive: true, force: true });
+  w.boot();
+  await w.tick(2);
+  assert.strictEqual(w.journal().halted.code, "unknown_memo");
+  assert.ok(w.m.ack("unknown_memo").ok);
+  await w.tick(4);
+  assert.strictEqual(w.journal().halted, null, "the same memo does not halt again");
+  assert.strictEqual(w.ch.sends.length, 1, "no second payout");
+  assert.strictEqual(deliveredOf(w, A), owed(cuna(40)));
+  assert.strictEqual(w.entries()[0][1].state, "paid", "the adopted payout is recorded from the chain");
+});
+
+t("rotating the payer while an old-payer payout is wrongly judged dead never pays twice: the old payer's history is still read", async () => {
+  const A = pk();
+  const w = world(); await w.configure({ rows: [row(A, 1000)] });
+  w.ch.addIncoming({ from: A, amount: cuna(30) });
+  await w.m.tick("t");
+  const s1 = w.ch.sends[0].sig;
+  w.ch.statusLag.set(s1, 1000);
+  w.m.disarm();
+  w.advance(400, 0); await w.m.tick("t");
+  w.advance(5, 61); await w.m.tick("t");
+  const P2 = web3.Keypair.generate();
+  w.ch.payers.add(P2.publicKey.toBase58());
+  const r = w.m.setPayer(P2.publicKey.toBase58());
+  if (r.ok) {
+    w.signer = { keypair: P2 };
+    assert.ok(w.m.arm("arm-cuna-migration").ok);
+    w.ch.statusLag.set(s1, 0);
+    await w.tick(4);
+  }
+  assert.strictEqual(deliveredOf(w, A), owed(cuna(30)));
+  assert.strictEqual(uniqueLandedFor(w, A), 1);
+});
+
+section("review: spam cannot stop the monitor");
+
+t("more than 20 pages of dust signatures between ticks: the walk resumes instead of stalling, and a real send-in behind them is paid", async () => {
+  const A = pk();
+  const w = world({ limits: { maxFetch: 5000 } }); await w.configure({ rows: [row(A, 1000)] });
+  w.ch.addIncoming({ from: A, amount: cuna(1) });
+  await w.tick(2);
+  const spammer = pk();
+  for (let i = 0; i < 20001; i++) w.ch.addIncoming({ from: spammer, amount: "1" });
+  w.ch.addIncoming({ from: A, amount: cuna(100) });
+  for (let i = 0; i < 12 && deliveredOf(w, A) < owed(cuna(1)) + owed(cuna(100)); i++) await w.tick(1);
+  assert.strictEqual(deliveredOf(w, A), owed(cuna(1)) + owed(cuna(100)));
+  assert.strictEqual(w.entries().length, 2, "dust is never an entry");
+  assert.strictEqual(w.journal().skipped.dust.count, 20001);
+});
+
+t("a journal with more than MAX_ENTRIES held entries still resolves in-flight payouts and still pays; only PAYABLE entries count", async () => {
+  const A = pk(), B = pk();
+  const w = world(); await w.configure({ rows: [row(A, 1000), row(B, 1000)] });
+  w.ch.addIncoming({ from: A, amount: cuna(10) });
+  w.ch.sendModes = ["drop"];
+  await w.m.tick("t");                                       // A's attempt is live, not landed
+  const j = w.journal();
+  for (let i = 0; i <= M.MAX_ENTRIES; i++) j.entries["junk" + i] = { kind: "sendin", sig: "junk" + i, slot: 1, blockTime: 1, sender: pk(), receivedCunaRaw: "1", creditCunaRaw: "0", excessCunaRaw: "1", clknRaw: "0", state: "held", reason: "unlisted_sender", attempts: [] };
+  assert.ok(w.kv.setVerified("cunaMigJournal", j));
+  w.ch.addIncoming({ from: B, amount: cuna(10) });
+  await w.tick(4);
+  assert.strictEqual(deliveredOf(w, A), owed(cuna(10)), "A's in-flight payout was resolved (rebroadcast and landed)");
+  assert.strictEqual(deliveredOf(w, B), owed(cuna(10)));
+});
+
+t("dust (under 1 CUNA) from anyone is counted, never an entry and never credited; a listed wallet sees its dust in the public lookup", async () => {
+  const A = pk();
+  const w = world(); await w.configure({ rows: [row(A, 1000)] });
+  for (let i = 0; i < 3; i++) w.ch.addIncoming({ from: pk(), amount: "1" });
+  w.ch.addIncoming({ from: A, amount: "999999999" });
+  await w.tick(3);
+  assert.strictEqual(w.entries().length, 0);
+  const sk = w.journal().skipped;
+  assert.strictEqual(sk.dust.count, 4); assert.strictEqual(sk.dust.cunaRaw, "1000000002");
+  assert.strictEqual(w.journal().credited[A], undefined);
+  const v = w.m.publicLookup(A);
+  assert.strictEqual(v.dust.cunaRaw, "999999999"); assert.strictEqual(v.totals.cunaReceivedRaw, "999999999");
+  assert.strictEqual(v.transfers.length, 1); assert.strictEqual(v.transfers[0].heldReason, "dust");
+  assert.strictEqual(w.ch.sends.length, 0);
+  await w.tick(2);
+  assert.strictEqual(w.journal().skipped.dust.count, 4, "re-reading never counts twice");
+});
+
+section("review: dust payouts cannot drain the payer or crowd others out");
+
+t("one payout per recipient per tick", async () => {
+  const A = pk(), B = pk();
+  const w = world(); await w.configure({ rows: [row(A, 1000), row(B, 1000)] });
+  for (let i = 0; i < 3; i++) w.ch.addIncoming({ from: A, amount: cuna(2) });
+  w.ch.addIncoming({ from: B, amount: cuna(5) });
+  await w.m.tick("t");
+  const to = w.ch.sends.map((x) => x.recipient);
+  assert.strictEqual(to.filter((x) => x === A).length, 1); assert.strictEqual(to.filter((x) => x === B).length, 1);
+  await w.tick(4);
+  assert.strictEqual(deliveredOf(w, A), owed(cuna(2)) * 3n);
+});
+
+t("a wallet that was paid and then closed its CLKN account is held, not re-funded the account rent", async () => {
+  const A = pk();
+  const w = world(); await w.configure({ rows: [row(A, 1000)] });
+  w.ch.addIncoming({ from: A, amount: cuna(10) });
+  await w.tick(3);
+  assert.strictEqual(deliveredOf(w, A), owed(cuna(10)));
+  w.ch.closedAtas.add(w.ch.clknAtaOf(A));
+  const s2 = w.ch.addIncoming({ from: A, amount: cuna(10) });
+  await w.tick(3);
+  assert.strictEqual(w.journal().entries[s2].state, "held"); assert.strictEqual(w.journal().entries[s2].reason, "recipient_ata_closed");
+  assert.strictEqual(deliveredOf(w, A), owed(cuna(10)));
+  assert.strictEqual(w.ch.sends.length, 1);
+});
+
+section("review: off-curve recipients");
+
+t("an off-curve (program-derived) wallet is refused on upload unless its row says allowOffCurve:true; the opt-in is part of the hash", () => {
+  const [pda] = web3.PublicKey.findProgramAddressSync([Buffer.from("escrow")], new web3.PublicKey(TOKEN));
+  const P = pda.toBase58();
+  assert.ok(!M.isWalletAddress(P));
+  const A = pk();
+  const plain = M.validateList([row(A, 10), row(P, 0, "5", "0")]);
+  assert.strictEqual(plain.ok, false); assert.ok(plain.errors.some((e) => /OFF the curve/.test(e)));
+  const opted = M.validateList([row(A, 10), { ...row(P, 0, "5", "0"), allowOffCurve: true }]);
+  assert.ok(opted.ok); assert.deepStrictEqual(opted.offCurve, [P]);
+  const onlyA = M.validateList([row(A, 10)]);
+  assert.strictEqual(onlyA.sha256, M.validateList([{ ...row(A, 10), allowOffCurve: false }]).sha256, "an on-curve list hashes as before");
+  assert.ok(opted.rows.find((r) => r.wallet === P).allowOffCurve === true);
+  assert.ok(M.offCurveRefused({ wallet: P })); assert.ok(!M.offCurveRefused({ wallet: P, allowOffCurve: true })); assert.ok(!M.offCurveRefused({ wallet: A }));
+});
+
+section("review: receive accounts");
+
+t("a receive token account that was seen once and then closed is still walked; so is the receive wallet's CUNA ATA, listed or not", async () => {
+  const A = pk(), B = pk();
+  const w = world(); await w.configure({ rows: [row(A, 1000), row(B, 1000)] });
+  const acct2 = w.ch.addReceiveAcct();
+  await w.tick(1);                                           // acct2 is seen and recorded
+  w.ch.addIncoming({ from: A, amount: cuna(10), to: acct2 });
+  w.ch.receiveAccts = w.ch.receiveAccts.filter((x) => x.pubkey !== acct2);   // closed before the next tick
+  const ata = spl.getAssociatedTokenAddressSync(new web3.PublicKey(CUNA), new web3.PublicKey(w.receive), false).toBase58();
+  w.ch.addIncoming({ from: B, amount: cuna(20), to: ata });                   // into the ATA, never listed
+  await w.tick(4);
+  assert.strictEqual(deliveredOf(w, A), owed(cuna(10)));
+  assert.strictEqual(deliveredOf(w, B), owed(cuna(20)));
 });
 
 // ═════════════════════════════════════════════════════════════════════════════════════════════

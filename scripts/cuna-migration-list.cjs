@@ -4,7 +4,7 @@
 //
 //   node scripts/cuna-migration-list.cjs ledger.json > upload.json
 //
-// Input: a JSON array of rows {wallet, sendCuna, locks, rew} — CUNA (sendCuna) and CLKN (locks,
+// Input: a JSON array of rows {wallet, sendCuna, locks, rew[, allowOffCurve]} — CUNA (sendCuna) and CLKN (locks,
 // rew) as DECIMAL amounts, the owner's ledger format. Output: {"rows":[{wallet, sendInMaxCunaRaw,
 // day0LocksClknRaw, day0RewardsClknRaw}]} with exact raw-integer strings (both mints have 9
 // decimals). Numbers are converted from their SOURCE TEXT, never through a float: 1234567.123456789
@@ -38,8 +38,10 @@ function convertRows(rows) {
   const out = rows.map((r, i) => {
     if (!r || typeof r.wallet !== "string") throw new Error(`row ${i + 1}: no wallet`);
     try {
-      return { wallet: r.wallet.trim(), sendInMaxCunaRaw: toRaw(r.sendCuna == null ? 0 : r.sendCuna),
+      const o = { wallet: r.wallet.trim(), sendInMaxCunaRaw: toRaw(r.sendCuna == null ? 0 : r.sendCuna),
         day0LocksClknRaw: toRaw(r.locks == null ? 0 : r.locks), day0RewardsClknRaw: toRaw(r.rew == null ? 0 : r.rew) };
+      if (r.allowOffCurve === true) o.allowOffCurve = true;   // an off-curve wallet is refused on upload without it
+      return o;
     } catch (e) { throw new Error(`row ${i + 1} (${r.wallet}): ${e.message}`); }
   });
   return { rows: out };
