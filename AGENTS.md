@@ -49,7 +49,9 @@ does not tell you how to write software; use your judgement for that.
 > going to pay out of the current wallet we have keys set up on")** — `CUNA_MIGRATION_PAYER_SOURCE=treasury`
 > loads the existing `MM_OPERATOR_SECRET_TREASURY`. That is the one sanctioned exception to "never
 > automate with the treasury key"; it stays safe only because `assertPayoutShape` lets a payout carry
-> nothing but one CLKN `TransferChecked` to a listed wallet — never loosen that check. The payout list is the owner's
+> nothing but one CLKN `TransferChecked` to a listed wallet — never loosen that check. Treasury mode
+> also does not arm until the owner sets a SOL reserve (≥0.05 SOL), a CLKN reserve and an explicit
+> `CUNA_MIGRATION_MAX_CLKN_RAW` in env; don't default them. The payout list is the owner's
 > upload, never committed. Never pay outside its journal; an attempt file under
 > `${DATA_DIR}/cuna-migration/attempts/` is never deleted.
 

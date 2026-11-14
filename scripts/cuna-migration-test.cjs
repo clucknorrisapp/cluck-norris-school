@@ -1157,6 +1157,10 @@ t("status is a pure read: it never ticks", async () => {
 // ── The list converter (scripts/cuna-migration-list.cjs) ──────────────────────────────────────
 section("paying from the treasury (owner, 2026-11-14)");
 
+// Treasury mode needs the owner's reserves and an explicit cap stated in env (above the list total,
+// so the cap stays the list total in these tests).
+const TENV = { CUNA_MIGRATION_PAYER_SOURCE: "treasury", CUNA_MIGRATION_SOL_RESERVE_LAMPORTS: "100000000", CUNA_MIGRATION_CLKN_RESERVE_RAW: "0", CUNA_MIGRATION_MAX_CLKN_RAW: "1" + "0".repeat(30) };
+
 t("CUNA_MIGRATION_PAYER_SOURCE=treasury loads MM_OPERATOR_SECRET_TREASURY; both sources, a missing key or an unknown source are refused", () => {
   const { loadPayerSignerFromEnv } = freshMonitorModule();
   const kp = web3.Keypair.generate();
@@ -1175,7 +1179,7 @@ t("treasury mode pays once from the treasury; without the env the treasury is re
   const A = pk();
   const tkp = web3.Keypair.generate(), T = tkp.publicKey.toBase58();
   // on purpose: the treasury pays
-  let w = world({ payerKp: tkp, treasury: T, env: { CUNA_MIGRATION_PAYER_SOURCE: "treasury" }, signer: { keypair: tkp, source: "treasury" } });
+  let w = world({ payerKp: tkp, treasury: T, env: TENV, signer: { keypair: tkp, source: "treasury" } });
   await w.configure({ rows: [row(A, 100)] });
   assert.strictEqual(w.m.armFacts().armed, true, JSON.stringify(w.m.armFacts()));
   assert.strictEqual(w.m.armFacts().payerSource, "treasury");
@@ -1186,12 +1190,12 @@ t("treasury mode pays once from the treasury; without the env the treasury is re
   w.env = { CUNA_MIGRATION_ON: "1" };
   assert.strictEqual(w.m.armFacts().armed, false); assert.ok(/does not match/.test(w.m.armFacts().payerWhy), w.m.armFacts().payerWhy);
   // a dedicated key that happens to be the treasury, with the env set: still refused (the source must say treasury)
-  w.env = { CUNA_MIGRATION_ON: "1", CUNA_MIGRATION_PAYER_SOURCE: "treasury" }; w.signer = { keypair: tkp };
+  w.env = { CUNA_MIGRATION_ON: "1", ...TENV }; w.signer = { keypair: tkp };
   assert.strictEqual(w.m.armFacts().armed, false); assert.ok(/pay from it on purpose/.test(w.m.armFacts().payerWhy), w.m.armFacts().payerWhy);
   // setPayer: the treasury needs the env, and the env allows only the treasury
   w = world({ treasury: T });
   assert.strictEqual(w.m.setPayer(T).ok, false, "treasury without the env");
-  w = world({ treasury: T, env: { CUNA_MIGRATION_PAYER_SOURCE: "treasury" } });
+  w = world({ treasury: T, env: TENV });
   assert.strictEqual(w.m.setPayer(w.payer).ok, false, "a non-treasury payer with the env");
   assert.ok(w.m.setPayer(T).ok);
   // the treasury can never be on the list or be the receive wallet
@@ -1235,6 +1239,144 @@ t("the payout shape check: only compute budget, the recipient's CLKN ATA create,
   assert.throws(() => assertPayoutShape(build({ amount: 6n }), x), /planned CLKN amount/);
   assert.throws(() => assertPayoutShape(build({ dst: spl.getAssociatedTokenAddressSync(mint, new web3.PublicKey(pk()), true) }), x), /planned CLKN amount/);
   assert.throws(() => assertPayoutShape(build({ ataMint: other }), x), /ATA create/);
+});
+
+t("treasury mode does not arm without the owner's SOL reserve (at least 0.05 SOL), CLKN reserve and explicit cap; a value that does not parse is not armed in either mode", async () => {
+  const A = pk();
+  const tkp = web3.Keypair.generate(), T = tkp.publicKey.toBase58();
+  const w = world({ payerKp: tkp, treasury: T, env: TENV, signer: { keypair: tkp, source: "treasury" } });
+  await w.configure({ rows: [row(A, 100)], arm: false });
+  for (const drop of ["CUNA_MIGRATION_SOL_RESERVE_LAMPORTS", "CUNA_MIGRATION_CLKN_RESERVE_RAW", "CUNA_MIGRATION_MAX_CLKN_RAW"]) {
+    const env = { CUNA_MIGRATION_ON: "1", ...TENV }; delete env[drop]; w.env = env;
+    const r = w.m.arm("arm-cuna-migration");
+    assert.strictEqual(r.ok, false, drop); assert.ok(r.error.includes(drop), r.error);
+    assert.strictEqual(w.m.armFacts().armed, false, drop);
+  }
+  w.env = { CUNA_MIGRATION_ON: "1", ...TENV, CUNA_MIGRATION_SOL_RESERVE_LAMPORTS: "10000000" };
+  assert.ok(/at least/.test(w.m.arm("arm-cuna-migration").error));
+  w.env = { CUNA_MIGRATION_ON: "1", ...TENV };
+  assert.ok(w.m.arm("arm-cuna-migration").ok);
+  assert.strictEqual(w.m.armFacts().armed, true);
+  // the env losing a reserve later disarms the send path, even with the kv arm set
+  w.env = { CUNA_MIGRATION_ON: "1", ...TENV }; delete w.env.CUNA_MIGRATION_CLKN_RESERVE_RAW;
+  assert.strictEqual(w.m.armFacts().armed, false);
+  w.ch.addIncoming({ from: A, amount: cuna(10) });
+  await w.tick(3);
+  assert.strictEqual(w.ch.sends.length, 0);
+  // a dedicated payer with a reserve that does not parse is not armed either
+  const d = world(); await d.configure({ rows: [row(A, 100)] });
+  d.env = { CUNA_MIGRATION_ON: "1", CUNA_MIGRATION_SOL_RESERVE_LAMPORTS: "0.5" };
+  assert.strictEqual(d.m.armFacts().armed, false); assert.ok(/not a raw integer/.test(d.m.armFacts().reservesWhy));
+});
+
+t("treasury mode: payouts never take the treasury below its SOL reserve or its CLKN reserve, and the priority fee is capped lower", async () => {
+  const A = pk(), B = pk();
+  const tkp = web3.Keypair.generate(), T = tkp.publicKey.toBase58();
+  const env = { ...TENV, CUNA_MIGRATION_SOL_RESERVE_LAMPORTS: "300000000", CUNA_MIGRATION_CLKN_RESERVE_RAW: (1000n * E9).toString(), CUNA_MIGRATION_CU_PRICE: "500000" };
+  const w = world({ payerKp: tkp, treasury: T, env, signer: { keypair: tkp, source: "treasury" } });
+  await w.configure({ rows: [row(A, 1000000), row(B, 1000000)] });
+  assert.strictEqual(w.m.armFacts().armed, true, JSON.stringify(w.m.armFacts()));
+  assert.strictEqual((await w.m.status()).cap.cuPrice, 50000, "the treasury's priority-fee ceiling");
+  // CLKN: the treasury holds the reserve plus A's payout less one raw unit, so A waits
+  const need = owed(cuna(100000));
+  w.ch.payerClkn = 1000n * E9 + need - 1n;
+  w.ch.addIncoming({ from: A, amount: cuna(100000) });
+  await w.tick(3);
+  assert.strictEqual(w.ch.sends.length, 0, "the CLKN reserve is never spent");
+  assert.strictEqual((await w.m.status()).payer.coversRemaining, false);
+  w.ch.payerClkn += 1n;
+  await w.tick(3);
+  assert.strictEqual(deliveredOf(w, A), need);
+  assert.strictEqual(w.ch.payerClkn, 1000n * E9, "exactly the reserve is left");
+  // SOL: just under reserve + fee + rent, B waits
+  w.ch.payerClkn = 10n ** 24n;
+  const fee = 5000 + Math.ceil((50000 * 100000) / 1e6);
+  w.ch.payerLamports = BigInt(300000000 + fee + 2039280 - 1);
+  w.ch.addIncoming({ from: B, amount: cuna(10) });
+  await w.tick(3);
+  assert.strictEqual(deliveredOf(w, B), 0n, "the SOL reserve is never spent");
+  const st = await w.m.status();
+  assert.strictEqual(st.payer.solReserveLamports, 300000000);
+  w.ch.payerLamports += 1n;
+  await w.tick(3);
+  assert.strictEqual(deliveredOf(w, B), owed(cuna(10)));
+});
+
+t("payer rotation (dedicated -> treasury) then a lost journal: the old payer's history is still read, so its payout is never paid again", async () => {
+  for (const wipeConfigHistory of [false, true]) {
+    const A = pk();
+    const tkp = web3.Keypair.generate(), T = tkp.publicKey.toBase58();
+    const w = world({ treasury: T });
+    await w.configure({ rows: [row(A, 1000)] });
+    w.ch.addIncoming({ from: A, amount: cuna(10) });
+    await w.tick(3);
+    assert.strictEqual(deliveredOf(w, A), owed(cuna(10)));
+    assert.ok(w.m.disarm().ok);
+    w.env = { CUNA_MIGRATION_ON: "1", ...TENV };
+    w.signer = { keypair: tkp, source: "treasury" };
+    w.ch.payers.add(T);
+    const r = w.m.setPayer(T); assert.ok(r.ok, JSON.stringify(r));
+    assert.deepStrictEqual(r.payerHistory, [w.payer, T]);
+    assert.ok(w.m.arm("arm-cuna-migration").ok);
+    await w.tick(2);
+    // the journal and the attempt files are lost; in the second pass a config restore drops the
+    // config's own history too, and only the separate kv key remembers the old payer
+    assert.ok(w.kv.setVerified("cunaMigJournal", M.emptyJournal()));
+    if (wipeConfigHistory) { const c = { ...w.kv.get("cunaMigConfig") }; delete c.payerHistory; assert.ok(w.kv.setVerified("cunaMigConfig", c)); }
+    fs.rmSync(w.attemptsDir, { recursive: true, force: true });
+    w.boot();
+    await w.tick(4);
+    assert.strictEqual(deliveredOf(w, A), owed(cuna(10)), "A was paid twice" + (wipeConfigHistory ? " (config history wiped)" : ""));
+    assert.strictEqual(w.ch.sends.length, 1);
+    assert.strictEqual(w.journal().halted && w.journal().halted.code, "unknown_memo");
+  }
+});
+
+t("more stranger memo rows in ONE slot than a tick may fetch: verdicts are kept across ticks, the cursor moves past the slot, and a later send-in is paid", async () => {
+  const A = pk();
+  const w = world(); await w.configure({ rows: [row(A, 1000)] });
+  w.ch.addIncoming({ from: A, amount: cuna(5) });
+  await w.tick(3);
+  const s = ++w.ch.slot;
+  for (let i = 0; i < 51; i++) { const sig = w.ch.addForeignMemo(`CLKN migration junk${i} #1`); w.ch.payouts.get(sig).slot = s; }
+  w.ch.slot = s;
+  w.ch.addIncoming({ from: A, amount: cuna(7) });
+  await w.tick(4);
+  assert.strictEqual(deliveredOf(w, A), owed(cuna(5)) + owed(cuna(7)));
+  assert.ok(w.journal().payerCursors[w.payer].slot >= s, "the cursor is past the stall slot");
+  assert.strictEqual(w.journal().halted, null);
+});
+
+t("a stranger who names the payer in more memo rows every tick than a tick may check cannot hold up payouts for keys those rows do not name", async () => {
+  const A = pk();
+  const w = world(); await w.configure({ rows: [row(A, 1000)] });
+  w.ch.addIncoming({ from: A, amount: cuna(9) });
+  let n = 0;
+  for (let i = 0; i < 10; i++) { for (let k = 0; k < 51; k++) w.ch.addForeignMemo(`CLKN migration junk${n++} #1`); await w.tick(1); }
+  assert.strictEqual(deliveredOf(w, A), owed(cuna(9)));
+  assert.strictEqual(w.journal().halted, null);
+});
+
+t("…but a key that unchecked rows DO name waits until they are checked; and a payer-signed payout hidden behind them (a lost journal) still halts, never pays twice", async () => {
+  const A = pk();
+  const w = world({ limits: { maxFetch: 5 } }); await w.configure({ rows: [row(A, 1000)] });
+  w.ch.addIncoming({ from: A, amount: cuna(40) });
+  await w.tick(3);
+  assert.strictEqual(deliveredOf(w, A), owed(cuna(40)));
+  const [key] = w.entries()[0];
+  const real = w.ch.sends[0].sig, realSlot = w.ch.payouts.get(real).slot;
+  // 30 stranger rows naming the same key, all BELOW the real payout, so they are checked first
+  for (let i = 0; i < 30; i++) { const sig = w.ch.addForeignMemo(`CLKN migration ${key} #1`); w.ch.payouts.get(sig).slot = realSlot - 1; }
+  assert.ok(w.kv.setVerified("cunaMigJournal", M.emptyJournal()));
+  fs.rmSync(w.attemptsDir, { recursive: true, force: true });
+  w.boot();
+  await w.tick(1);
+  assert.strictEqual(w.journal().entries[key].state, "due", "re-detected");
+  assert.strictEqual(w.ch.sends.length, 1, "the key waits while rows naming it are unchecked");
+  await w.tick(8);
+  assert.strictEqual(w.ch.sends.length, 1, "no second payout");
+  assert.strictEqual(deliveredOf(w, A), owed(cuna(40)));
+  assert.strictEqual(w.journal().halted && w.journal().halted.code, "unknown_memo");
 });
 
 section("the list converter");

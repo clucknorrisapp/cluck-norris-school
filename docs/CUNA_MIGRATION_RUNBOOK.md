@@ -14,6 +14,7 @@ The monitor that pays CLKN for CUNA sent in, and the one-time Day-0 batch for lo
 | `CUNA_MIGRATION_OFF` is not `1` | Railway env (the hard kill; it always wins) |
 | not staging (`STAGING=1` never pays) | Railway env |
 | the payer key is loaded and its pubkey is the configured payer: the treasury key with `CUNA_MIGRATION_PAYER_SOURCE=treasury` (the owner's choice), or a dedicated `CUNA_MIGRATION_PAYER_SECRET` | Railway env + `payer=` |
+| treasury mode only: `CUNA_MIGRATION_SOL_RESERVE_LAMPORTS` (at least 0.05 SOL), `CUNA_MIGRATION_CLKN_RESERVE_RAW` and `CUNA_MIGRATION_MAX_CLKN_RAW` are all set explicitly (a reserve that does not parse is refused in either mode) | Railway env |
 | the kv store is persistent and loaded cleanly | the `/data` volume |
 | the journal is not halted | `ack=` clears a halt |
 
@@ -49,10 +50,20 @@ With the payer secret unset the whole thing is a safe no-op: it detects and reco
      treasury's CLKN account for the planned amount, and the memo (`assertPayoutShape`). Any other
      instruction, mint, amount, destination or signer throws and nothing is signed. It can never send
      SOL, CUNA or any other token the treasury holds;
-   - every send is still bounded by the wallet's own row and by the list total.
-   The treasury also pays other things (buy-comp, the Hub desk). Their CLKN outflows come out of the
-   same balance, so the status's `payer.clknRaw` is the figure to watch; when it is short, payouts wait
-   and you get one alert.
+   - every send is still bounded by the wallet's own row and by the list total;
+   - **you state three numbers in Railway or it does not arm** (the treasury's SOL and CLKN are shared
+     with buy-comp, the Hub desk, diploma mints and any engine you resume):
+     `CUNA_MIGRATION_SOL_RESERVE_LAMPORTS` — SOL the migration never spends, at least 50,000,000
+     (0.05 SOL); `CUNA_MIGRATION_CLKN_RESERVE_RAW` — CLKN it never spends (raw units; `0` is allowed
+     but must be written); and `CUNA_MIGRATION_MAX_CLKN_RAW` — the most CLKN it may pay in all, so CLKN
+     that lands in the treasury for other reasons (LP pulled back, Hub fees) is not spent on payouts
+     beyond that figure. A payout that would take the treasury below either reserve waits, with one
+     alert. The priority fee is capped at 50,000 micro-lamports per CU in treasury mode (0.005 SOL per
+     payout at most) instead of 500,000.
+   The other treasury paths still spend from the same balance at the same time, so a payout and a
+   buy-comp payout can race; the loser fails on chain, which is recoverable. The status's
+   `payer.clknAboveReserveRaw`, `payer.solAboveReserveLamports`, `payer.coversRemaining` and
+   `payer.coversSolEstimate` are the figures to watch.
 
    The other option, if you ever want it, is a dedicated hot wallet in `CUNA_MIGRATION_PAYER_SECRET`
    (base58 or a JSON byte array, and no `CUNA_MIGRATION_PAYER_SOURCE`). The server refuses that key if
@@ -114,8 +125,11 @@ A bare GET is a pure read. It never ticks. Check these fields:
   `day0RewardsClknRaw`, `totalClknNeededRaw`, and the indicative `totalClknNeededUsdIndicative` at
   the live CLKN price.
 - `armFacts`: every condition in the table above, one by one.
-- `payer`: the payer's CLKN (`clknRaw`) and SOL (`lamports`), read on chain, and
-  `solNeededEstimateLamports`.
+- `payer`: the payer's CLKN (`clknRaw`) and SOL (`lamports`), read on chain; the reserves
+  (`solReserveLamports`, `clknReserveRaw`) and what is above them (`clknAboveReserveRaw`,
+  `solAboveReserveLamports`); `coversRemaining` (CLKN above the reserve against what is still owed up
+  to the cap); `solSpendEstimateLamports` for the remaining rows and `solNeededEstimateLamports` (that
+  plus the reserve) with `coversSolEstimate`; and `payerHistory`, every payer ever set.
 
 ### 3. Fund the payer
 
@@ -124,8 +138,11 @@ A bare GET is a pure read. It never ticks. Check these fields:
   global cap below the list total. It can never raise it. A value that does not parse holds
   everything.
 - **SOL:** roughly 0.0021 SOL per payout (fee plus the rent for the recipient's CLKN account, if it
-  is missing) plus a 0.01 SOL floor the monitor always leaves untouched. The status prints the
-  estimate.
+  is missing) plus the floor the monitor always leaves untouched: 0.01 SOL for a dedicated payer, or
+  your `CUNA_MIGRATION_SOL_RESERVE_LAMPORTS` (which may also raise a dedicated payer's floor). A list of
+  500 new recipients needs about 1.02 SOL above the floor. The status prints the estimate.
+- **Arming does not read the chain:** before you arm, check in the status that `coversRemaining` and
+  `coversSolEstimate` are `true`. If they are not, payouts simply wait for funding.
 
 When the payer is short, nothing is sent. The entry stays due and you get one alert
 (`mig-short`, deduplicated for 6 h). Fund the payer and the next tick pays.
@@ -133,7 +150,9 @@ When the payer is short, nothing is sent. The entry stays due and you get one al
 ### 4. Arm (two flags)
 
 1. In Railway, set `CUNA_MIGRATION_PAYER_SOURCE=treasury` (or a dedicated `CUNA_MIGRATION_PAYER_SECRET`)
-   and `CUNA_MIGRATION_ON=1`, then redeploy.
+   and `CUNA_MIGRATION_ON=1` — with the treasury also `CUNA_MIGRATION_SOL_RESERVE_LAMPORTS`,
+   `CUNA_MIGRATION_CLKN_RESERVE_RAW` and `CUNA_MIGRATION_MAX_CLKN_RAW` (your numbers; `arm=1` answers
+   409 naming any that is missing) — then redeploy.
 2. Arm:
 
    ```
@@ -203,10 +222,16 @@ creates nothing new. A wallet that is both a holder and a locker gets both, inde
    past `lastValidBlockHeight + 150`. While live, it is rebroadcast with the **identical bytes**,
    which carry the same signature. A new attempt is built only when every earlier attempt is dead.
 4. **A memo on every payout.** Every payout carries `CLKN migration <key> #<n>`. Every tick, armed
-   or not, the monitor reads the history of every payer the journal has ever used (so rotating the
-   payer does not hide the old one), past a durable cursor, at finalized. A memo row counts only if
-   that payer **signed** the transaction: anyone can send dust that names the payer, and that does
-   nothing. One of our attempts that landed while the journal judged it dead is revived and recorded
+   or not, the monitor reads the history of every payer ever configured, past a durable cursor, at
+   finalized. Rotating the payer does not hide the old one, even after a lost journal: every payer
+   `payer=` ever set is kept append-only in the config (`payerHistory`) and in its own kv key
+   (`cunaMigPayers`), outside the journal. A memo row counts only if that payer **signed** the
+   transaction: anyone can send dust that names the payer, and that does nothing. Checking a row
+   costs one transaction fetch, at most 50 a tick (`CUNA_MIGRATION_WITNESS_MAX_FETCH`, up to 2,000);
+   a verdict is kept across ticks, so a backlog always drains. Rows not yet checked hold back only the
+   payout keys **their memos name**; every other due payout goes ahead. A stranger who keeps naming
+   one holder's key in more rows than a tick checks can delay that one holder (never pay them twice);
+   raise the fetch limit if you see `mig-hist-keys` alerts that do not clear. One of our attempts that landed while the journal judged it dead is revived and recorded
    from the chain; if the entry was already paid by a retry, that is an `anomaly` halt. A payer-signed
    memo the journal does not own (a lost or restored journal) halts once and is adopted into its
    entry as a live attempt, so that entry can never be paid again, even after the ack.
@@ -270,6 +295,9 @@ token account of the receive wallet** while the window is open.
 | `CUNA_MIGRATION_PAYER_SECRET` | unset (no-op) | a dedicated payer key instead (secret, Railway only); refused if set together with the source above |
 | `CUNA_MIGRATION_ON` | unset | `=1` is the second arm flag |
 | `CUNA_MIGRATION_OFF` | unset | `=1` is the hard kill |
-| `CUNA_MIGRATION_MAX_CLKN_RAW` | list total | lowers the global cap; it can never raise it |
+| `CUNA_MIGRATION_MAX_CLKN_RAW` | list total (REQUIRED in treasury mode) | lowers the global cap; it can never raise it |
+| `CUNA_MIGRATION_SOL_RESERVE_LAMPORTS` | 0.01 SOL floor (REQUIRED in treasury mode, at least 50,000,000) | SOL the payer always keeps |
+| `CUNA_MIGRATION_CLKN_RESERVE_RAW` | 0 (REQUIRED in treasury mode) | CLKN the payer always keeps |
 | `CUNA_MIGRATION_TICK_MAX` | 5 | payouts per tick, 1–20 |
-| `CUNA_MIGRATION_CU_PRICE` | 20000 | priority fee in micro-lamports per CU, clamped to 500,000; the CU limit is 100,000 |
+| `CUNA_MIGRATION_CU_PRICE` | 20000 | priority fee in micro-lamports per CU, clamped to 500,000 (50,000 in treasury mode); the CU limit is 100,000 |
+| `CUNA_MIGRATION_WITNESS_MAX_FETCH` | 50 | payer-history memo rows checked per tick, 1–2,000 |

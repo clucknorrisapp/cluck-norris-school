@@ -13595,7 +13595,8 @@ async function cunaOpsAlert(text, dedupeKey, opts = {}) {
 // loaded and matches the configured payer. The owner chose to pay from the TREASURY (2026-11-14):
 // CUNA_MIGRATION_PAYER_SOURCE=treasury loads the existing MM_OPERATOR_SECRET_TREASURY, the payer must
 // then be the treasury, and assertPayoutShape lets a payout carry nothing but one CLKN TransferChecked
-// to the recipient. With neither that nor a dedicated CUNA_MIGRATION_PAYER_SECRET set it is a safe
+// to the recipient; treasury mode also needs the owner's SOL/CLKN reserves and an explicit
+// CUNA_MIGRATION_MAX_CLKN_RAW in env. With neither that nor a dedicated CUNA_MIGRATION_PAYER_SECRET set it is a safe
 // no-op. It never touches the lock-to-earn, burn or engine state (no cunaStake*/cunaBurn*/
 // cunaEngineArmed key, no vault project) and never moves CUNA. Alerts go to the treasury operator
 // room ({burn:true}), never the CUNA public room, OnlyRose or X.
