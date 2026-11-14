@@ -13586,6 +13586,164 @@ async function cunaOpsAlert(text, dedupeKey, opts = {}) {
   return tgSend(chat, text, null, { silent: true });
 }
 
+// ── CUNA -> CLKN migration monitor (owner, 2026-11-14) ─────────────────────────────────────────
+// Holders send CUNA to a receive wallet the owner configures; the monitor pays the SENDER CLKN at
+// 27,700 per 1,000,000 CUNA up to their snapshot row, and lockers get a one-time Day-0 batch. The
+// decisions are lib/cuna-migration.js, the tick lib/cuna-migration-monitor.js, the owner's steps
+// docs/CUNA_MIGRATION_RUNBOOK.md. SHIPS DISARMED: nothing sends unless kv cunaMigArmed is true AND
+// CUNA_MIGRATION_ON=1 AND CUNA_MIGRATION_OFF is not 1 AND this is not staging AND the payer key is
+// loaded and matches the configured payer. The owner chose to pay from the TREASURY (2026-11-14):
+// CUNA_MIGRATION_PAYER_SOURCE=treasury loads the existing MM_OPERATOR_SECRET_TREASURY, the payer must
+// then be the treasury, and assertPayoutShape lets a payout carry nothing but one CLKN TransferChecked
+// to the recipient; treasury mode also needs the owner's SOL/CLKN reserves and an explicit
+// CUNA_MIGRATION_MAX_CLKN_RAW in env. With neither that nor a dedicated CUNA_MIGRATION_PAYER_SECRET set it is a safe
+// no-op. It never touches the lock-to-earn, burn or engine state (no cunaStake*/cunaBurn*/
+// cunaEngineArmed key, no vault project) and never moves CUNA. Alerts go to the treasury operator
+// room ({burn:true}), never the CUNA public room, OnlyRose or X.
+let CUNA_MIG_SIGNER;   // undefined = not loaded yet; null = unset; {keypair} | {refused}
+// Parsed once and cached (a changed secret needs a restart, like every other signer here). The
+// refusals — unparseable, or the same key as MM_OPERATOR_SECRET / MM_OPERATOR_SECRET_* /
+// CUNA_BURN_SECRET — live in the lib so the test drives them; only names and pubkeys are logged.
+function loadMigrationSigner() {
+  if (CUNA_MIG_SIGNER !== undefined) return CUNA_MIG_SIGNER;
+  CUNA_MIG_SIGNER = require("./lib/cuna-migration-monitor").loadPayerSignerFromEnv(process.env);
+  if (CUNA_MIG_SIGNER && CUNA_MIG_SIGNER.refused) console.error(`[cuna-migration] REFUSING the payer key: ${CUNA_MIG_SIGNER.refused}${CUNA_MIG_SIGNER.pubkey ? ` (${CUNA_MIG_SIGNER.pubkey})` : ""}`);
+  else if (CUNA_MIG_SIGNER) console.log(`[cuna-migration] payer key loaded: ${CUNA_MIG_SIGNER.keypair.publicKey.toBase58()}`);
+  return CUNA_MIG_SIGNER;
+}
+let CUNA_MIG_MONITOR = null;
+function cunaMigration() {
+  if (CUNA_MIG_MONITOR) return CUNA_MIG_MONITOR;
+  const { createMonitor } = require("./lib/cuna-migration-monitor");
+  const { createAttemptStore } = require("./lib/cuna-migration-attempts");
+  // Resolved per call, so a failover of the primary endpoint is picked up (connection() memoises).
+  const c = () => rpc.connection("confirmed");
+  CUNA_MIG_MONITOR = createMonitor({
+    kv,
+    rpcJson: (method, params) => rpc.rpcJson(method, params),
+    conn: {
+      getSignatureStatuses: (sigs, o) => c().getSignatureStatuses(sigs, o),
+      getBlockHeight: (commitment) => c().getBlockHeight(commitment),
+      getLatestBlockhash: (commitment) => c().getLatestBlockhash(commitment),
+      sendRawTransaction: (bytes, o) => c().sendRawTransaction(bytes, o),
+    },
+    attempts: createAttemptStore(path.join(process.env.DATA_DIR || "/data", "cuna-migration", "attempts")),
+    loadSigner: loadMigrationSigner,
+    env: () => process.env,
+    alert: (text, key) => cunaOpsAlert(text, key, { burn: true }),
+    isStaging: IS_STAGING,
+    mints: { cuna: CUNA_MINT, clkn: CLKN_MINT },
+    treasury: () => TREASURY_WALLET,
+    clknUsd: () => toolGatePrice.usd,
+  });
+  return CUNA_MIG_MONITOR;
+}
+function cunaMigrationTimerTick(reason) {
+  let m;
+  try { m = cunaMigration(); } catch (e) { console.error("[cuna-migration] init: " + e.message); return; }
+  m.tick(reason).then((r) => {
+    if (r && r.sent && r.sent.length) console.log(`[cuna-migration] ${reason}: sent ${r.sent.length} payout(s)`);
+    if (r && r.blocked) console.error(`[cuna-migration] ${reason}: ${r.blocked}`);
+  }).catch((e) => console.error("[cuna-migration] tick: " + e.message));
+}
+setInterval(() => cunaMigrationTimerTick("timer"), 120000);
+setTimeout(() => {
+  try {
+    const f = cunaMigration().armFacts();
+    console.log(`[cuna-migration] boot: armed=${f.armed} kvArm=${f.kvArm} envOn=${f.envOn} envOff=${f.envOff} payerLoaded=${f.payerLoaded} payerMatches=${f.payerMatches} staging=${f.staging} configComplete=${f.configComplete} halted=${f.halted ? f.halted.code : "no"}`);
+  } catch (e) { console.error("[cuna-migration] boot: " + e.message); }
+  cunaMigrationTimerTick("boot");
+}, 25000);
+
+// Admin auth for the migration: the master key in the x-premium-key HEADER only. A ?key= in the URL
+// is refused outright (it lands in access logs), and no scoped key (BUYCOMP_KEY etc.) is accepted.
+function cunaMigAdminOK(req, res) {
+  res.setHeader("Cache-Control", "no-store");
+  const KEY = process.env.PREMIUM_ACCESS_KEY;
+  const ok = !req.cluckDirect && !(req.query && req.query.key != null) && !!KEY && secretEqual(String(req.headers["x-premium-key"] || ""), String(KEY));
+  if (!ok) res.status(404).json(ADMIN_404_OK_US);
+  return ok;
+}
+const CUNA_MIG_ADMIN_FLAGS = ["receive", "payer", "list", "window", "start", "end", "arm", "disarm", "confirm", "tick", "hold", "release", "ack"];
+const CUNA_MIG_ACTIONS = ["receive", "payer", "list", "window", "arm", "disarm", "tick", "hold", "release", "ack"];
+
+// Public, read-only: the terms, or ONE wallet's own row (entitlement, CUNA received, CLKN paid,
+// payout signatures). Never another wallet, the list hash, payer balances, halts or cursors. Never ticks.
+app.get("/api/cuna-migration", rateLimit("cuna-migration", { windowMs: 60000, max: 60 }), (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  try {
+    const m = cunaMigration();
+    const w = req.query.wallet;
+    if (w == null || w === "") {
+      const t = m.publicTerms();
+      return res.status(t.configured ? 200 : 503).json({ ok: t.configured, ...t });
+    }
+    if (!SOL_ADDR_RE.test(String(w))) return res.status(400).json({ ok: false, error: "wallet must be a base58 address" });
+    const v = m.publicLookup(String(w));
+    if (!v) return res.status(503).json({ ok: false, configured: false });
+    return res.json({ ok: true, ...v });
+  } catch (e) { return res.status(500).json({ ok: false, error: publicErrMsg(e) }); }
+});
+
+// Owner-only. A flag-less GET is the status READ (never a tick); every write is a POST with exactly
+// one action. Shape and steps: docs/CUNA_MIGRATION_RUNBOOK.md.
+app.all("/api/cuna-migration/admin", async (req, res) => {
+  if (!cunaMigAdminOK(req, res)) return;
+  if (mutatingGetRefused(req, res, CUNA_MIG_ADMIN_FLAGS)) return;
+  try {
+    const m = cunaMigration();
+    if (req.method === "GET") return res.json({ ok: true, ...(await m.status()) });
+    if (req.method !== "POST") { res.setHeader("Allow", "GET, POST"); return res.status(405).json({ ok: false, error: "GET reads, POST writes" }); }
+    const q = { ...(req.query || {}), ...(req.body && typeof req.body === "object" && !Array.isArray(req.body) ? req.body : {}) };
+    const acts = CUNA_MIG_ACTIONS.filter((a) => q[a] != null && q[a] !== "");
+    if (acts.length !== 1) return res.status(400).json({ ok: false, error: `exactly one action per POST (one of ${CUNA_MIG_ACTIONS.join(", ")}); got ${acts.length ? acts.join(", ") : "none"}` });
+    let r;
+    switch (acts[0]) {
+      case "receive": r = await m.setReceive(q.receive); break;
+      case "payer": r = m.setPayer(q.payer); break;
+      case "list": r = String(q.list) === "1" ? m.setList(q.rows) : { ok: false, status: 400, error: "list=1 with body.rows" }; break;
+      case "window": r = String(q.window) === "1" ? m.setWindow(q.start, q.end) : { ok: false, status: 400, error: "window=1&start=<unix>[&end=<unix>]" }; break;
+      case "arm": r = String(q.arm) === "1" ? m.arm(q.confirm) : { ok: false, status: 400, error: "arm=1&confirm=arm-cuna-migration" }; break;
+      case "disarm": r = m.disarm(); break;
+      case "tick": {
+        if (String(q.tick) !== "1") { r = { ok: false, status: 400, error: "tick=1" }; break; }
+        const t = await m.tick("manual");
+        r = t && t.busy ? { ok: false, status: 409, error: "a tick is already running" } : { ok: true, tick: t };
+        break;
+      }
+      case "hold": r = m.hold(q.hold); break;
+      case "release": r = await m.release(q.release); break;
+      case "ack": r = m.ack(q.ack); break;
+      default: r = { ok: false, status: 400, error: "unknown action" };
+    }
+    console.log(`[cuna-migration] admin ${acts[0]}: ${r.ok ? "ok" : "refused — " + r.error}`);
+    return res.status(r.ok ? 200 : (r.status || 400)).json(r);
+  } catch (e) {
+    console.error("[cuna-migration] admin: " + e.message);
+    return res.status(500).json({ ok: false, error: publicErrMsg(e) });
+  }
+});
+
+// Day 0 for the lockers: a DRY RUN by default (also on a bare GET) that writes nothing;
+// POST run=1&confirm=pay-day0 creates one due entry per locker (once) and pays through the same journal.
+app.all("/api/cuna-migration/day0", async (req, res) => {
+  if (!cunaMigAdminOK(req, res)) return;
+  if (mutatingGetRefused(req, res, ["run", "confirm"])) return;
+  try {
+    const m = cunaMigration();
+    const q = { ...(req.query || {}), ...(req.body && typeof req.body === "object" && !Array.isArray(req.body) ? req.body : {}) };
+    if (req.method === "POST" && String(q.run || "") === "1") {
+      const r = await m.day0Run(q.confirm);
+      console.log(`[cuna-migration] day0 run: ${r.ok ? `created ${r.created}` : "refused — " + r.error}`);
+      return res.status(r.ok ? 200 : (r.status || 400)).json(r);
+    }
+    return res.json({ ok: true, ...(await m.day0Preview()) });
+  } catch (e) {
+    console.error("[cuna-migration] day0: " + e.message);
+    return res.status(500).json({ ok: false, error: publicErrMsg(e) });
+  }
+});
+
 // If the PREVIOUS full hour was never accrued while armed, say so once per hour. The ten-minute
 // tick retries on its own; this is the line that stops a lost hour being discovered on Friday.
 let CUNA_ACCRUAL_ALERTED_SLICE = null;

@@ -82,6 +82,28 @@ expectExit(
   2
 );
 
+expectExit(
+  "cuna-migration/admin arm=1, plain GET",
+  'curl -H "x-premium-key: $K" "https://clucknorris.app/api/cuna-migration/admin?arm=1&confirm=arm-cuna-migration"',
+  2
+);
+expectExit(
+  "cuna-migration/admin receive=, plain GET",
+  'curl -H "x-premium-key: $K" "https://clucknorris.app/api/cuna-migration/admin?receive=So11111111111111111111111111111111111111112"',
+  2
+);
+expectExit(
+  "cuna-migration/admin tick=1 / hold= / ack= / list= / window= / payer=, plain GET",
+  'curl -H "x-premium-key: $K" "https://clucknorris.app/api/cuna-migration/admin?tick=1" ; curl "https://clucknorris.app/api/cuna-migration/admin?hold=x"',
+  2
+);
+expectExit("cuna-migration/admin release=, plain GET", 'curl -H "x-premium-key: $K" "https://clucknorris.app/api/cuna-migration/admin?release=x"', 2);
+expectExit("cuna-migration/admin ack=, plain GET", 'curl "https://clucknorris.app/api/cuna-migration/admin?ack=anomaly"', 2);
+expectExit("cuna-migration/admin list=1, plain GET", 'curl "https://clucknorris.app/api/cuna-migration/admin?list=1"', 2);
+expectExit("cuna-migration/admin window=1, plain GET", 'curl "https://clucknorris.app/api/cuna-migration/admin?window=1&start=1"', 2);
+expectExit("cuna-migration/admin payer=, plain GET", 'curl "https://clucknorris.app/api/cuna-migration/admin?payer=x"', 2);
+expectExit("cuna-migration/day0 run=1, plain GET", 'curl -H "x-premium-key: $K" "https://clucknorris.app/api/cuna-migration/day0?run=1&confirm=pay-day0"', 2);
+
 // --- Allowed: same routes/flags, but properly POSTed -----------------------
 expectExit(
   "vault pause with run=1, -X POST",
@@ -109,7 +131,28 @@ expectExit(
   0
 );
 
+expectExit(
+  "cuna-migration/admin arm=1, -X POST",
+  'curl -X POST -H "x-premium-key: $K" "https://clucknorris.app/api/cuna-migration/admin?arm=1&confirm=arm-cuna-migration"',
+  0
+);
+expectExit(
+  "cuna-migration/day0 run=1, -X POST",
+  'curl -X POST -H "x-premium-key: $K" "https://clucknorris.app/api/cuna-migration/day0?run=1&confirm=pay-day0"',
+  0
+);
+
 // --- Allowed: reads (no mutating flag), non-admin paths, non-curl ----------
+expectExit(
+  "cuna-migration admin status read, no flags",
+  'curl -H "x-premium-key: $K" "https://clucknorris.app/api/cuna-migration/admin"',
+  0
+);
+expectExit(
+  "cuna-migration public lookup",
+  'curl "https://clucknorris.app/api/cuna-migration?wallet=So11111111111111111111111111111111111111112"',
+  0
+);
 expectExit(
   "cuna-stake payout read, no flags",
   'curl -H "x-premium-key: $K" "https://clucknorris.app/api/cuna-stake/payout"',

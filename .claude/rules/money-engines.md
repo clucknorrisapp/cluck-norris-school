@@ -7,6 +7,8 @@ paths:
   - "lib/cuna-*"
   - "scripts/engine-sim-test.cjs"
   - "docs/CUNA_STAKING_RUNBOOK.md"
+  - "docs/CUNA_MIGRATION_RUNBOOK.md"
+  - "scripts/cuna-migration-*.cjs"
 ---
 
 # Money-engine traps
