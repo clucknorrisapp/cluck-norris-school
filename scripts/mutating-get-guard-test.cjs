@@ -47,7 +47,8 @@ function raw(method, p, headers) {
   // CUNA_ENGINE_ON=1 is deliberately set: since 2026-09-17 (P1-032) an env arm flag must NOT arm
   // anything — the kv key is the only switch and an absent key is OFF. ANTHROPIC_API_KEY is a
   // dummy so the X-Ray chat route reaches its pass check instead of the "AI not configured" 500.
-  const env = { ...process.env, PORT: String(PORT), DATA_DIR: DIR, PREMIUM_ACCESS_KEY: KEY, CUNA_ENGINE_ON: "1", ANTHROPIC_API_KEY: "test-not-a-key",
+  // CUNA_MIGRATION_ON=1 too, with no payer secret: the migration monitor must stay a quiet no-op.
+  const env = { ...process.env, PORT: String(PORT), DATA_DIR: DIR, PREMIUM_ACCESS_KEY: KEY, CUNA_ENGINE_ON: "1", CUNA_MIGRATION_ON: "1", CUNA_MIGRATION_PAYER_SECRET: "", ANTHROPIC_API_KEY: "test-not-a-key",
     TELEGRAM_BOT_TOKEN: "", TELEGRAM_CHAT_ID: "", HELIUS_API_KEY: "", MM_OPERATOR_SECRET: "", MM_OPERATOR_SECRET_TREASURY: "",
     FALLBACK_RPC_URL: "http://127.0.0.1:9" };
   const srv = spawn(process.execPath, ["server.js"], { cwd: path.join(__dirname, ".."), env, stdio: "ignore" });
@@ -232,6 +233,55 @@ function raw(method, p, headers) {
   ok("GET /api/cuna-stake/payout?void= is refused with 405", r.status === 405);
   r = await call("GET", "/api/cuna-stake/payout?bonus=nope&run=1");
   ok("GET /api/cuna-stake/payout?bonus= is refused with 405", r.status === 405);
+
+  // ── CUNA -> CLKN migration (2026-11-14): every admin/day0 write flag is refused on a GET, the master
+  // key is accepted in the HEADER only, a bare admin GET is a read that never ticks, and the public
+  // lookup carries no admin data.
+  const PK0 = "B".repeat(32);   // base58 shape only; not a real wallet
+  // Its own rate-limit bucket (the global /api cap is 150/min per client IP, and this harness is one
+  // client): without it the cases below would push the later sections into 429s.
+  const mcall = async (method, p, withKey = true) => {
+    const r = await fetch(BASE + p, { method, headers: { ...(withKey ? { "x-premium-key": KEY } : {}), "cf-connecting-ip": "10.77.0.1" } });
+    let body = null; try { body = await r.json(); } catch (_) { body = null; }
+    return { status: r.status, body };
+  };
+  for (const f of ["receive=" + PK0, "payer=" + PK0, "list=1", "window=1", "start=1800000000", "end=1800000001", "arm=1", "disarm=1", "confirm=arm-cuna-migration", "tick=1", "hold=x", "ack=anomaly"]) {
+    r = await mcall("GET", "/api/cuna-migration/admin?" + f);
+    ok(`GET /api/cuna-migration/admin?${f.split("=")[0]}= is refused with 405`, r.status === 405, String(r.status));
+  }
+  r = await mcall("GET", "/api/cuna-migration/day0?run=1");
+  ok("GET /api/cuna-migration/day0?run=1 is refused with 405", r.status === 405, String(r.status));
+  r = await mcall("GET", "/api/cuna-migration/day0?confirm=pay-day0");
+  ok("GET /api/cuna-migration/day0?confirm= is refused with 405", r.status === 405, String(r.status));
+  r = await mcall("GET", "/api/cuna-migration/admin?key=" + encodeURIComponent(KEY), false);
+  ok("the migration admin refuses ?key= without the header (404 — header only)", r.status === 404, String(r.status));
+  r = await mcall("GET", "/api/cuna-migration/admin?key=" + encodeURIComponent(KEY));
+  ok("…and refuses ?key= even beside a valid header (a key in a URL is never accepted)", r.status === 404, String(r.status));
+  r = await mcall("GET", "/api/cuna-migration/admin", false);
+  ok("the migration admin is 404 without the key", r.status === 404, String(r.status));
+  {
+    const a = await mcall("GET", "/api/cuna-migration/admin");
+    await sleep(300);
+    const b = await mcall("GET", "/api/cuna-migration/admin");
+    ok("a bare admin GET with the header is a 200 read", a.status === 200 && a.body && a.body.armFacts, JSON.stringify(a.body).slice(0, 160));
+    ok("…that never ticks (lastTick unchanged across reads)", a.body && b.body && JSON.stringify(a.body.lastTick) === JSON.stringify(b.body.lastTick));
+    ok("CUNA_MIGRATION_ON=1 with no payer secret stays disarmed (no payer, no kv arm)", a.body && a.body.armFacts && a.body.armFacts.armed === false && a.body.armFacts.payerLoaded === false && a.body.armFacts.envOn === true, JSON.stringify(a.body && a.body.armFacts));
+  }
+  r = await mcall("GET", "/api/cuna-migration/day0");
+  ok("a bare day0 GET is the dry run", r.status === 200 && r.body && r.body.dryRun === true, JSON.stringify(r.body).slice(0, 160));
+  r = await mcall("POST", "/api/cuna-migration/day0?run=1&confirm=pay-day0");
+  ok("POST day0 run=1 while disarmed is refused (409), nothing paid", r.status === 409 && r.body && r.body.ok === false, JSON.stringify(r.body).slice(0, 160));
+  r = await mcall("POST", "/api/cuna-migration/admin?arm=1&confirm=arm-cuna-migration");
+  ok("POST arm with nothing configured is refused (409)", r.status === 409, JSON.stringify(r.body).slice(0, 160));
+  r = await mcall("POST", "/api/cuna-migration/admin?arm=1&disarm=1");
+  ok("POST with two actions is refused (400) — exactly one action per request", r.status === 400, String(r.status));
+  {
+    const pub = await mcall("GET", "/api/cuna-migration?wallet=" + PK0, false);
+    const txt = JSON.stringify(pub.body || {});
+    ok("the public lookup for a made-up wallet carries no admin fields", ![/sha256/, /armFacts/, /payer/, /cursors/, /halted/, /lamports/, /txBase64/].some((re) => re.test(txt)), txt.slice(0, 200));
+    const terms = await mcall("GET", "/api/cuna-migration", false);
+    ok("the public terms answer (503 until configured) and name no receive wallet yet", terms.status === 503 && terms.body && terms.body.configured === false && terms.body.receiveWallet === null, JSON.stringify(terms.body).slice(0, 160));
+  }
 
   // ── #9 telegram test routes: 404 (not 403) without the key; post=1 needs POST
   r = await call("GET", "/api/bags-radar-test", false);
