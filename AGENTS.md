@@ -42,6 +42,13 @@ does not tell you how to write software; use your judgement for that.
 > from our own `firstSeenAt`, never from `vesting_start_time` (Jupiter sets that equal to the cliff,
 > and it is creator-set — live CUNA escrows declare 2069 and 2077).
 
+> 🔁 **Touching the CUNA → CLKN migration? Read `docs/CUNA_MIGRATION_RUNBOOK.md` first.** The monitor
+> (`lib/cuna-migration*.js`) pays CLKN for CUNA sent to the owner's receive wallet and runs the Day-0
+> locker batch. It ships DISARMED: kv `cunaMigArmed` AND `CUNA_MIGRATION_ON=1` AND a dedicated
+> `CUNA_MIGRATION_PAYER_SECRET`, with `CUNA_MIGRATION_OFF=1` the kill. The payout list is the owner's
+> upload, never committed. Never pay outside its journal; an attempt file under
+> `${DATA_DIR}/cuna-migration/attempts/` is never deleted.
+
 > Moved to .claude/rules/normie-quest.md (loads for `normie-quest/**`) — the Normie Quest testing
 > handoff, the boss/audio/speed handoff, and the Phaser `setScrollFactor` trap.
 
