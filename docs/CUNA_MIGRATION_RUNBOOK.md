@@ -54,8 +54,11 @@ With the payer secret unset the whole thing is a safe no-op: it detects and reco
      memo must carry no accounts and be exactly `CLKN migration <key> #<n>` for that attempt. Any other
      instruction, mint, amount, destination, signer or byte throws and nothing is signed. It can never
      send SOL, CUNA or any other token the treasury holds. A refusal holds that entry as
-     `payout_shape_refused` with one `mig-shape` alert, and the tick goes on with the others. Stored
-     signed bytes are put through the same check (and their signature must be the attempt's) before
+     `payout_shape_refused` with one alert for that entry, and nothing else is sent that tick: a cause
+     that breaks every build costs one held entry per tick, never the whole queue, and the rest pay
+     by themselves once it is fixed. Stored
+     signed bytes are put through the same check (and their signature must be the attempt's; the fee
+     ceiling used is the widest either payer source signs under, since a rebroadcast cannot change it) before
      any rebroadcast; bytes that fail are never rebroadcast, and the entry freezes as an `anomaly`;
    - every send is still bounded by the wallet's own row and by the list total;
    - **you state three numbers in Railway or it does not arm** (the treasury's SOL and CLKN are shared

@@ -1754,7 +1754,7 @@ t("an adopted attempt file whose bytes carry the paySig but are not this payout'
   assert.strictEqual(w.ch.sends.length, 0); assert.strictEqual(deliveredOf(w, A), 0n);
 });
 
-t("a build that fails the shape check holds that entry (payout_shape_refused) with ONE deduplicated alert, and the tick goes on with the others", async () => {
+t("a build that fails the shape check holds that ONE entry (payout_shape_refused), alerts once for it, and sends nothing else that tick; the rest stay due", async () => {
   const A = pk(), B = pk(), C = pk();
   const w = world(); await w.configure({ rows: [row(A, 100), row(B, 100), row(C, 100)] });
   const sA = w.ch.addIncoming({ from: A, amount: cuna(10) });
@@ -1767,15 +1767,20 @@ t("a build that fails the shape check holds that entry (payout_shape_refused) wi
   let r;
   try { r = await w.m.tick("t"); } finally { web3.ComputeBudgetProgram.setComputeUnitPrice = orig; }
   assert.ok(r && r.ok, "the tick completed: " + JSON.stringify(r));
-  const j = w.journal();
+  let j = w.journal();
   assert.strictEqual(j.entries[sA].state, "held"); assert.strictEqual(j.entries[sA].reason, "payout_shape_refused");
-  assert.strictEqual(j.entries[sB].reason, "payout_shape_refused");
+  assert.strictEqual(j.entries[sB].state, "due", "the first refusal stops the tick: B was not built");
   assert.strictEqual(j.entries[sA].attempts.length, 0, "nothing was signed or recorded for it");
-  assert.strictEqual(r.shapeRefused.length, 2);
-  const shapeAlerts = w.alerts.filter((x) => x.key === "mig-shape");
-  assert.strictEqual(shapeAlerts.length, 1, "one alert"); assert.ok(/above the ceiling/.test(shapeAlerts[0].text));
+  assert.strictEqual(r.shapeRefused.length, 1);
+  assert.strictEqual(w.ch.sends.length, 0, "nothing sent in the tick that refused");
   assert.ok(j.lastTick && j.lastTick.at, "lastTick is still written");
-  await w.tick(3);
+  web3.ComputeBudgetProgram.setComputeUnitPrice = function (p) { calls++; return orig.call(this, calls <= 2 ? { microLamports: Number(p.microLamports) * 1000000 } : p); };
+  try { await w.tick(4); } finally { web3.ComputeBudgetProgram.setComputeUnitPrice = orig; }
+  j = w.journal();
+  assert.strictEqual(j.entries[sB].reason, "payout_shape_refused");
+  const shapeAlerts = w.alerts.filter((x) => /^mig-shape:/.test(x.key || ""));
+  assert.strictEqual(shapeAlerts.length, 2, "one alert per refused entry, each with its own dedupe key");
+  assert.notStrictEqual(shapeAlerts[0].key, shapeAlerts[1].key); assert.ok(/above the ceiling/.test(shapeAlerts[0].text));
   assert.strictEqual(deliveredOf(w, C), owed(cuna(10)), "the other entry paid");
   assert.strictEqual(deliveredOf(w, A), 0n);
   // fixed: the owner releases it and it pays once
@@ -1783,6 +1788,47 @@ t("a build that fails the shape check holds that entry (payout_shape_refused) wi
   assert.ok(rel.ok, JSON.stringify(rel));
   await w.tick(3);
   assert.strictEqual(deliveredOf(w, A), owed(cuna(10))); assert.strictEqual(uniqueLandedFor(w, A), 1);
+});
+
+t("a build failure that hits EVERY payout holds one entry per tick, not the whole queue; once the cause is gone the rest pay with no release", async () => {
+  const A = pk(), B = pk(), C = pk();
+  const w = world(); await w.configure({ rows: [row(A, 100), row(B, 100), row(C, 100)] });
+  const sA = w.ch.addIncoming({ from: A, amount: cuna(10) });
+  w.ch.addIncoming({ from: B, amount: cuna(10) }); w.ch.addIncoming({ from: C, amount: cuna(10) });
+  const orig = web3.ComputeBudgetProgram.setComputeUnitPrice;
+  web3.ComputeBudgetProgram.setComputeUnitPrice = function (p) { return orig.call(this, { microLamports: Number(p.microLamports) * 1000000 }); };
+  try { await w.m.tick("t"); } finally { web3.ComputeBudgetProgram.setComputeUnitPrice = orig; }
+  const held = w.entries().filter(([, e]) => e.state === "held");
+  assert.strictEqual(held.length, 1, "one entry held, the others still due"); assert.strictEqual(held[0][0], sA);
+  await w.tick(4);
+  assert.strictEqual(deliveredOf(w, B), owed(cuna(10))); assert.strictEqual(deliveredOf(w, C), owed(cuna(10)));
+  assert.strictEqual(deliveredOf(w, A), 0n, "the held one waits for the owner's release");
+});
+
+t("stored bytes signed under the dedicated payer's wider fee ceiling are not frozen when the treasury source is switched on mid-flight", async () => {
+  const A = pk();
+  const w = world({ env: { CUNA_MIGRATION_CU_PRICE: "100000" } }); await w.configure({ rows: [row(A, 100)] });
+  w.ch.addIncoming({ from: A, amount: cuna(10) });
+  w.ch.sendModes = ["drop"];
+  await w.m.tick("t");                       // signed at 100,000 micro-lamports and dropped
+  assert.strictEqual(w.ch.sends.length, 1);
+  // The ceiling for NEW builds drops to 50,000. This payer is not the treasury, so the monitor
+  // disarms (nothing is rebroadcast), but the stored bytes are still judged every tick, and before
+  // the fix they failed the current ceiling and froze the entry as an anomaly with a global halt.
+  w.env = { ...w.env, CUNA_MIGRATION_PAYER_SOURCE: "treasury" };
+  w.ch.sendMode = "land";
+  await w.tick(2);
+  let j = w.journal();
+  assert.ok(!j.halted, "no halt: " + JSON.stringify(j.halted));
+  assert.strictEqual(Object.values(j.entries)[0].state, "sending", "still a live payout, not frozen");
+  assert.strictEqual(deliveredOf(w, A), 0n, "nothing rebroadcast while disarmed");
+  // Switched back: the same stored bytes are rebroadcast and land once.
+  const { CUNA_MIGRATION_PAYER_SOURCE, ...rest } = w.env; w.env = rest;
+  await w.tick(3);
+  j = w.journal();
+  assert.ok(!j.halted);
+  assert.strictEqual(deliveredOf(w, A), owed(cuna(10))); assert.strictEqual(uniqueLandedFor(w, A), 1);
+  assert.strictEqual(new Set(w.ch.sends.map((s) => s.sig)).size, 1, "the same signature, never a second payout");
 });
 
 section("review: an entry held after attempts that never reached the chain");
