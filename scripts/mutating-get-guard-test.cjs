@@ -245,7 +245,7 @@ function raw(method, p, headers) {
     let body = null; try { body = await r.json(); } catch (_) { body = null; }
     return { status: r.status, body };
   };
-  for (const f of ["receive=" + PK0, "payer=" + PK0, "list=1", "window=1", "start=1800000000", "end=1800000001", "arm=1", "disarm=1", "confirm=arm-cuna-migration", "tick=1", "hold=x", "ack=anomaly"]) {
+  for (const f of ["receive=" + PK0, "payer=" + PK0, "list=1", "window=1", "start=1800000000", "end=1800000001", "arm=1", "disarm=1", "confirm=arm-cuna-migration", "tick=1", "hold=x", "release=x", "ack=anomaly"]) {
     r = await mcall("GET", "/api/cuna-migration/admin?" + f);
     ok(`GET /api/cuna-migration/admin?${f.split("=")[0]}= is refused with 405`, r.status === 405, String(r.status));
   }

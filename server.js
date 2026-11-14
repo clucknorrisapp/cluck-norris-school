@@ -13664,8 +13664,8 @@ function cunaMigAdminOK(req, res) {
   if (!ok) res.status(404).json(ADMIN_404_OK_US);
   return ok;
 }
-const CUNA_MIG_ADMIN_FLAGS = ["receive", "payer", "list", "window", "start", "end", "arm", "disarm", "confirm", "tick", "hold", "ack"];
-const CUNA_MIG_ACTIONS = ["receive", "payer", "list", "window", "arm", "disarm", "tick", "hold", "ack"];
+const CUNA_MIG_ADMIN_FLAGS = ["receive", "payer", "list", "window", "start", "end", "arm", "disarm", "confirm", "tick", "hold", "release", "ack"];
+const CUNA_MIG_ACTIONS = ["receive", "payer", "list", "window", "arm", "disarm", "tick", "hold", "release", "ack"];
 
 // Public, read-only: the terms, or ONE wallet's own row (entitlement, CUNA received, CLKN paid,
 // payout signatures). Never another wallet, the list hash, payer balances, halts or cursors. Never ticks.
@@ -13712,6 +13712,7 @@ app.all("/api/cuna-migration/admin", async (req, res) => {
         break;
       }
       case "hold": r = m.hold(q.hold); break;
+      case "release": r = await m.release(q.release); break;
       case "ack": r = m.ack(q.ack); break;
       default: r = { ok: false, status: 400, error: "unknown action" };
     }

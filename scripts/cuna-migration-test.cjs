@@ -151,6 +151,8 @@ function makeChain({ receive, payer }) {
       ch.sends.push(d);
       const mode = ch.sendModes.length ? ch.sendModes.shift() : ch.sendMode;
       if (mode === "throw") throw new Error("socket hang up");
+      // The node simulated it and refused (the payer's balance moved after the tick read it): never forwarded.
+      if (mode === "preflightReject") throw new Error("Transaction simulation failed: Error processing Instruction 3: insufficient funds");
       if (ch.payouts.has(d.sig)) return d.sig;                      // same signature: lands once, ever
       const lv = ch.blockhashes.get(d.tx.recentBlockhash);
       if (lv == null || ch.height > lv) throw new Error("Blockhash not found");
@@ -1231,7 +1233,7 @@ t("the payout shape check: only compute budget, the recipient's CLKN ATA create,
     if (mut.extra) tx.add(mut.extra);
     return tx;
   };
-  const x = { payer: payer.toBase58(), mint: CLKN, src: src.toBase58(), dst: dst.toBase58(), owner: owner.toBase58(), amountRaw: "5" };
+  const x = { payer: payer.toBase58(), mint: CLKN, owner: owner.toBase58(), amountRaw: "5", key: "x", n: 1, cuPriceMax: 50000 };
   assertPayoutShape(build(), x);
   const other = new web3.PublicKey(CUNA);
   assert.throws(() => assertPayoutShape(build({ extra: web3.SystemProgram.transfer({ fromPubkey: payer, toPubkey: owner, lamports: 1 }) }), x), /unexpected instructions/);
@@ -1635,6 +1637,229 @@ t("an off-curve (program-derived) wallet is refused on upload unless its row say
   assert.strictEqual(onlyA.sha256, M.validateList([{ ...row(A, 10), allowOffCurve: false }]).sha256, "an on-curve list hashes as before");
   assert.ok(opted.rows.find((r) => r.wallet === P).allowOffCurve === true);
   assert.ok(M.offCurveRefused({ wallet: P })); assert.ok(!M.offCurveRefused({ wallet: P, allowOffCurve: true })); assert.ok(!M.offCurveRefused({ wallet: A }));
+});
+
+
+section("review: the payout shape is checked against the plan, and stored bytes are checked before a rebroadcast");
+
+const MEMO_PID = new web3.PublicKey("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr");
+// A payout built by hand in the exact shape the monitor builds, with any one piece swapped out.
+function payoutTx({ payerKp, owner, amount, key, n, blockhash, mut = {} }) {
+  const payer = payerKp.publicKey, mint = new web3.PublicKey(CLKN), ow = new web3.PublicKey(owner);
+  const src = mut.src || spl.getAssociatedTokenAddressSync(mint, payer, false), dst = mut.dst || spl.getAssociatedTokenAddressSync(mint, ow, true);
+  let ata = mut.nonIdempotent ? spl.createAssociatedTokenAccountInstruction(mut.funder || payer, dst, ow, mint) : spl.createAssociatedTokenAccountIdempotentInstruction(mut.funder || payer, dst, ow, mint);
+  if (mut.ataKeys) ata = new web3.TransactionInstruction({ keys: mut.ataKeys(ata.keys), programId: ata.programId, data: ata.data });
+  return new web3.Transaction({ feePayer: payer, blockhash: blockhash || bs58.encode(Buffer.alloc(32, 7)), lastValidBlockHeight: 10 })
+    .add(web3.ComputeBudgetProgram.setComputeUnitLimit({ units: mut.units || 100000 }))
+    .add(web3.ComputeBudgetProgram.setComputeUnitPrice({ microLamports: mut.price != null ? mut.price : 20000 }))
+    .add(ata)
+    .add(spl.createTransferCheckedInstruction(src, mint, dst, payer, BigInt(amount), 9))
+    .add(new web3.TransactionInstruction({ keys: mut.memoKeys || [], programId: MEMO_PID, data: Buffer.from(mut.memo || M.memoFor(key, n)) }));
+}
+
+t("the shape check derives the token accounts itself and decodes the ATA create, the compute budget and the memo", () => {
+  const { assertPayoutShape } = freshMonitorModule();
+  const payerKp = web3.Keypair.generate(), other = web3.Keypair.generate(), owner = pk();
+  const x = { payer: payerKp.publicKey.toBase58(), mint: CLKN, owner, amountRaw: "5", key: "sigK", n: 2, cuPriceMax: 50000 };
+  const b = (mut) => payoutTx({ payerKp, owner, amount: 5n, key: "sigK", n: 2, mut });
+  assertPayoutShape(b(), x);
+  // the builder's own accounts are not trusted: a plan that names a wrong source still fails
+  const wrongSrc = new web3.PublicKey(pk());
+  assert.throws(() => assertPayoutShape(b({ src: wrongSrc }), { ...x, src: wrongSrc.toBase58() }), /planned CLKN amount/);
+  assert.throws(() => assertPayoutShape(b({ nonIdempotent: true }), x), /CreateIdempotent/);
+  assert.throws(() => assertPayoutShape(b({ funder: other.publicKey }), x), /funded by the payer/);
+  assert.throws(() => assertPayoutShape(b({ ataKeys: (k) => [k[0], k[1], k[2], k[3], k[5], k[4]] }), x), /System and Token programs/);
+  assert.throws(() => assertPayoutShape(b({ units: 1400000 }), x), /compute unit limit/);
+  assert.throws(() => assertPayoutShape(b({ price: 10000000000 }), x), /above the ceiling/);
+  assert.throws(() => assertPayoutShape(b({ price: 50001 }), x), /above the ceiling/);
+  assertPayoutShape(b({ price: 50000 }), x);
+  assert.throws(() => assertPayoutShape(b({ price: 60000 }), { ...x, cuPriceMax: 50000 }), /above the ceiling/);
+  assert.throws(() => assertPayoutShape(b({ memoKeys: [{ pubkey: new web3.PublicKey(pk()), isSigner: false, isWritable: true }] }), x), /memo carries accounts/);
+  assert.throws(() => assertPayoutShape(b({ memo: M.memoFor("sigK", 3) }), x), /attempt's memo/);
+  assert.throws(() => assertPayoutShape(b(), { ...x, n: 1 }), /attempt's memo/);
+  const { key, ...noKey } = x; void key;
+  assert.throws(() => assertPayoutShape(b(), noKey), /plan is incomplete/);
+  const { cuPriceMax, ...noCeil } = x; void cuPriceMax;
+  assert.throws(() => assertPayoutShape(b(), noCeil), /ceiling/);
+});
+
+t("treasury mode: the monitor's own payouts carry a price at or under the treasury ceiling, the exact CU limit and the attempt's memo", async () => {
+  const { assertPayoutShape, CU_PRICE_MAX_TREASURY } = freshMonitorModule();
+  const A = pk();
+  const tkp = web3.Keypair.generate(), T = tkp.publicKey.toBase58();
+  const w = world({ payerKp: tkp, treasury: T, env: { ...TENV, CUNA_MIGRATION_CU_PRICE: "999999" }, signer: { keypair: tkp, source: "treasury" } });
+  await w.configure({ rows: [row(A, 100)] });
+  const sig = w.ch.addIncoming({ from: A, amount: cuna(10) });
+  await w.tick(3);
+  assert.strictEqual(w.ch.sends.length, 1);
+  const tx = w.ch.sends[0].tx;
+  assertPayoutShape(tx, { payer: T, mint: CLKN, owner: A, amountRaw: owed(cuna(10)).toString(), key: sig, n: 1, cuPriceMax: CU_PRICE_MAX_TREASURY });
+  assert.throws(() => assertPayoutShape(tx, { payer: T, mint: CLKN, owner: A, amountRaw: owed(cuna(10)).toString(), key: sig, n: 1, cuPriceMax: CU_PRICE_MAX_TREASURY - 1 }), /above the ceiling/);
+});
+
+t("stored bytes whose signature is not the attempt's paySig are never rebroadcast: the entry freezes as an anomaly and everything halts", async () => {
+  const A = pk(), B = pk();
+  const w = world(); await w.configure({ rows: [row(A, 100), row(B, 100)] });
+  const sig = w.ch.addIncoming({ from: A, amount: cuna(10) });
+  w.ch.sendModes = ["drop"];
+  await w.m.tick("t");
+  assert.strictEqual(w.ch.sends.length, 1);
+  const j = w.journal(); const a = j.entries[sig].attempts[0];
+  // Other valid, payer-signed bytes (a different blockhash, so a different signature) in the journal's copy.
+  const { blockhash } = await w.ch.conn.getLatestBlockhash();
+  const other = payoutTx({ payerKp: w.payerKp, owner: A, amount: BigInt(a.clknRaw), key: sig, n: 1, blockhash }); other.sign(w.payerKp);
+  a.txBase64 = other.serialize().toString("base64");
+  assert.ok(w.kv.setVerified("cunaMigJournal", j));
+  const otherSig = bs58.encode(other.signature);
+  await w.m.tick("t");
+  assert.strictEqual(w.ch.sends.length, 1, "nothing was rebroadcast");
+  assert.ok(!w.ch.payouts.has(otherSig), "the other bytes never reached the chain");
+  const e = w.journal().entries[sig];
+  assert.strictEqual(e.state, "anomaly"); assert.ok(/paySig/.test(e.reason), e.reason);
+  assert.strictEqual(w.journal().halted.code, "anomaly");
+  assert.ok(w.alerts.some((x) => /stored bytes/.test(x.text)), "the owner is told");
+  // after the ack the entry stays frozen and is never paid; others pay
+  assert.ok(w.m.ack("anomaly").ok);
+  w.ch.addIncoming({ from: B, amount: cuna(10) });
+  await w.tick(4);
+  assert.strictEqual(deliveredOf(w, A), 0n);
+  assert.strictEqual(deliveredOf(w, B), owed(cuna(10)));
+  assert.strictEqual(w.journal().entries[sig].state, "anomaly");
+});
+
+t("an adopted attempt file whose bytes carry the paySig but are not this payout's shape is never rebroadcast", async () => {
+  const A = pk();
+  const w = world(); await w.configure({ rows: [row(A, 100)] });
+  const sig = w.ch.addIncoming({ from: A, amount: cuna(10) });
+  w.fp.after_claim = () => { throw new Error("CRASH"); };
+  await assert.rejects(w.m.tick("t"), /CRASH/);
+  delete w.fp.after_claim;
+  const name = fs.readdirSync(w.attemptsDir)[0];
+  const f = JSON.parse(fs.readFileSync(path.join(w.attemptsDir, name), "utf8"));
+  // The same signature over a different message (twice the amount): the signature no longer verifies,
+  // and the message is not the planned payout.
+  const t2 = payoutTx({ payerKp: w.payerKp, owner: A, amount: BigInt(f.clknRaw) * 2n, key: sig, n: 1, blockhash: f.blockhash });
+  t2.lastValidBlockHeight = f.lastValidBlockHeight;
+  t2.addSignature(w.payerKp.publicKey, Buffer.from(bs58.decode(f.paySig)));
+  f.txBase64 = t2.serialize({ requireAllSignatures: false, verifySignatures: false }).toString("base64");
+  fs.writeFileSync(path.join(w.attemptsDir, name), JSON.stringify(f));
+  w.boot();
+  await w.m.tick("t");
+  const e = w.journal().entries[sig];
+  assert.ok(e.attempts[0].adopted);
+  assert.strictEqual(e.state, "anomaly", e.state + " " + e.reason); assert.ok(/stored payout bytes refused/.test(e.reason), e.reason);
+  assert.strictEqual(w.journal().halted.code, "anomaly");
+  assert.strictEqual(w.ch.sends.length, 0, "nothing was put on the wire");
+  await w.tick(3);
+  assert.strictEqual(w.ch.sends.length, 0); assert.strictEqual(deliveredOf(w, A), 0n);
+});
+
+t("a build that fails the shape check holds that entry (payout_shape_refused) with ONE deduplicated alert, and the tick goes on with the others", async () => {
+  const A = pk(), B = pk(), C = pk();
+  const w = world(); await w.configure({ rows: [row(A, 100), row(B, 100), row(C, 100)] });
+  const sA = w.ch.addIncoming({ from: A, amount: cuna(10) });
+  const sB = w.ch.addIncoming({ from: B, amount: cuna(10) });
+  w.ch.addIncoming({ from: C, amount: cuna(10) });
+  // A library change that encodes the priority fee wrongly for the first two builds (A and B).
+  const orig = web3.ComputeBudgetProgram.setComputeUnitPrice;
+  let calls = 0;
+  web3.ComputeBudgetProgram.setComputeUnitPrice = function (p) { calls++; return orig.call(this, calls <= 2 ? { microLamports: Number(p.microLamports) * 1000000 } : p); };
+  let r;
+  try { r = await w.m.tick("t"); } finally { web3.ComputeBudgetProgram.setComputeUnitPrice = orig; }
+  assert.ok(r && r.ok, "the tick completed: " + JSON.stringify(r));
+  const j = w.journal();
+  assert.strictEqual(j.entries[sA].state, "held"); assert.strictEqual(j.entries[sA].reason, "payout_shape_refused");
+  assert.strictEqual(j.entries[sB].reason, "payout_shape_refused");
+  assert.strictEqual(j.entries[sA].attempts.length, 0, "nothing was signed or recorded for it");
+  assert.strictEqual(r.shapeRefused.length, 2);
+  const shapeAlerts = w.alerts.filter((x) => x.key === "mig-shape");
+  assert.strictEqual(shapeAlerts.length, 1, "one alert"); assert.ok(/above the ceiling/.test(shapeAlerts[0].text));
+  assert.ok(j.lastTick && j.lastTick.at, "lastTick is still written");
+  await w.tick(3);
+  assert.strictEqual(deliveredOf(w, C), owed(cuna(10)), "the other entry paid");
+  assert.strictEqual(deliveredOf(w, A), 0n);
+  // fixed: the owner releases it and it pays once
+  const rel = await w.m.release(sA);
+  assert.ok(rel.ok, JSON.stringify(rel));
+  await w.tick(3);
+  assert.strictEqual(deliveredOf(w, A), owed(cuna(10))); assert.strictEqual(uniqueLandedFor(w, A), 1);
+});
+
+section("review: an entry held after attempts that never reached the chain");
+
+async function exhaustByPreflight(w) {
+  w.ch.sendMode = "preflightReject";
+  for (let i = 0; i < 20; i++) {
+    await w.m.tick("t");
+    const e = w.entries()[0][1];
+    if (e.state === "held") return e;
+    w.advance(200, 61);
+  }
+  throw new Error("never held");
+}
+
+t("three payouts rejected at preflight hold the entry; release= returns it to due only once every attempt is dead on chain, and it then pays once with attempt #4", async () => {
+  const A = pk();
+  const w = world(); await w.configure({ rows: [row(A, 100)] });
+  const sig = w.ch.addIncoming({ from: A, amount: cuna(10) });
+  let e = await exhaustByPreflight(w);
+  assert.strictEqual(e.reason, "attempts_exhausted"); assert.strictEqual(e.attempts.length, 3);
+  assert.ok(e.attempts.every((a) => a.outcome === "expired"));
+  assert.strictEqual(deliveredOf(w, A), 0n);
+  w.ch.sendMode = "land";
+  await w.tick(2);
+  assert.strictEqual(w.journal().entries[sig].state, "held", "a held entry is never retried on its own");
+  // refusals
+  assert.strictEqual((await w.m.release("nope")).status, 404);
+  w.ch.rpcFail.add("getSignatureStatuses");
+  assert.strictEqual((await w.m.release(sig)).status, 503, "no chain read, no release");
+  w.ch.rpcFail.delete("getSignatureStatuses");
+  // a lagging node said not found, but attempt #3 is on chain after all: refused
+  const s3 = e.attempts[2].paySig;
+  w.ch.payouts.set(s3, { recipient: A, amount: 1n, memo: M.memoFor(sig, 3), slot: ++w.ch.slot, err: null, deliveredAmt: 0n, blockTime: T0, payer: w.payer });
+  const r1 = await w.m.release(sig);
+  assert.strictEqual(r1.ok, false); assert.strictEqual(r1.status, 409); assert.ok(/on chain/.test(r1.error), r1.error);
+  w.ch.payouts.delete(s3);
+  assert.strictEqual(w.journal().entries[sig].state, "held");
+  // all dead: released
+  const r2 = await w.m.release(sig);
+  assert.ok(r2.ok, JSON.stringify(r2)); assert.strictEqual(r2.deadAttempts, 3);
+  e = w.journal().entries[sig];
+  assert.strictEqual(e.state, "due"); assert.strictEqual(e.releasedDead, 3);
+  assert.strictEqual((await w.m.release(sig)).status, 409, "a due entry cannot be released");
+  await w.tick(4);
+  e = w.journal().entries[sig];
+  assert.strictEqual(e.state, "paid"); assert.strictEqual(e.attempts.length, 4); assert.strictEqual(e.attempts[3].n, 4);
+  assert.strictEqual(deliveredOf(w, A), owed(cuna(10))); assert.strictEqual(uniqueLandedFor(w, A), 1);
+});
+
+t("release= refuses an entry held for any other reason, and one whose attempt file is not in the journal", async () => {
+  const A = pk(), B = pk();
+  const w = world(); await w.configure({ rows: [row(A, 100), row(B, 100)], arm: false });
+  const sA = w.ch.addIncoming({ from: A, amount: cuna(10) });
+  await w.tick(1);
+  assert.ok(w.m.hold(sA).ok);
+  const r = await w.m.release(sA);
+  assert.strictEqual(r.status, 409); assert.ok(/attempts_exhausted/.test(r.error), r.error);
+  // an exhausted entry beside an attempt file the journal does not list
+  const w2 = world(); await w2.configure({ rows: [row(B, 100)] });
+  const sB = w2.ch.addIncoming({ from: B, amount: cuna(10) });
+  await exhaustByPreflight(w2);
+  createAttemptStore(w2.attemptsDir).claim(sB, 9, { paySig: randSig(), clknRaw: "1", recipient: B, payer: w2.payer });
+  const r2 = await w2.m.release(sB);
+  assert.strictEqual(r2.status, 409); assert.ok(/not dead/.test(r2.error), r2.error);
+});
+
+section("review: the record matches the chain");
+
+t("the epoch-slot comment and the runbook's list of treasury signers say what the code and chain say", () => {
+  const lib = fs.readFileSync(path.join(__dirname, "..", "lib", "cuna-migration.js"), "utf8");
+  assert.ok(/1794653315/.test(lib) && /2026-11-14 10:48:35 UTC/.test(lib), "the slot's block time");
+  assert.ok(!/07:00 UTC/.test(lib));
+  const rb = fs.readFileSync(path.join(__dirname, "..", "docs", "CUNA_MIGRATION_RUNBOOK.md"), "utf8");
+  assert.ok(!/shared\s+with buy-comp, the Hub desk/.test(rb) && !/a payout and a\s+buy-comp payout can race/.test(rb), "buy-comp and the Hub desk do not sign with the treasury");
+  assert.ok(/lib\/diploma-nft\.js/.test(rb) && /do\s+\*\*not\*\* sign with it/.test(rb));
+  assert.ok(/release=<key>/.test(rb));
 });
 
 section("review: receive accounts");

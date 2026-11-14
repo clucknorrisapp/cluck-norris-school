@@ -97,6 +97,7 @@ expectExit(
   'curl -H "x-premium-key: $K" "https://clucknorris.app/api/cuna-migration/admin?tick=1" ; curl "https://clucknorris.app/api/cuna-migration/admin?hold=x"',
   2
 );
+expectExit("cuna-migration/admin release=, plain GET", 'curl -H "x-premium-key: $K" "https://clucknorris.app/api/cuna-migration/admin?release=x"', 2);
 expectExit("cuna-migration/admin ack=, plain GET", 'curl "https://clucknorris.app/api/cuna-migration/admin?ack=anomaly"', 2);
 expectExit("cuna-migration/admin list=1, plain GET", 'curl "https://clucknorris.app/api/cuna-migration/admin?list=1"', 2);
 expectExit("cuna-migration/admin window=1, plain GET", 'curl "https://clucknorris.app/api/cuna-migration/admin?window=1&start=1"', 2);

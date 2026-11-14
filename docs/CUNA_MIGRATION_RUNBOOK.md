@@ -47,12 +47,19 @@ With the payer secret unset the whole thing is a safe no-op: it detects and reco
      without it, the treasury is refused as payer exactly as before;
    - before anything is signed, every payout transaction is checked to be exactly compute budget, an
      idempotent CLKN account create for the recipient, ONE `TransferChecked` of CLKN from the
-     treasury's CLKN account for the planned amount, and the memo (`assertPayoutShape`). Any other
-     instruction, mint, amount, destination or signer throws and nothing is signed. It can never send
-     SOL, CUNA or any other token the treasury holds;
+     treasury's CLKN account for the planned amount, and the memo (`assertPayoutShape`). The check
+     derives both CLKN accounts itself rather than trusting the builder, and decodes the rest: the
+     compute-unit limit must be exactly 100,000 and the price at or under the ceiling; the account
+     create must be `CreateIdempotent`, funded by the payer, naming the System and Token programs; the
+     memo must carry no accounts and be exactly `CLKN migration <key> #<n>` for that attempt. Any other
+     instruction, mint, amount, destination, signer or byte throws and nothing is signed. It can never
+     send SOL, CUNA or any other token the treasury holds. A refusal holds that entry as
+     `payout_shape_refused` with one `mig-shape` alert, and the tick goes on with the others. Stored
+     signed bytes are put through the same check (and their signature must be the attempt's) before
+     any rebroadcast; bytes that fail are never rebroadcast, and the entry freezes as an `anomaly`;
    - every send is still bounded by the wallet's own row and by the list total;
    - **you state three numbers in Railway or it does not arm** (the treasury's SOL and CLKN are shared
-     with buy-comp, the Hub desk, diploma mints and any engine you resume):
+     with everything else that spends from it, listed below):
      `CUNA_MIGRATION_SOL_RESERVE_LAMPORTS` — SOL the migration never spends, at least 50,000,000
      (0.05 SOL); `CUNA_MIGRATION_CLKN_RESERVE_RAW` — CLKN it never spends (raw units; `0` is allowed
      but must be written); and `CUNA_MIGRATION_MAX_CLKN_RAW` — the most CLKN it may pay in all, so CLKN
@@ -60,8 +67,20 @@ With the payer secret unset the whole thing is a safe no-op: it detects and reco
      beyond that figure. A payout that would take the treasury below either reserve waits, with one
      alert. The priority fee is capped at 50,000 micro-lamports per CU in treasury mode (0.005 SOL per
      payout at most) instead of 500,000.
-   The other treasury paths still spend from the same balance at the same time, so a payout and a
-   buy-comp payout can race; the loser fails on chain, which is recoverable. The status's
+   **What else spends from the treasury.** In the server, the treasury key
+   (`MM_OPERATOR_SECRET_TREASURY`) signs: the graduation cNFT mints (`lib/diploma-nft.js`, the treasury
+   pays their fees); the liquidity automation on that key, all of it off today (the `treasury` vault
+   project, paused; the scoped POKE engine, which registers only with `POKE_ENGINE_ON=1`; and the
+   Meteora re-centers, behind `LIQ_ENGINE_KILLED`, `meteoraCfg.autoRecenter` and
+   `JUP_AUTO_REBALANCE_KILLED`); and the owner-run admin levers on it (the Meteora DLMM routes in
+   `lib/meteora-dlmm.js`, and the vault's manual swaps and pool opens for the treasury project). Buy-comp payouts and the Hub desk do
+   **not** sign with it (Hub fees in CLKN flow *into* the treasury). None of those paths writes a
+   `CLKN migration` memo or touches a `cunaMig*` kv key, so they cannot halt or skew the journal; they
+   only compete for the same SOL and CLKN. The other thing that does is **your own manual treasury
+   work** (pool-ops redeploys, hand sends). The balance is read once per tick, so if something spends
+   between that read and a send, the payout fails preflight, never lands, and is judged expired. Three
+   of those in a row hold the entry as `attempts_exhausted`; once every attempt is dead on chain, the
+   `release=` action below puts it back to due (no hand payment needed). The status's
    `payer.clknAboveReserveRaw`, `payer.solAboveReserveLamports`, `payer.coversRemaining` and
    `payer.coversSolEstimate` are the figures to watch.
 
@@ -199,6 +218,15 @@ creates nothing new. A wallet that is both a holder and a locker gets both, inde
   flight are still resolved from the chain and recorded, but nothing is rebroadcast.
 - **Hold one entry:** `curl -X POST -H "x-premium-key: $K" "$A?hold=<key>"`. This works only on a
   due entry with nothing in flight. A held entry is never paid automatically.
+- **Release one entry:** `curl -X POST -H "x-premium-key: $K" "$A?release=<key>"`. Only for an entry
+  held as `attempts_exhausted` or `payout_shape_refused` (fix the cause first: fund the payer, or the
+  build). It reads the chain again at that moment and refuses unless **every** attempt the entry ever
+  had is dead there: a finalized failure, or not found with the finalized height past its
+  `lastValidBlockHeight + 150`. It also refuses while any attempt or attempt file of the key is not
+  dead, while a payer-signed memo for the key is unadopted, while the payer history shows one of its
+  attempts landed, while a tick runs, or when the RPC cannot be read. The dead attempts stay on the
+  entry and in the witness; the next attempt is numbered above all of them and only the count toward
+  the three-attempt cap restarts. POST only: a GET with `release=` is refused with 405.
 
 ## Why it cannot pay twice
 
@@ -255,7 +283,8 @@ creates nothing new. A wallet that is both a holder and a locker gets both, inde
 | `recipient_ata_closed` | the wallet was paid before and has since closed its CLKN account; re-creating it on every payout would let it drain the payer's SOL | pay by hand |
 | `off_curve` | the recipient is off the curve and its row does not carry `allowOffCurve` | check the address |
 | `sender_is_payer` | the payer wallet sent CUNA in | nothing |
-| `attempts_exhausted` | three payout attempts died on chain | look at the payer and RPC, then pay by hand if owed |
+| `attempts_exhausted` | three payout attempts died on chain (since the last release) | look at the payer's balance and the RPC, then `release=<key>` |
+| `payout_shape_refused` | the payout transaction failed `assertPayoutShape` before it was signed; nothing was signed | find out why (a library upgrade, a code change), fix it, then `release=<key>` |
 | `owner` | you held it | — |
 | `nothing_owed` (state) | the credit rounds to 0 CLKN | — |
 
@@ -269,7 +298,7 @@ curl -X POST -H "x-premium-key: $K" "$A?ack=<halt code>"
 
 | Code | Meaning |
 | --- | --- |
-| `anomaly` | A payout landed with the wrong CLKN deltas, or a second payout landed for one entry. The entry stays frozen as `anomaly` after the ack and is never retried. |
+| `anomaly` | A payout landed with the wrong CLKN deltas, or a second payout landed for one entry, or an attempt's stored signed bytes failed the check before a rebroadcast (wrong signature, or not the payout shape for that attempt; they were not rebroadcast). The entry stays frozen as `anomaly` after the ack and is never retried. |
 | `unknown_memo` | The payer's history holds a migration payout the journal does not own: the journal was lost or edited. Compare the chain against the status before you ack. The history is read back only to slot 469,300,000 (2026-11-14, before this code existed), so a long-lived payer like the treasury stays cheap to scan. |
 | `orphan_attempt` / `attempt_mismatch` | An attempt file has no journal entry, or disagrees with it. |
 | `credit_mismatch` | The credited totals do not add up from the entries. Resolve it first, or the next tick halts again. |
