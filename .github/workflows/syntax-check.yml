@@ -440,6 +440,14 @@ jobs:
       # somebody actually receives.
       - name: CUNA payout double-pay guards
         run: node scripts/cuna-payout-test.cjs
+      # The CUNA -> CLKN migration monitor pays CLKN for CUNA sent in, automatically, so every case is a
+      # way it could pay twice or pay the wrong wallet: a crash at each step between signing and
+      # broadcast, a dropped send response, a lagging node, a lost journal (the on-chain memo witness),
+      # a second instance on the same volume (the O_EXCL attempt file), two send-ins over one wallet's
+      # cap, the two-flag arm and the OFF kill, the window, a short payer, Day 0 once per locker, and
+      # the list converter's exact raw strings. Driven against a stub chain that delivers once per signature.
+      - name: CUNA migration monitor
+        run: node scripts/cuna-migration-test.cjs
       # The server-signed buy-comp payout pays ONLY the sealed list, journals each transfer at
       # submit time, sweeps dropped sigs only past expiry, and locks the run across processes.
       - name: Buy-comp server payout guards
